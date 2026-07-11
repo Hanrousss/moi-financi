@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f5f8f4">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Мои деньги">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="./icons/favicon.png">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Мои деньги</title>
+</head>
+<body>
+  <div id="loading" class="loading-screen"><div class="loading-mark">M</div><p>Загрузка данных</p></div>
+  <div id="app" class="app-shell" hidden>
+    <header class="topbar">
+      <div><p id="eyebrow" class="eyebrow"></p><h1 id="screenTitle">Главная</h1></div>
+      <button id="settingsBtn" class="icon-button" aria-label="Настройки"></button>
+      <button id="closeOverlayBtn" class="icon-button" aria-label="Закрыть" hidden></button>
+    </header>
+
+    <main class="main-content">
+      <section id="home" class="screen active">
+        <button id="periodPill" class="period-pill"></button>
+        <article id="freeCard" class="hero-card status-good">
+          <div class="hero-card-head"><span>Свободный остаток</span><button id="editBalanceBtn" class="mini-icon" aria-label="Изменить текущий баланс"></button></div>
+          <strong id="freeValue">0 BYN</strong><small id="freeMeta"></small>
+        </article>
+        <div class="two-col">
+          <button id="weekCard" class="summary-card text-left"><span>Еда · эта неделя</span><strong id="weekAvailable">0 BYN</strong><small>Потрачено <b id="weekSpent">0 BYN</b></small></button>
+          <article class="summary-card"><span>До зарплаты</span><strong id="daysToSalary">0 дней</strong><small>Следующий период начинается 5 числа</small></article>
+        </div>
+        <div id="dashboardList" class="dashboard-list"></div>
+      </section>
+
+      <section id="month" class="screen">
+        <div class="month-switcher"><button id="prevMonth" aria-label="Предыдущий месяц"></button><div><strong id="monthTitle"></strong><small id="monthRange"></small></div><button id="nextMonth" aria-label="Следующий месяц"></button></div>
+        <article class="income-card"><div><span>Доход</span><strong id="incomeTotal">0 BYN</strong><small id="incomeDetails"></small></div><button id="editPeriodBtn" class="small-button">Изменить</button></article>
+        <div class="section-row"><h2>Обязательное</h2></div>
+        <div id="mandatoryGrid" class="mandatory-grid"></div>
+        <div class="section-row"><h2>Категории</h2><button id="addCategoryBtn" class="text-button"></button></div>
+        <div id="categoryList" class="category-list"></div>
+        <article id="monthFreeCard" class="bottom-total"><span>Свободный остаток</span><strong id="monthFreeValue">0 BYN</strong><small id="monthLimitMeta"></small></article>
+      </section>
+
+      <section id="savings" class="screen">
+        <article class="savings-hero"><span>Текущий итог</span><strong id="savingsBalance">$0</strong><small id="savingsEquivalent"></small></article>
+        <div class="button-row"><button id="depositSavings" class="primary-button"></button><button id="withdrawSavings" class="secondary-button"></button></div>
+        <div class="section-row"><h2>По месяцам</h2></div><div id="monthlySavings" class="monthly-savings"></div>
+        <div class="section-row"><h2>История</h2></div><div id="savingsHistory" class="history-list"></div>
+      </section>
+
+      <section id="pet" class="screen">
+        <article class="pet-hero"><div id="petAvatar"></div><div><span>Баланс питомца</span><strong id="petBalance">0 BYN</strong><small id="petNeedSummary"></small></div></article>
+        <div class="button-row"><button id="topupPet" class="primary-button"></button><button id="spendPet" class="secondary-button"></button></div>
+        <div class="section-row"><h2>Что нужно</h2><button id="addPetNeed" class="text-button"></button></div><div id="petNeeds" class="need-list"></div>
+        <div class="section-row"><h2>История баланса</h2></div><div id="petHistory" class="history-list"></div>
+      </section>
+
+      <section id="purchases" class="screen">
+        <article class="purchase-summary"><span>Накопления для сравнения</span><strong id="purchaseSavingsByn">0 BYN</strong><small id="purchaseSavingsUsd">$0</small></article>
+        <div id="purchaseTabs" class="segmented-control"><button data-purchase-tab="required" class="active">Обязательные</button><button data-purchase-tab="desired">Желательные</button><button data-purchase-tab="wish">Просто хочется</button></div>
+        <div class="section-row"><h2 id="purchaseTitle">Обязательные</h2><button id="addPurchaseBtn" class="text-button"></button></div><div id="purchaseList" class="purchase-list"></div>
+      </section>
+
+      <section id="food" class="screen overlay-screen">
+        <div class="month-switcher"><button id="foodPrevMonth" aria-label="Предыдущий месяц"></button><div><strong id="foodMonthTitle"></strong><small id="foodMonthRange"></small></div><button id="foodNextMonth" aria-label="Следующий месяц"></button></div>
+        <article id="foodTotal" class="food-total"></article><div id="foodWeeks" class="food-weeks"></div>
+      </section>
+
+      <section id="payments" class="screen overlay-screen">
+        <article class="debt-hero"><span>Осталось закрыть</span><strong id="debtRemaining">0 BYN</strong><div class="progress-track"><span id="debtProgress"></span></div><small id="debtMeta"></small></article>
+        <div class="section-row"><h2>График</h2><button id="addPaymentBtn" class="text-button"></button></div><div id="paymentsList" class="payments-list"></div>
+      </section>
+
+      <section id="settings" class="screen overlay-screen">
+        <div class="settings-group"><h2>Общие</h2><button id="editGeneralBtn" class="settings-row"></button></div>
+        <div class="settings-group"><div class="section-row"><h2>Категории</h2><button id="settingsAddCategory" class="text-button"></button></div><div id="settingsCategories" class="settings-stack"></div></div>
+        <div class="settings-group"><h2>Данные</h2><div class="settings-stack"><button id="exportBtn" class="settings-row"></button><label class="settings-row file-row" id="importLabel"><input id="importInput" type="file" accept="application/json"><span id="importContent"></span></label><button id="resetBtn" class="settings-row danger-row"></button></div></div>
+        <p class="version-note">Данные хранятся локально на этом устройстве.</p>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Основная навигация"><button data-nav="home" class="active"></button><button data-nav="month"></button><button data-nav="savings"></button><button data-nav="pet"></button><button data-nav="purchases"></button></nav>
+  </div>
+
+  <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script src="./app.bundle.js"></script>
+</body>
+</html>

@@ -210,6 +210,12 @@ export function petBalanceByn(state){return Number.isFinite(Number(state.pet?.ba
 export function paymentsPaidTotal(state){return roundMoney(state.payments.reduce((s,p)=>s+Number(p.paid||0),0))}
 export function debtRemaining(state){return Math.max(0,roundMoney(Number(state.settings.debtInitial||0)-paymentsPaidTotal(state)))}
 export function plannedCategoryTotal(state,period){return roundMoney(state.categories.filter(c=>c.visible).reduce((s,c)=>s+categoryBudget(period,c).plan,0))}
+export function periodCarryover(state,period){
+  const previous=state.periods?.[shiftPeriodKey(period.key,-1)];
+  if(!previous)return 0;
+  const previousFree=previous.balanceNow==null?plannedFreeBalance(state,previous):liveFreeBalance(state,previous);
+  return Math.max(0,roundMoney(previousFree));
+}
 export function periodSavingsDepositedUsd(state,key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(parseISODate(t.date),state.settings.salaryDay)===key).reduce((s,t)=>s+Number(t.amountUsd||0),0))}
 export function periodSavingsDepositedByn(state,key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(parseISODate(t.date),state.settings.salaryDay)===key).reduce((s,t)=>s+savingAmountByn(state,t),0))}
 export function captureBalanceSnapshot(state,period){
@@ -226,7 +232,7 @@ export function plannedFreeBalance(state,period){
   const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
   const paymentPlan=sections.includes('payment')?Number(periodPayment(state,period.key).planned||0):0;
   const reservePlan=sections.includes('reserve')?Number(period.mandatory.reservePlan||0):0;
-  const base=periodIncome(period)-Number(period.mandatory.housingPlan||0)-paymentPlan-reservePlan-savingsPlanByn-plannedCategoryTotal(state,period);
+  const base=periodIncome(period)+periodCarryover(state,period)-Number(period.mandatory.housingPlan||0)-paymentPlan-reservePlan-savingsPlanByn-plannedCategoryTotal(state,period);
   const overCategories=state.categories.filter(c=>c.visible&&c.kind!=='food').reduce((s,c)=>{const b=categoryBudget(period,c);return s+Math.min(0,Number(b.plan||0)-Number(b.spent||0))},0);
   const foodVariance=period.foodWeeks.reduce((s,w)=>{const delta=Number(w.plan||0)-Number(w.spent||0);return s+(w.closed?delta:Math.min(0,delta))},0);
   return roundMoney(base+overCategories+foodVariance);

@@ -4,7 +4,7 @@ import {
   periodStart, periodEnd, currentWeekIndex, daysToNextSalary,
   seedState, ensurePeriod, foodBudget, categoryBudget, periodIncome,
   periodPayment, savingsBalanceUsd, savingsBalanceByn, petBalanceByn, paymentsPaidTotal,
-  debtRemaining, plannedCategoryTotal, plannedFreeBalance, liveFreeBalance,
+  debtRemaining, plannedCategoryTotal, periodCarryover, plannedFreeBalance, liveFreeBalance,
   purchaseAvailable, monthlySavingsRows, validateState, toISODate, captureBalanceSnapshot
 } from './model.js';
 import { loadState, saveState, clearState } from './storage.js';
@@ -312,8 +312,9 @@ function renderMonth(){
   const sections=mandatorySections(p);
   const addableSections=[!sections.includes('payment')?`<button class="text-button" data-add-mandatory-section="payment">+ ${esc(sectionLabel('payments'))}</button>`:'',!sections.includes('reserve')?`<button class="text-button" data-add-mandatory-section="reserve">+ ${esc(mandatoryLabel('reserve'))}</button>`:''].filter(Boolean).join('');
   $('#monthTitle').textContent=periodTitle(p.key);$('#monthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
-  $('#incomeTotal').textContent=formatByn(periodIncome(p));
-  $('#incomeDetails').textContent=`Зарплата ${formatByn(p.salary)}${p.extraIncome?` · Доп. доход ${formatByn(p.extraIncome)}`:''}`;
+  const carryover=periodCarryover(state,p), totalIncome=roundMoney(periodIncome(p)+carryover);
+  $('#incomeTotal').textContent=formatByn(totalIncome);
+  $('#incomeDetails').textContent=`Зарплата ${formatByn(p.salary)}${p.extraIncome?` · Доп. доход ${formatByn(p.extraIncome)}`:''}${carryover?` · Остаток прошлого месяца ${formatByn(carryover)}`:''}`;
   $('#mandatoryGrid').innerHTML=[
     renderMandatoryCard(mandatoryLabel('housing'),num(p.mandatory.housingPlan),num(p.mandatory.housingSpent),'housing',{locked:true}),
     sections.includes('payment')?renderMandatoryCard(sectionLabel('payments'),num(payment.planned),num(payment.paid),'payment'):null,

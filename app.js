@@ -106,7 +106,6 @@ function savingTxUsd(t){return txSavingCurrency(t)==='byn'?0:num(t.amountUsd);}
 function savingTxByn(t){return txSavingCurrency(t)==='byn'?num(t.amountByn):0;}
 function formatSavingsTotal(usd,byn){return num(byn)!==0?`${formatUsd(usd)} + ${formatByn(byn)}`:formatUsd(usd);}
 function formatSavingTx(t){return txSavingCurrency(t)==='byn'?formatByn(savingTxByn(t)):formatUsd(savingTxUsd(t));}
-function formatPurchaseUsd(value){return `${Number(value||0).toLocaleString('ru-RU',{maximumFractionDigits:Number.isInteger(Number(value))?0:2})} USD`;}
 function purchaseCostUsd(item){return num(item?.costUsd ?? item?.costByn);}
 const dashboardDefaults=['savings','payments','pet','purchases'];
 const navDefaults=[
@@ -312,10 +311,10 @@ function renderPet(){
 const purchaseTitles={required:'Обязательные',desired:'Желательные',wish:'Просто хочется'};
 function renderPurchases(){
   const savings=savingsBalanceUsd(state), byn=savingsBalanceByn(state);
-  $('#purchaseSavingsByn').textContent=formatByn(byn);$('#purchaseSavingsUsd').textContent=formatPurchaseUsd(savings);
+  $('#purchaseSavingsByn').textContent=formatByn(byn);$('#purchaseSavingsUsd').textContent=formatUsd(savings);
   $$('#purchaseTabs button').forEach(b=>b.classList.toggle('active',b.dataset.purchaseTab===purchaseTab));$('#purchaseTitle').textContent=purchaseTitles[purchaseTab];
   const items=state.purchases.filter(p=>p.priority===purchaseTab&&!p.completed);
-  $('#purchaseList').innerHTML=items.length?items.map(p=>{const cost=purchaseCostUsd(p), enough=purchaseAvailable(state,cost), missing=Math.max(0,cost-savings);return `<article class="purchase-card ${enough?'affordable':''}">${p.imageDataUrl?`<img class="purchase-thumb" src="${p.imageDataUrl}" alt="">`:''}<div><b>${esc(p.name)}</b><small>${esc(p.note||purchaseTitles[p.priority])}</small></div><div class="purchase-cost"><b>${formatPurchaseUsd(cost)}</b><small class="${enough?'success-text':'negative-number'}">${enough?'Накоплений хватает':`Не хватает ${formatPurchaseUsd(missing)}`}</small><div><button class="mini-icon" data-complete-purchase="${p.id}">${icon('check',16)}</button><button class="mini-icon" data-edit-purchase="${p.id}">${icon('edit',16)}</button></div></div></article>`}).join(''):'<div class="empty-state">В этом разделе пока нет покупок</div>';
+  $('#purchaseList').innerHTML=items.length?items.map(p=>{const cost=purchaseCostUsd(p), enough=purchaseAvailable(state,cost), missing=Math.max(0,cost-savings);return `<article class="purchase-card ${enough?'affordable':''}">${p.imageDataUrl?`<img class="purchase-thumb" src="${p.imageDataUrl}" alt="">`:''}<div><b>${esc(p.name)}</b><small>${esc(p.note||purchaseTitles[p.priority])}</small></div><div class="purchase-cost"><b>${formatUsd(cost)}</b><small class="${enough?'success-text':'negative-number'}">${enough?'Накоплений хватает':`Не хватает ${formatUsd(missing)}`}</small><div><button class="mini-icon" data-complete-purchase="${p.id}">${icon('check',16)}</button><button class="mini-icon" data-edit-purchase="${p.id}">${icon('edit',16)}</button></div></div></article>`}).join(''):'<div class="empty-state">В этом разделе пока нет покупок</div>';
 }
 
 function renderPayments(){

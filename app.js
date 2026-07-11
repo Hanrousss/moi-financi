@@ -461,8 +461,8 @@ function openCategoryEditor(id){
     }
     const plan=num(v.plan);
     if(c.kind==='food'){
-      const per=roundMoney(plan/4);
-      p.foodWeeks.forEach((w,i)=>w.plan=i===3?roundMoney(plan-per*3):per);
+      const count=Math.max(1,p.foodWeeks.length), per=roundMoney(plan/count);
+      p.foodWeeks.forEach((w,i)=>w.plan=i===count-1?roundMoney(plan-per*(count-1)):per);
     }else ensurePeriod(state,p.key).categoryBudgets[c.id].plan=plan;
     await commit();closeModal();
   },{extraAction:deletable?{label:'Удалить категорию',handler:async()=>{

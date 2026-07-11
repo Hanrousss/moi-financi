@@ -46,27 +46,38 @@ function formatPeriodRange(key, salaryDay=5) {
   const opts = {day:'numeric',month:'long'};
   return `${periodStart(key,salaryDay).toLocaleDateString('ru-RU',opts)} — ${periodEnd(key,salaryDay).toLocaleDateString('ru-RU',opts)}`;
 }
-function makeFoodWeeks(key, plans=[200,200,200,200], salaryDay=5) {
-  const start = periodStart(key,salaryDay);
-  const end = periodEnd(key,salaryDay);
-  const ranges = [
-    [start,new Date(start.getFullYear(),start.getMonth(),start.getDate()+6)],
-    [new Date(start.getFullYear(),start.getMonth(),start.getDate()+7),new Date(start.getFullYear(),start.getMonth(),start.getDate()+13)],
-    [new Date(start.getFullYear(),start.getMonth(),start.getDate()+14),new Date(start.getFullYear(),start.getMonth(),start.getDate()+20)],
-    [new Date(start.getFullYear(),start.getMonth(),start.getDate()+21),end]
-  ];
-  return ranges.map(([from,to],index)=>({id:`${key}-w${index+1}`,index:index+1,start:toISODate(from),end:toISODate(to),plan:Number(plans[index]||0),spent:0,closed:false}));
+function mondayStart(date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = d.getDay() || 7;
+  d.setDate(d.getDate() - day + 1);
+  return d;
+}
+function dayAfterISO(value) {
+  const d = parseISODate(value);
+  d.setDate(d.getDate() + 1);
+  return d;
+}
+function dateOverlapDays(aStart,aEnd,bStart,bEnd) {
+  const start = Math.max(aStart.getTime(), bStart.getTime());
+  const end = Math.min(aEnd.getTime(), bEnd.getTime());
+  return Math.max(0, Math.ceil((end - start) / 86400000));
+}
+function makeFoodWeeks(key, plans=[], salaryDay=5) {
+  const periodFrom = periodStart(key,salaryDay);
+  const periodTo = periodEnd(key,salaryDay);
+  const weeks = [];
+  for(let from = mondayStart(periodFrom), index = 0; from <= periodTo; index++){
+    const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 6);
+    weeks.push({id:`${key}-w${index+1}`,index:index+1,start:toISODate(from),end:toISODate(to),plan:Number(plans[index]||0),spent:0,closed:false});
+    from = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 7);
+  }
+  return weeks;
 }
 function currentWeekIndex(key,date=new Date(),salaryDay=5) {
-  const start = periodStart(key,salaryDay);
-  const end = periodEnd(key,salaryDay);
-  if (date <= start) return 0;
-  if (date >= end) return 3;
-  const diff = Math.floor((new Date(date.getFullYear(),date.getMonth(),date.getDate()) - start)/86400000);
-  if (diff<=6) return 0;
-  if (diff<=13) return 1;
-  if (diff<=20) return 2;
-  return 3;
+  const weeks = makeFoodWeeks(key,[],salaryDay);
+  const current = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const index = weeks.findIndex(week => current >= parseISODate(week.start) && current < dayAfterISO(week.end));
+  return index >= 0 ? index : current < parseISODate(weeks[0]?.start) ? 0 : Math.max(0,weeks.length-1);
 }
 function daysToNextSalary(date=new Date(),salaryDay=5) {
   const today = new Date(date.getFullYear(),date.getMonth(),date.getDate());
@@ -148,6 +159,28 @@ function seedState(now=new Date()) {
   };
 }
 
+function alignFoodWeeks(period,salaryDay=5) {
+  const expected = makeFoodWeeks(period.key,[],salaryDay);
+  const current = Array.isArray(period.foodWeeks) ? period.foodWeeks : [];
+  const aligned = current.length === expected.length && current.every((week,index)=>week.start===expected[index].start&&week.end===expected[index].end);
+  if(aligned)return false;
+  const migrated = expected.map(week=>({...week}));
+  for(const oldWeek of current){
+    const oldStart = parseISODate(oldWeek.start);
+    const oldEnd = dayAfterISO(oldWeek.end);
+    let bestIndex = 0, bestOverlap = -1;
+    migrated.forEach((week,index)=>{
+      const overlap = dateOverlapDays(oldStart,oldEnd,parseISODate(week.start),dayAfterISO(week.end));
+      if(overlap>bestOverlap){bestOverlap=overlap;bestIndex=index;}
+    });
+    migrated[bestIndex].plan = roundMoney(Number(migrated[bestIndex].plan||0) + Number(oldWeek.plan||0));
+    migrated[bestIndex].spent = roundMoney(Number(migrated[bestIndex].spent||0) + Number(oldWeek.spent||0));
+    migrated[bestIndex].closed = !!oldWeek.closed;
+  }
+  period.foodWeeks = migrated;
+  return true;
+}
+
 function ensurePeriod(state,key) {
   if(!state.periods[key]) state.periods[key]=createPeriod(key,'normal');
   const mandatory=state.periods[key].mandatory;
@@ -156,6 +189,7 @@ function ensurePeriod(state,key) {
   if(!mandatory.categoryIds.includes('food'))mandatory.categoryIds.unshift('food');
   mandatory.sections=mandatory.sections.filter((id,index,arr)=>['payment','reserve'].includes(id)&&arr.indexOf(id)===index);
   mandatory.categoryIds=mandatory.categoryIds.filter((id,index,arr)=>state.categories.some(c=>c.id===id)&&arr.indexOf(id)===index);
+  alignFoodWeeks(state.periods[key],state.settings?.salaryDay||5);
   for(const c of state.categories) if(c.kind!=='food'&&!state.periods[key].categoryBudgets[c.id]) state.periods[key].categoryBudgets[c.id]={plan:0,spent:0};
   if(state.periods[key].balanceNow!=null&&!state.periods[key].balanceSnapshot) captureBalanceSnapshot(state,state.periods[key]);
   return state.periods[key];
@@ -691,8 +725,8 @@ function openCategoryEditor(id){
     }
     const plan=num(v.plan);
     if(c.kind==='food'){
-      const per=roundMoney(plan/4);
-      p.foodWeeks.forEach((w,i)=>w.plan=i===3?roundMoney(plan-per*3):per);
+      const count=Math.max(1,p.foodWeeks.length), per=roundMoney(plan/count);
+      p.foodWeeks.forEach((w,i)=>w.plan=i===count-1?roundMoney(plan-per*(count-1)):per);
     }else ensurePeriod(state,p.key).categoryBudgets[c.id].plan=plan;
     await commit();closeModal();
   },{extraAction:deletable?{label:'Удалить категорию',handler:async()=>{

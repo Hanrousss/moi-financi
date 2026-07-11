@@ -113,7 +113,7 @@ export function createPeriod(key) {
   };
 }
 
-const payment=(periodKey,planned)=>({id:`payment-${periodKey}`,periodKey,planned,paid:0,note:''});
+const payment=(periodKey,planned)=>({id:`payment-${periodKey}`,periodKey,title:'',planned,paid:0,note:''});
 export function seedState(now=new Date()) {
   const current=periodKeyForDate(now,5), periods={};
   for(let i=-2;i<=24;i++){
@@ -128,7 +128,10 @@ export function seedState(now=new Date()) {
       usdRate: 1,
       debtInitial: 0,
       navLabels: true,
-      navIcons: {}
+      navItems: ['home','month','savings','pet','purchases'],
+      navIcons: {},
+      sectionLabels: {},
+      mandatoryLabels: {}
     },
     categories: structuredClone(DEFAULT_CATEGORIES),
     periods,

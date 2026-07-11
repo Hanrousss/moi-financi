@@ -103,7 +103,9 @@ export function createPeriod(key) {
       housingSpent: 0,
       reservePlan: 0,
       reserveAllocated: 0,
-      savingsPlanUsd: 0
+      savingsPlanUsd: 0,
+      sections: ['payment','reserve'],
+      categoryIds: ['food']
     },
     categoryBudgets,
     foodWeeks: makeFoodWeeks(key,[0,0,0,0]),
@@ -144,6 +146,12 @@ export function seedState(now=new Date()) {
 
 export function ensurePeriod(state,key) {
   if(!state.periods[key]) state.periods[key]=createPeriod(key,'normal');
+  const mandatory=state.periods[key].mandatory;
+  mandatory.sections=Array.isArray(mandatory.sections)?mandatory.sections:['payment','reserve'];
+  mandatory.categoryIds=Array.isArray(mandatory.categoryIds)?mandatory.categoryIds:['food'];
+  if(!mandatory.categoryIds.includes('food'))mandatory.categoryIds.unshift('food');
+  mandatory.sections=mandatory.sections.filter((id,index,arr)=>['payment','reserve'].includes(id)&&arr.indexOf(id)===index);
+  mandatory.categoryIds=mandatory.categoryIds.filter((id,index,arr)=>state.categories.some(c=>c.id===id)&&arr.indexOf(id)===index);
   for(const c of state.categories) if(c.kind!=='food'&&!state.periods[key].categoryBudgets[c.id]) state.periods[key].categoryBudgets[c.id]={plan:0,spent:0};
   if(state.periods[key].balanceNow!=null&&!state.periods[key].balanceSnapshot) captureBalanceSnapshot(state,state.periods[key]);
   return state.periods[key];
@@ -176,7 +184,10 @@ export function captureBalanceSnapshot(state,period){
 }
 export function plannedFreeBalance(state,period){
   const savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
-  const base=periodIncome(period)-Number(period.mandatory.housingPlan||0)-Number(periodPayment(state,period.key).planned||0)-Number(period.mandatory.reservePlan||0)-savingsPlanByn-plannedCategoryTotal(state,period);
+  const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
+  const paymentPlan=sections.includes('payment')?Number(periodPayment(state,period.key).planned||0):0;
+  const reservePlan=sections.includes('reserve')?Number(period.mandatory.reservePlan||0):0;
+  const base=periodIncome(period)-Number(period.mandatory.housingPlan||0)-paymentPlan-reservePlan-savingsPlanByn-plannedCategoryTotal(state,period);
   const overCategories=state.categories.filter(c=>c.visible&&c.kind!=='food').reduce((s,c)=>{const b=categoryBudget(period,c);return s+Math.min(0,Number(b.plan||0)-Number(b.spent||0))},0);
   const foodVariance=period.foodWeeks.reduce((s,w)=>{const delta=Number(w.plan||0)-Number(w.spent||0);return s+(w.closed?delta:Math.min(0,delta))},0);
   return roundMoney(base+overCategories+foodVariance);
@@ -184,12 +195,15 @@ export function plannedFreeBalance(state,period){
 export function liveFreeBalance(state,period){
   if(period.balanceNow==null)return plannedFreeBalance(state,period);
   const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period),payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key),savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
-  const remainingMandatory=Math.max(0,Number(period.mandatory.housingPlan||0)-Number(period.mandatory.housingSpent||0))+Math.max(0,Number(payment.planned||0)-Number(payment.paid||0))+Math.max(0,Number(period.mandatory.reservePlan||0)-Number(period.mandatory.reserveAllocated||0))+Math.max(0,savingsPlanByn-saved);
+  const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
+  const remainingPayment=sections.includes('payment')?Math.max(0,Number(payment.planned||0)-Number(payment.paid||0)):0;
+  const remainingReserve=sections.includes('reserve')?Math.max(0,Number(period.mandatory.reservePlan||0)-Number(period.mandatory.reserveAllocated||0)):0;
+  const remainingMandatory=Math.max(0,Number(period.mandatory.housingPlan||0)-Number(period.mandatory.housingSpent||0))+remainingPayment+remainingReserve+Math.max(0,savingsPlanByn-saved);
   const remainingCategories=state.categories.filter(c=>c.visible).reduce((sum,c)=>{
     if(c.kind==='food') return sum+period.foodWeeks.reduce((s,w)=>s+(w.closed?0:Math.max(0,Number(w.plan||0)-Number(w.spent||0))),0);
     const b=categoryBudget(period,c);return sum+Math.max(0,Number(b.plan||0)-Number(b.spent||0));
   },0);
-  const newMandatorySpend=(Number(period.mandatory.housingSpent||0)-Number(snapshot.housingSpent||0))+(Number(period.mandatory.reserveAllocated||0)-Number(snapshot.reserveAllocated||0))+(Number(payment.paid||0)-Number(snapshot.paymentPaid||0))+(saved-Number(snapshot.savingsDepositedByn??snapshot.savingsDepositedUsd??0));
+  const newMandatorySpend=(Number(period.mandatory.housingSpent||0)-Number(snapshot.housingSpent||0))+(sections.includes('reserve')?(Number(period.mandatory.reserveAllocated||0)-Number(snapshot.reserveAllocated||0)):0)+(sections.includes('payment')?(Number(payment.paid||0)-Number(snapshot.paymentPaid||0)):0)+(saved-Number(snapshot.savingsDepositedByn??snapshot.savingsDepositedUsd??0));
   const newCategorySpend=state.categories.filter(c=>c.visible).reduce((sum,c)=>{
     if(c.kind==='food')return sum+period.foodWeeks.reduce((s,w,i)=>s+Number(w.spent||0)-Number(snapshot.food?.[i]||0),0);
     const b=categoryBudget(period,c);return sum+Number(b.spent||0)-Number(snapshot.categories?.[c.id]||0);

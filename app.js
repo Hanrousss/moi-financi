@@ -79,6 +79,8 @@ function normalizeState(){
     const category=state.categories?.find(c=>c.id===id), item=navDefaults.find(x=>x.id===id);
     if(category&&item&&category.name!==item.label&&!state.settings.sectionLabels[id])state.settings.sectionLabels[id]=category.name;
   }
+  const foodCategory=state.categories?.find(c=>c.id==='food');
+  if(foodCategory)foodCategory.visible=true;
   state.pet=state.pet||{transactions:[],needs:[]};
   if(!Number.isFinite(Number(state.pet.balanceByn)))state.pet.balanceByn=petBalanceByn(state);
   state.pet.avatarImage=state.pet.avatarImage||'';
@@ -119,6 +121,25 @@ function scheduleAutoWeekClose(){
 }
 function categoryAvailable(period,category){const b=categoryBudget(period,category);return roundMoney(num(b.plan)-num(b.spent));}
 function visibleCategories(){return [...state.categories].filter(c=>c.visible).sort((a,b)=>a.order-b.order);}
+function mandatorySections(period){
+  period.mandatory.sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
+  period.mandatory.sections=period.mandatory.sections.filter((id,index,arr)=>['payment','reserve'].includes(id)&&arr.indexOf(id)===index);
+  return period.mandatory.sections;
+}
+function mandatoryCategoryIds(period){
+  period.mandatory.categoryIds=Array.isArray(period.mandatory.categoryIds)?period.mandatory.categoryIds:['food'];
+  if(!period.mandatory.categoryIds.includes('food'))period.mandatory.categoryIds.unshift('food');
+  period.mandatory.categoryIds=period.mandatory.categoryIds.filter((id,index,arr)=>state.categories.some(c=>c.id===id)&&arr.indexOf(id)===index);
+  return period.mandatory.categoryIds;
+}
+function mandatoryCategories(period){
+  const ids=mandatoryCategoryIds(period);
+  return ids.map(id=>categoryById(id)).filter(c=>c&&(c.visible||c.id==='food')).sort((a,b)=>ids.indexOf(a.id)-ids.indexOf(b.id));
+}
+function optionalCategories(period){
+  const ids=mandatoryCategoryIds(period);
+  return visibleCategories().filter(c=>!ids.includes(c.id));
+}
 function totalOpenNeeds(){return state.pet.needs.filter(n=>!n.completed).reduce((s,n)=>s+num(n.costByn),0);}
 function greeting(){const h=new Date().getHours();return h<12?'Доброе утро':h<18?'Добрый день':'Добрый вечер';}
 function dashboardStatus(value){return value<0?'status-bad':'status-good';}
@@ -269,30 +290,34 @@ function renderHome(){
 
 function metric(label,value,fieldHtml=''){return `<div class="metric"><span>${label}</span>${fieldHtml||`<strong>${value}</strong>`}</div>`;}
 function categoryIconHtml(category,size=22){return category.iconImage?`<img class="custom-category-icon" src="${category.iconImage}" alt="">`:icon(category.icon,size);}
-function renderMandatoryCard(name,plan,spent,kind){
+function renderMandatoryCard(name,plan,spent,kind,{locked=false}={}){
   const available=roundMoney(plan-spent);
-  return `<article class="mandatory-card ${budgetToneClass(plan,available)}"><div class="mandatory-title"><b>${esc(name)}</b><button class="mini-icon" data-edit-mandatory="${kind}" aria-label="Изменить">${icon('edit',17)}</button></div><div class="metrics-row">${metric('План',formatByn(plan))}${metric('Потрачено',formatByn(spent))}${metric('Доступно',`<span class="${budgetValueClass(plan,available)}">${formatByn(available)}</span>`)}</div></article>`;
+  return `<article class="mandatory-card ${budgetToneClass(plan,available)}"><div class="mandatory-title"><b>${esc(name)}</b><span class="settings-actions"><button class="mini-icon" data-edit-mandatory="${kind}" aria-label="Изменить">${icon('edit',17)}</button>${locked?'':`<button class="mini-icon" data-remove-mandatory-section="${kind}" aria-label="Убрать из обязательного">${icon('close',16)}</button>`}</span></div><div class="metrics-row">${metric('План',formatByn(plan))}${metric('Потрачено',formatByn(spent))}${metric('Доступно',`<span class="${budgetValueClass(plan,available)}">${formatByn(available)}</span>`)}</div></article>`;
 }
-function renderCategoryCard(category,period){
+function renderCategoryCard(category,period,{mandatory=false}={}){
   const b=categoryBudget(period,category), available=roundMoney(b.plan-b.spent);
   const food=category.kind==='food', pet=category.kind==='pet';
   const input=food ? `<button class="inline-link" data-open-food="1">${formatByn(b.spent)}</button>` : pet ? `<button class="inline-link" data-nav-to="pet">${formatByn(b.spent)}</button>` : `<input class="number-field compact" data-category-spent="${category.id}" inputmode="decimal" type="number" min="0" step="1" value="${num(b.spent)}" aria-label="Потрачено: ${esc(category.name)}">`;
+  const actions=`<span class="settings-actions"><button class="mini-icon" data-edit-category="${category.id}" aria-label="Изменить категорию">${icon('edit',17)}</button>${mandatory&&category.id!=='food'?`<button class="mini-icon" data-remove-mandatory-category="${category.id}" aria-label="Убрать из обязательного">${icon('close',16)}</button>`:!mandatory?`<button class="mini-icon" data-add-mandatory-category="${category.id}" aria-label="В обязательное">${icon('plus',16)}</button>`:''}</span>`;
   return `<article class="category-card ${budgetToneClass(b.plan,available)}" data-category="${category.id}">
-    <div class="category-head"><span class="category-icon" style="background:${esc(category.color)}">${categoryIconHtml(category)}</span><div><b>${esc(category.name)}</b><small>${category.kind==='food'?'по неделям':category.kind==='pet'?'пополнение внутреннего баланса':'месячный лимит'}</small></div><button class="mini-icon" data-edit-category="${category.id}" aria-label="Изменить категорию">${icon('edit',17)}</button></div>
+    <div class="category-head"><span class="category-icon" style="background:${esc(category.color)}">${categoryIconHtml(category)}</span><div><b>${esc(category.name)}</b><small>${mandatory?'обязательное этого месяца':category.kind==='food'?'по неделям':category.kind==='pet'?'пополнение внутреннего баланса':'месячный лимит'}</small></div>${actions}</div>
     <div class="metrics-row">${metric('План',formatByn(b.plan))}${metric('Потрачено','',input)}${metric('Доступно',`<span class="${budgetValueClass(b.plan,available)}">${formatByn(available)}</span>`)}</div>
   </article>`;
 }
 function renderMonth(){
   const p=selectedPeriod(), payment=periodPayment(state,p.key);
+  const sections=mandatorySections(p);
+  const addableSections=[!sections.includes('payment')?`<button class="text-button" data-add-mandatory-section="payment">+ ${esc(sectionLabel('payments'))}</button>`:'',!sections.includes('reserve')?`<button class="text-button" data-add-mandatory-section="reserve">+ ${esc(mandatoryLabel('reserve'))}</button>`:''].filter(Boolean).join('');
   $('#monthTitle').textContent=periodTitle(p.key);$('#monthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
   $('#incomeTotal').textContent=formatByn(periodIncome(p));
   $('#incomeDetails').textContent=`Зарплата ${formatByn(p.salary)}${p.extraIncome?` · Доп. доход ${formatByn(p.extraIncome)}`:''}`;
   $('#mandatoryGrid').innerHTML=[
-    renderMandatoryCard(mandatoryLabel('housing'),num(p.mandatory.housingPlan),num(p.mandatory.housingSpent),'housing'),
-    renderMandatoryCard(sectionLabel('payments'),num(payment.planned),num(payment.paid),'payment'),
-    renderMandatoryCard(mandatoryLabel('reserve'),num(p.mandatory.reservePlan),num(p.mandatory.reserveAllocated),'reserve')
-  ].join('')+`<article class="pass-through"><label class="check-label"><input type="checkbox" data-utility-paid="${p.key}" ${p.passThroughs?.[0]?.paid?'checked':''}><span>${p.passThroughs?.[0]?.paid?'Оплачено':'Не оплачено'}</span></label><div><b>Коммунальные ${formatByn(p.passThroughs?.[0]?.amount||120)}</b><small>Аванс 25 числа приходит и сразу уходит. Основной доход не уменьшается.</small></div></article>`;
-  $('#categoryList').innerHTML=visibleCategories().map(c=>renderCategoryCard(c,p)).join('');
+    renderMandatoryCard(mandatoryLabel('housing'),num(p.mandatory.housingPlan),num(p.mandatory.housingSpent),'housing',{locked:true}),
+    sections.includes('payment')?renderMandatoryCard(sectionLabel('payments'),num(payment.planned),num(payment.paid),'payment'):null,
+    sections.includes('reserve')?renderMandatoryCard(mandatoryLabel('reserve'),num(p.mandatory.reservePlan),num(p.mandatory.reserveAllocated),'reserve'):null,
+    ...mandatoryCategories(p).map(c=>renderCategoryCard(c,p,{mandatory:true}))
+  ].filter(Boolean).join('')+(addableSections?`<article class="pass-through"><div><b>Добавить в обязательное</b><small>Для ${periodTitle(p.key)} можно вернуть скрытые обязательные пункты.</small></div><div class="settings-actions">${addableSections}</div></article>`:'')+`<article class="pass-through"><label class="check-label"><input type="checkbox" data-utility-paid="${p.key}" ${p.passThroughs?.[0]?.paid?'checked':''}><span>${p.passThroughs?.[0]?.paid?'Оплачено':'Не оплачено'}</span></label><div><b>Коммунальные ${formatByn(p.passThroughs?.[0]?.amount||120)}</b><small>Аванс 25 числа приходит и сразу уходит. Основной доход не уменьшается.</small></div></article>`;
+  $('#categoryList').innerHTML=optionalCategories(p).map(c=>renderCategoryCard(c,p)).join('')||'<div class="empty-state">Все видимые категории уже в обязательном для этого месяца</div>';
   const free=p.balanceNow==null?plannedFreeBalance(state,p):liveFreeBalance(state,p);
   $('#monthFreeValue').textContent=formatByn(free);
   $('#monthLimitMeta').textContent=`Лимиты категорий: ${formatByn(plannedCategoryTotal(state,p))}`;
@@ -424,7 +449,28 @@ function petAvatarModal(){
 function openCategoryEditor(id){
   const c=categoryById(id), p=selectedPeriod(), b=categoryBudget(p,c);const deletable=!['food','pet'].includes(c.kind);
   const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:b.plan,help:c.kind==='food'?'Для еды лимиты меняются по неделям. Значение здесь распределится на четыре недели.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',preview:c.iconImage||'',help:'Загруженная картинка заменит выбранную иконку.'},{name:'color',label:'Цвет',type:'select',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
-  openModal('Категория',fields,async v=>{c.name=v.name.trim()||c.name;if(['food','pet'].includes(c.kind))setSectionLabel(c.id,c.name);c.icon=v.icon;c.color=v.color;c.visible=v.visible;if(v.iconImage)c.iconImage=await imageToDataUrl(v.iconImage,256);if(['food','pet'].includes(c.kind)){const item=navDefaults.find(x=>x.id===c.id);navIconSettings()[c.id]={icon:c.icon||item?.icon,image:c.iconImage||''};if(navIconSettings()[c.id].icon===item?.icon&&!navIconSettings()[c.id].image)delete navIconSettings()[c.id];}const plan=num(v.plan);if(c.kind==='food'){const per=roundMoney(plan/4);p.foodWeeks.forEach((w,i)=>w.plan=i===3?roundMoney(plan-per*3):per)}else ensurePeriod(state,p.key).categoryBudgets[c.id].plan=plan;await commit();closeModal();},{extraAction:deletable?{label:'Удалить категорию',handler:async()=>{if(!confirm(`Удалить «${c.name}»?`))return;state.categories=state.categories.filter(x=>x.id!==id);Object.values(state.periods).forEach(period=>delete period.categoryBudgets[id]);await commit();closeModal();}}:null});
+  openModal('Категория',fields,async v=>{
+    c.name=v.name.trim()||c.name;
+    if(['food','pet'].includes(c.kind))setSectionLabel(c.id,c.name);
+    c.icon=v.icon;c.color=v.color;c.visible=v.visible;
+    if(v.iconImage)c.iconImage=await imageToDataUrl(v.iconImage,256);
+    if(['food','pet'].includes(c.kind)){
+      const item=navDefaults.find(x=>x.id===c.id);
+      navIconSettings()[c.id]={icon:c.icon||item?.icon,image:c.iconImage||''};
+      if(navIconSettings()[c.id].icon===item?.icon&&!navIconSettings()[c.id].image)delete navIconSettings()[c.id];
+    }
+    const plan=num(v.plan);
+    if(c.kind==='food'){
+      const per=roundMoney(plan/4);
+      p.foodWeeks.forEach((w,i)=>w.plan=i===3?roundMoney(plan-per*3):per);
+    }else ensurePeriod(state,p.key).categoryBudgets[c.id].plan=plan;
+    await commit();closeModal();
+  },{extraAction:deletable?{label:'Удалить категорию',handler:async()=>{
+    if(!confirm(`Удалить «${c.name}»?`))return;
+    state.categories=state.categories.filter(x=>x.id!==id);
+    Object.values(state.periods).forEach(period=>{delete period.categoryBudgets[id];if(period.mandatory?.categoryIds)period.mandatory.categoryIds=period.mandatory.categoryIds.filter(x=>x!==id);});
+    await commit();closeModal();
+  }}:null});
 }
 function openNewCategory(){openModal('Новая категория',[{name:'name',label:'Название',required:true},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:0},{name:'icon',label:'Иконка',type:'select',value:'wallet',options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',help:'Можно загрузить свою картинку.'},{name:'color',label:'Цвет',type:'select',value:'#e5edf8',options:colorOptions}],async v=>{const id=`category-${uid()}`;const order=Math.max(0,...state.categories.map(c=>c.order))+1;state.categories.push({id,name:v.name.trim()||'Новая категория',icon:v.icon,iconImage:v.iconImage?await imageToDataUrl(v.iconImage,256):'',color:v.color,kind:'monthly',order,visible:true});Object.values(state.periods).forEach(period=>{period.categoryBudgets[id]={plan:period.key===selectedPeriodKey?num(v.plan):0,spent:0}});await commit();closeModal();});}
 
@@ -472,6 +518,10 @@ function bindDelegatedEvents(){
     const dashboard=e.target.closest('[data-dashboard]');if(dashboard){const id=dashboard.dataset.dashboard;if(id==='payments')openOverlay('payments');else setScreen(id);return;}
     const nav=e.target.closest('[data-nav-to]');if(nav){setScreen(nav.dataset.navTo);return;}
     if(e.target.closest('[data-open-food]')){foodPeriodKey=selectedPeriodKey;openOverlay('food');return;}
+    const addMandatorySection=e.target.closest('[data-add-mandatory-section]');if(addMandatorySection){const p=selectedPeriod(),sections=mandatorySections(p),id=addMandatorySection.dataset.addMandatorySection;if(!sections.includes(id))sections.push(id);await commit();return;}
+    const removeMandatorySection=e.target.closest('[data-remove-mandatory-section]');if(removeMandatorySection){const p=selectedPeriod(),id=removeMandatorySection.dataset.removeMandatorySection;if(['payment','reserve'].includes(id))p.mandatory.sections=mandatorySections(p).filter(x=>x!==id);await commit();return;}
+    const addMandatoryCategory=e.target.closest('[data-add-mandatory-category]');if(addMandatoryCategory){const p=selectedPeriod(),ids=mandatoryCategoryIds(p),id=addMandatoryCategory.dataset.addMandatoryCategory;if(!ids.includes(id))ids.push(id);await commit();return;}
+    const removeMandatoryCategory=e.target.closest('[data-remove-mandatory-category]');if(removeMandatoryCategory){const p=selectedPeriod(),id=removeMandatoryCategory.dataset.removeMandatoryCategory;if(id!=='food')p.mandatory.categoryIds=mandatoryCategoryIds(p).filter(x=>x!==id);await commit();return;}
     const mandatory=e.target.closest('[data-edit-mandatory]');if(mandatory){openMandatoryEditor(mandatory.dataset.editMandatory);return;}
     const editCategory=e.target.closest('[data-edit-category]');if(editCategory){openCategoryEditor(editCategory.dataset.editCategory);return;}
     const settingsCategory=e.target.closest('[data-settings-category]');if(settingsCategory){openCategoryEditor(settingsCategory.dataset.settingsCategory);return;}

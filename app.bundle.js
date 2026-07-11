@@ -250,7 +250,7 @@ const iconPaths = {
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'
 };
 function icon(name,size=22){return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name]||iconPaths.wallet}</svg>`}
-function petAvatar(){return `<svg viewBox="0 0 120 120" role="img" aria-label="Кавалер кинг чарльз спаниель"><circle cx="60" cy="60" r="56" fill="#f4e8dc"/><path d="M38 42C18 38 15 70 32 83c7 5 16-2 17-13Z" fill="#a9673f"/><path d="M82 42c20-4 23 28 6 41-7 5-16-2-17-13Z" fill="#a9673f"/><path d="M60 28c23 0 32 18 28 41-3 19-15 30-28 30S35 88 32 69C28 46 37 28 60 28Z" fill="#fffaf2"/><path d="M39 42c8-8 15-11 21-12-1 14-9 23-20 27Z" fill="#9a5734"/><path d="M81 42c-8-8-15-11-21-12 1 14 9 23 20 27Z" fill="#9a5734"/><ellipse cx="46" cy="62" rx="4.2" ry="5" fill="#222"/><ellipse cx="74" cy="62" rx="4.2" ry="5" fill="#222"/><ellipse cx="60" cy="76" rx="7" ry="5" fill="#2d2522"/><path d="M54 83c4 4 8 4 12 0" fill="none" stroke="#8c5141" stroke-width="2.5" stroke-linecap="round"/></svg>`}
+function petAvatar(){return `<img src="./icons/pet-face.png" alt="Сэмми" loading="lazy">`}
 
 let state;
 let activeScreen='home';

@@ -133,7 +133,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
 .bottom-nav{
   position:fixed;z-index:30;bottom:10px;left:50%;transform:translateX(-50%);
-  width:min(calc(100% - 28px),532px);display:grid;grid-template-columns:repeat(5,1fr);
+  width:min(calc(100% - 28px),532px);display:grid;grid-template-columns:repeat(var(--nav-count,5),minmax(0,1fr));
   background:rgba(255,255,255,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
   border:1px solid var(--line);border-radius:18px;
   box-shadow:0 10px 32px rgba(17,24,39,.12);
@@ -143,7 +143,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .bottom-nav button small{font-size:10px;line-height:1}
 .bottom-nav button.active{color:var(--green);font-weight:700;background:transparent}
 .bottom-nav button.active .icon{stroke-width:2.4}
+.bottom-nav.icons-only{align-items:center;padding:10px 10px calc(10px + var(--safe-bottom))}
+.bottom-nav.icons-only button{min-height:48px;place-items:center;padding:7px 2px}
+.bottom-nav.icons-only .icon{width:31px;height:31px}
 .custom-nav-icon{width:21px;height:21px;border-radius:7px;object-fit:cover;display:block}
+.bottom-nav.icons-only .custom-nav-icon{width:31px;height:31px;border-radius:9px}
 
 .month-switcher{display:grid;grid-template-columns:42px 1fr 42px;align-items:center;gap:10px;text-align:center;margin:2px 0 14px}
 .month-switcher button{height:41px;border:1px solid var(--line);border-radius:12px;background:#fff;display:grid;place-items:center;box-shadow:none}

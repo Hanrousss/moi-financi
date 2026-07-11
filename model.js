@@ -127,6 +127,7 @@ export function seedState(now=new Date()) {
       salaryDay: 5,
       usdRate: 1,
       debtInitial: 0,
+      navLabels: true,
       navIcons: {}
     },
     categories: structuredClone(DEFAULT_CATEGORIES),

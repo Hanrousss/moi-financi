@@ -131,6 +131,7 @@ function seedState(now=new Date()) {
       salaryDay: 5,
       usdRate: 1,
       debtInitial: 0,
+      navLabels: true,
       navIcons: {}
     },
     categories: structuredClone(DEFAULT_CATEGORIES),
@@ -235,7 +236,9 @@ const imageToDataUrl = (file,maxSize=900) => new Promise((resolve,reject)=>{
       canvas.height=Math.max(1,Math.round(img.height*scale));
       const ctx=canvas.getContext('2d');
       ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      resolve(canvas.toDataURL('image/jpeg',.82));
+      const transparentSource=file.type==='image/png'||file.type==='image/webp'||file.name?.toLowerCase().endsWith('.png');
+      const format=transparentSource?(file.type==='image/webp'?'image/webp':'image/png'):'image/jpeg';
+      resolve(format==='image/png'?canvas.toDataURL(format):canvas.toDataURL(format,.82));
     };
     img.src=reader.result;
   };
@@ -310,6 +313,10 @@ function dashboardCards(){
 function navIconSettings(){
   state.settings.navIcons=state.settings.navIcons&&typeof state.settings.navIcons==='object'?state.settings.navIcons:{};
   return state.settings.navIcons;
+}
+function showNavLabels(){
+  if(typeof state.settings.navLabels!=='boolean')state.settings.navLabels=true;
+  return state.settings.navLabels;
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -453,7 +460,7 @@ function renderPayments(){
 
 function renderSettings(){
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
-  $('#settingsNavIcons').innerHTML=navDefaults.map(item=>`<button class="settings-row" data-edit-nav-icon="${item.id}"><span><span class="nav-icon-preview">${navItemIconHtml(item,20)}</span><span><b>${esc(item.label)}</b><small>${navIconSettings()[item.id]?.image?'Своя картинка':navIconSettings()[item.id]?.icon?'Иконка изменена':'Стандартная иконка'}</small></span></span>${icon('chevronRight',18)}</button>`).join('');
+  $('#settingsNavIcons').innerHTML=`<label class="toggle-field"><input type="checkbox" data-nav-labels ${showNavLabels()?'checked':''}><span><b>Показывать названия</b><small>Если выключить, нижнее меню останется только с крупными иконками.</small></span></label>`+navDefaults.map(item=>`<button class="settings-row" data-edit-nav-icon="${item.id}"><span><span class="nav-icon-preview">${navItemIconHtml(item,20)}</span><span><b>${esc(item.label)}</b><small>${navIconSettings()[item.id]?.image?'Своя картинка':navIconSettings()[item.id]?.icon?'Иконка изменена':'Стандартная иконка'}</small></span></span>${icon('chevronRight',18)}</button>`).join('');
   const cardLabels={savings:'Накопления',payments:'Платежи',pet:'Питомец',purchases:'Покупки'};
   $('#settingsDashboardCards').innerHTML=dashboardCards().map((id,index)=>`<article class="settings-row dashboard-setting"><span><b>${cardLabels[id]}</b><small>${index+1} на главной</small></span><span class="settings-actions"><button class="mini-icon" data-card-up="${id}" ${index===0?'disabled':''}>${icon('chevronLeft',16)}</button><button class="mini-icon" data-card-down="${id}" ${index===dashboardCards().length-1?'disabled':''}>${icon('chevronRight',16)}</button><button class="mini-icon" data-card-remove="${id}" aria-label="Скрыть">${icon('close',16)}</button></span></article>`).join('')+dashboardDefaults.filter(id=>!dashboardCards().includes(id)).map(id=>`<button class="settings-row" data-card-add="${id}"><span><b>${cardLabels[id]}</b><small>Скрыта</small></span>${icon('plus',18)}</button>`).join('');
   $('#settingsCategories').innerHTML=[...state.categories].sort((a,b)=>a.order-b.order).map(c=>`<button class="settings-row" data-settings-category="${c.id}"><span><span class="category-icon" style="background:${esc(c.color)}">${categoryIconHtml(c,20)}</span><span><b>${esc(c.name)}</b><small>${c.visible?'Показывается':'Скрыта'} · ${c.kind==='food'?'по неделям':c.kind==='pet'?'расширенная':'обычная'}</small></span></span>${icon('chevronRight',18)}</button>`).join('');
@@ -463,7 +470,10 @@ function renderSettings(){
 }
 
 function renderNav(){
-  $$('.bottom-nav button').forEach((button,index)=>{const item=navDefaults[index];button.innerHTML=`${navItemIconHtml(item,21)}<small>${item.label}</small>`;button.classList.toggle('active',activeScreen===item.id);});
+  const nav=$('.bottom-nav'), labels=showNavLabels();
+  nav.style.setProperty('--nav-count',navDefaults.length);
+  nav.classList.toggle('icons-only',!labels);
+  $$('.bottom-nav button').forEach((button,index)=>{const item=navDefaults[index];button.innerHTML=`${navItemIconHtml(item,labels?21:31)}${labels?`<small>${item.label}</small>`:''}`;button.classList.toggle('active',activeScreen===item.id);});
   $('#settingsBtn').innerHTML=icon('settings',21);$('#closeOverlayBtn').innerHTML=icon('close',21);
   $('#prevMonth').innerHTML=icon('chevronLeft');$('#nextMonth').innerHTML=icon('chevronRight');$('#foodPrevMonth').innerHTML=icon('chevronLeft');$('#foodNextMonth').innerHTML=icon('chevronRight');
   $('#editBalanceBtn').innerHTML=icon('edit',17);$('#addCategoryBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#depositSavings').innerHTML=`${icon('plus',18)} Отложить`;$('#withdrawSavings').innerHTML=`${icon('minus',18)} Взять`;$('#topupPet').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendPet').innerHTML=`${icon('minus',18)} Потратить`;$('#addPetNeed').innerHTML=`${icon('plus',17)} Добавить`;$('#addPurchaseBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#addPaymentBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#settingsAddCategory').innerHTML=`${icon('plus',17)} Добавить`;$('#modalClose').innerHTML=icon('close',19);
@@ -507,7 +517,7 @@ const colorOptions=['#dfece1','#e5edf8','#f4e8dc','#ebe5f5','#f2e6e6','#e9efe2',
 function navIconModal(id){
   const item=navDefaults.find(x=>x.id===id);if(!item)return;
   const settings=navIconSettings(), current=settings[id]||{};
-  openModal(`Иконка: ${item.label}`,[{name:'icon',label:'Стандартная иконка',type:'select',value:current.icon||item.icon,options:iconOptions},{name:'image',label:'Своя картинка',type:'file',preview:current.image||'',help:'Квадратная картинка лучше всего смотрится в нижнем меню.'}],async v=>{
+  openModal(`Иконка: ${item.label}`,[{name:'icon',label:'Стандартная иконка',type:'select',value:current.icon||item.icon,options:iconOptions},{name:'image',label:'Своя картинка',type:'file',preview:current.image||'',accept:'image/png,image/jpeg,image/webp,image/*',help:'PNG с прозрачным фоном сохранится вместе с альфа-каналом.'}],async v=>{
     const image=v.image?await imageToDataUrl(v.image,160):current.image||'';
     settings[id]={icon:v.icon||item.icon,image};
     if(settings[id].icon===item.icon&&!settings[id].image)delete settings[id];
@@ -574,6 +584,7 @@ function bindDelegatedEvents(){
     if(e.target.matches('[data-week-spent]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekSpent)].spent=Math.max(0,num(e.target.value));await commit();return;}
     if(e.target.matches('[data-week-closed]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekClosed)].closed=e.target.checked;await commit();return;}
     if(e.target.matches('[data-utility-paid]')){const p=ensurePeriod(state,e.target.dataset.utilityPaid);p.passThroughs=p.passThroughs?.length?p.passThroughs:[{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25,amount:120}];p.passThroughs[0].paid=e.target.checked;await commit();return;}
+    if(e.target.matches('[data-nav-labels]')){state.settings.navLabels=e.target.checked;await commit();return;}
   });
   document.addEventListener('focusin',e=>{if(e.target.matches('input[type="number"]'))e.target.select()});
 }

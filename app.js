@@ -112,7 +112,10 @@ function syncPeriodAutoClosedWeeks(period,now=new Date()){
   return changed;
 }
 function syncAllAutoClosedWeeks(){
-  return Object.values(state.periods||{}).reduce((changed,period)=>syncPeriodAutoClosedWeeks(period)||changed,false);
+  return Object.keys(state.periods||{}).reduce((changed,key)=>{
+    const period=ensurePeriod(state,key);
+    return syncPeriodAutoClosedWeeks(period)||changed;
+  },false);
 }
 function scheduleAutoWeekClose(){
   clearTimeout(autoCloseTimer);

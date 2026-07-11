@@ -175,7 +175,6 @@ function alignFoodWeeks(period,salaryDay=5) {
     });
     migrated[bestIndex].plan = roundMoney(Number(migrated[bestIndex].plan||0) + Number(oldWeek.plan||0));
     migrated[bestIndex].spent = roundMoney(Number(migrated[bestIndex].spent||0) + Number(oldWeek.spent||0));
-    migrated[bestIndex].closed = !!oldWeek.closed;
   }
   period.foodWeeks = migrated;
   return true;
@@ -376,7 +375,10 @@ function syncPeriodAutoClosedWeeks(period,now=new Date()){
   return changed;
 }
 function syncAllAutoClosedWeeks(){
-  return Object.values(state.periods||{}).reduce((changed,period)=>syncPeriodAutoClosedWeeks(period)||changed,false);
+  return Object.keys(state.periods||{}).reduce((changed,key)=>{
+    const period=ensurePeriod(state,key);
+    return syncPeriodAutoClosedWeeks(period)||changed;
+  },false);
 }
 function scheduleAutoWeekClose(){
   clearTimeout(autoCloseTimer);

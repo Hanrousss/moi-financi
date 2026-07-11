@@ -171,7 +171,6 @@ function alignFoodWeeks(period,salaryDay=5) {
     });
     migrated[bestIndex].plan = roundMoney(Number(migrated[bestIndex].plan||0) + Number(oldWeek.plan||0));
     migrated[bestIndex].spent = roundMoney(Number(migrated[bestIndex].spent||0) + Number(oldWeek.spent||0));
-    migrated[bestIndex].closed = !!oldWeek.closed;
   }
   period.foodWeeks = migrated;
   return true;

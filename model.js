@@ -135,7 +135,7 @@ export function seedState(now=new Date()) {
     payments: [],
     savings: [],
     purchases: [],
-    pet: {transactions:[],needs:[]}
+    pet: {balanceByn:0,avatarImage:'',transactions:[],needs:[]}
   };
 }
 
@@ -156,7 +156,7 @@ const savingBynAmount=t=>savingCurrency(t)==='byn'?Number(t.amountByn||0):0;
 export function savingsBalanceUsd(state){return roundMoney(state.savings.reduce((s,t)=>s+savingSign(t)*savingUsdAmount(t),0))}
 const savingAmountByn=(state,t)=>savingBynAmount(t);
 export function savingsBalanceByn(state){return roundMoney(state.savings.reduce((s,t)=>s+savingSign(t)*savingAmountByn(state,t),0))}
-export function petBalanceByn(state){return roundMoney(state.pet.transactions.reduce((s,t)=>s+(t.type==='topup'?1:-1)*Number(t.amountByn||0),0))}
+export function petBalanceByn(state){return Number.isFinite(Number(state.pet?.balanceByn))?roundMoney(state.pet.balanceByn):roundMoney(state.pet.transactions.reduce((s,t)=>s+(t.type==='topup'?1:-1)*Number(t.amountByn||0),0))}
 export function paymentsPaidTotal(state){return roundMoney(state.payments.reduce((s,p)=>s+Number(p.paid||0),0))}
 export function debtRemaining(state){return Math.max(0,roundMoney(Number(state.settings.debtInitial||0)-paymentsPaidTotal(state)))}
 export function plannedCategoryTotal(state,period){return roundMoney(state.categories.filter(c=>c.visible).reduce((s,c)=>s+categoryBudget(period,c).plan,0))}

@@ -32,7 +32,7 @@
   --safe-bottom:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box}
-html{background:var(--bg);-webkit-text-size-adjust:100%}
+html{background:var(--bg);-webkit-text-size-adjust:100%;touch-action:manipulation}
 body{
   margin:0;
   min-height:100dvh;
@@ -231,6 +231,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
 .pet-hero{padding:18px;display:flex;align-items:center;gap:14px;background:linear-gradient(145deg,#fff7ef,#fff)}
 #petAvatar{width:76px;height:76px;flex:0 0 auto}
+.pet-avatar-button{width:100%;height:100%;padding:0;border:0;background:transparent;border-radius:50%;display:block}
 #petAvatar img{width:100%;height:100%;display:block;border-radius:50%;object-fit:cover;box-shadow:0 7px 18px rgba(17,24,39,.12);border:3px solid #fff;outline:1px solid rgba(76,175,80,.28)}
 .pet-hero>div:last-child{display:grid;gap:4px}
 .pet-hero strong{font-size:29px;letter-spacing:0;color:var(--heading)}
@@ -281,6 +282,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .settings-actions{display:flex;align-items:center;gap:4px}
 .settings-actions .mini-icon{background:#f7f8fa;border:1px solid var(--line)}
 .settings-actions .mini-icon:disabled{opacity:.35;cursor:default}
+.mini-toggle input{display:none}
+.mini-toggle span{width:38px;height:22px;border-radius:999px;background:#d8dde5;display:block;position:relative}
+.mini-toggle span::after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;left:2px;top:2px;box-shadow:0 1px 4px rgba(0,0,0,.18);transition:.18s}
+.mini-toggle input:checked+span{background:var(--green)}
+.mini-toggle input:checked+span::after{transform:translateX(16px)}
+.mini-toggle input:disabled+span{opacity:.45}
 .file-row{cursor:pointer}
 .file-row input{display:none}
 #importContent{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;min-width:0;width:100%}
@@ -304,6 +311,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .form-field>span{font-size:11px;color:var(--muted);font-weight:700}
 .form-field input,.form-field select,.form-field textarea{width:100%;min-width:0;border:1px solid var(--line-strong);background:#fff;border-radius:12px;padding:12px 13px}
 .form-field input[type="date"]{display:block;min-height:45px;-webkit-appearance:none;appearance:none}
+.color-code-field{display:grid;grid-template-columns:1fr 38px;align-items:center;gap:9px}
+.color-code-field i{width:38px;height:38px;border-radius:10px;border:1px solid var(--line-strong);display:block}
 .file-picker img{width:72px;height:72px;border-radius:14px;object-fit:cover;border:1px solid var(--line);box-shadow:var(--shadow-soft)}
 .form-field input:focus,.form-field select:focus,.form-field textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(76,175,80,.12)}
 .form-field small,.toggle-field small{color:var(--muted);font-size:9px;line-height:1.35}

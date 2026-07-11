@@ -126,7 +126,8 @@ export function seedState(now=new Date()) {
       profileName: 'Пользователь',
       salaryDay: 5,
       usdRate: 1,
-      debtInitial: 0
+      debtInitial: 0,
+      navIcons: {}
     },
     categories: structuredClone(DEFAULT_CATEGORIES),
     periods,

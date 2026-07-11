@@ -143,6 +143,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .bottom-nav button small{font-size:10px;line-height:1}
 .bottom-nav button.active{color:var(--green);font-weight:700;background:transparent}
 .bottom-nav button.active .icon{stroke-width:2.4}
+.custom-nav-icon{width:21px;height:21px;border-radius:7px;object-fit:cover;display:block}
 
 .month-switcher{display:grid;grid-template-columns:42px 1fr 42px;align-items:center;gap:10px;text-align:center;margin:2px 0 14px}
 .month-switcher button{height:41px;border:1px solid var(--line);border-radius:12px;background:#fff;display:grid;place-items:center;box-shadow:none}
@@ -269,6 +270,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .settings-row b{font-size:13px;color:var(--heading)}
 .settings-row small{display:block;color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .settings-row .category-icon{width:36px;height:36px}
+.nav-icon-preview{width:36px;height:36px;border-radius:12px;background:#f4f6f8;color:#4b5563;display:grid;place-items:center;flex:0 0 auto}
+.nav-icon-preview .custom-nav-icon{width:24px;height:24px}
 .dashboard-setting{grid-template-columns:1fr auto}
 .settings-actions{display:flex;align-items:center;gap:4px}
 .settings-actions .mini-icon{background:#f7f8fa;border:1px solid var(--line)}

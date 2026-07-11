@@ -149,9 +149,13 @@ export function foodBudget(period){return{plan:roundMoney(period.foodWeeks.reduc
 export function categoryBudget(period,category){return category.kind==='food'?foodBudget(period):(period.categoryBudgets[category.id]||{plan:0,spent:0})}
 export function periodIncome(period){return roundMoney(Number(period.salary||0)+Number(period.extraIncome||0))}
 export function periodPayment(state,key){let item=state.payments.find(p=>p.periodKey===key);if(!item){item=payment(key,0);state.payments.push(item)}return item}
-export function savingsBalanceUsd(state){return roundMoney(state.savings.reduce((s,t)=>s+(t.type==='deposit'?1:-1)*Number(t.amountUsd||0),0))}
-const savingAmountByn=(state,t)=>Number(t.amountByn??(Number(t.amountUsd||0)*Number(state.settings?.usdRate||0)));
-export function savingsBalanceByn(state){return roundMoney(state.savings.reduce((s,t)=>s+(t.type==='deposit'?1:-1)*savingAmountByn(state,t),0))}
+const savingSign=t=>t.type==='deposit'?1:-1;
+const savingCurrency=t=>t.currency||'usd';
+const savingUsdAmount=t=>savingCurrency(t)==='byn'?0:Number(t.amountUsd||0);
+const savingBynAmount=t=>savingCurrency(t)==='byn'?Number(t.amountByn||0):0;
+export function savingsBalanceUsd(state){return roundMoney(state.savings.reduce((s,t)=>s+savingSign(t)*savingUsdAmount(t),0))}
+const savingAmountByn=(state,t)=>savingBynAmount(t);
+export function savingsBalanceByn(state){return roundMoney(state.savings.reduce((s,t)=>s+savingSign(t)*savingAmountByn(state,t),0))}
 export function petBalanceByn(state){return roundMoney(state.pet.transactions.reduce((s,t)=>s+(t.type==='topup'?1:-1)*Number(t.amountByn||0),0))}
 export function paymentsPaidTotal(state){return roundMoney(state.payments.reduce((s,p)=>s+Number(p.paid||0),0))}
 export function debtRemaining(state){return Math.max(0,roundMoney(Number(state.settings.debtInitial||0)-paymentsPaidTotal(state)))}
@@ -187,8 +191,8 @@ export function liveFreeBalance(state,period){
     if(c.kind==='food')return sum+period.foodWeeks.reduce((s,w,i)=>s+Number(w.spent||0)-Number(snapshot.food?.[i]||0),0);
     const b=categoryBudget(period,c);return sum+Number(b.spent||0)-Number(snapshot.categories?.[c.id]||0);
   },0);
-  return roundMoney(Number(period.balanceNow||0)+Number(period.cashNow||0)-remainingMandatory-remainingCategories-newMandatorySpend-newCategorySpend);
+  return roundMoney(Number(period.balanceNow||0)-remainingMandatory-remainingCategories-newMandatorySpend-newCategorySpend);
 }
 export function purchaseAvailable(state,cost){return savingsBalanceByn(state)>=Number(cost||0)}
-export function monthlySavingsRows(state){const map=new Map();for(const t of state.savings){const key=t.date.slice(0,7),row=map.get(key)||{period:key,deposited:0,withdrawn:0,depositedByn:0,withdrawnByn:0,notes:[]};if(t.type==='deposit'){row.deposited+=Number(t.amountUsd||0);row.depositedByn+=savingAmountByn(state,t)}else{row.withdrawn+=Number(t.amountUsd||0);row.withdrawnByn+=savingAmountByn(state,t)}if(t.note)row.notes.push(t.note);map.set(key,row)}return[...map.values()].sort((a,b)=>b.period.localeCompare(a.period))}
+export function monthlySavingsRows(state){const map=new Map();for(const t of state.savings){const key=t.date.slice(0,7),row=map.get(key)||{period:key,deposited:0,withdrawn:0,depositedByn:0,withdrawnByn:0,notes:[]};if(t.type==='deposit'){row.deposited+=savingUsdAmount(t);row.depositedByn+=savingAmountByn(state,t)}else{row.withdrawn+=savingUsdAmount(t);row.withdrawnByn+=savingAmountByn(state,t)}if(t.note)row.notes.push(t.note);map.set(key,row)}return[...map.values()].sort((a,b)=>b.period.localeCompare(a.period))}
 export function validateState(v){return !!v&&typeof v==='object'&&v.version===VERSION&&v.settings&&Array.isArray(v.categories)&&v.periods&&Array.isArray(v.payments)&&Array.isArray(v.savings)&&Array.isArray(v.purchases)&&v.pet}

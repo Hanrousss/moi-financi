@@ -167,6 +167,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .mandatory-grid,.category-list,.food-weeks,.monthly-savings,.history-list,.need-list,.purchase-list,.payments-list,.settings-stack{display:grid;gap:10px}
 
 .mandatory-card,.category-card{padding:16px;box-shadow:var(--shadow-soft)}
+.category-card[data-open-category-detail]{cursor:pointer}
+.category-card[data-open-category-detail]:active{transform:scale(.992)}
 .mandatory-title,.category-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px;padding-bottom:12px;border-bottom:1px solid var(--line)}
 .mandatory-title b,.category-head b{font-size:16px;color:var(--heading)}
 .category-head>div{flex:1;min-width:0;display:grid;gap:2px}

@@ -269,8 +269,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .settings-group{margin-bottom:25px}
 .settings-group h2{margin:0 2px 10px}
 .settings-row{width:100%;min-height:57px;padding:12px 14px;box-shadow:none;display:grid;grid-template-columns:1fr auto;align-items:center;text-align:left;gap:10px}
-.settings-row>span:first-child{display:flex;align-items:center;gap:10px;min-width:0}
-.settings-row>span:first-child>span{display:grid;gap:3px;min-width:0}
+.settings-row>span:first-of-type{display:flex;align-items:center;gap:10px;min-width:0}
+.settings-row>span:first-of-type>span{display:grid;gap:3px;min-width:0}
 .settings-row b{font-size:13px;color:var(--heading)}
 .settings-row small{display:block;color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .settings-row .category-icon{width:36px;height:36px}
@@ -282,6 +282,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .settings-actions .mini-icon:disabled{opacity:.35;cursor:default}
 .file-row{cursor:pointer}
 .file-row input{display:none}
+#importContent{display:contents}
 .danger-row{color:var(--red)}
 .version-note{text-align:center;color:var(--muted);font-size:10px;margin:28px 0}
 .empty-state{border:1px dashed #cfd5dc;border-radius:16px;padding:23px;text-align:center;color:var(--muted);font-size:12px;background:rgba(255,255,255,.56)}

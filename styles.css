@@ -167,6 +167,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .category-head>div{flex:1;min-width:0;display:grid;gap:2px}
 .category-head small{font-size:11px;color:var(--muted)}
 .category-icon{width:40px;height:40px;border-radius:12px;color:#1f2937}
+.custom-category-icon{width:24px;height:24px;border-radius:7px;object-fit:cover;display:block}
 .metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
 .metric{min-width:0;padding:0 10px;border-right:1px solid var(--line)}
 .metric:first-child{padding-left:0}
@@ -234,6 +235,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .need-main>div,.purchase-card>div:first-child{min-width:0;display:grid;gap:3px}
 .need-main b,.purchase-card b{font-size:14px;color:var(--heading)}
 .need-main small,.purchase-card small{color:var(--muted);font-size:10px;line-height:1.3}
+.purchase-thumb{width:54px;height:54px;border-radius:12px;object-fit:cover;flex:0 0 auto;border:1px solid var(--line)}
 .round-check input{display:none}
 .round-check span{width:26px;height:26px;border-radius:50%;border:1px solid var(--line-strong);display:grid;place-items:center;color:var(--green)}
 .need-value,.purchase-cost{text-align:right;display:grid;justify-items:end;gap:3px;flex:0 0 auto}
@@ -267,6 +269,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .settings-row b{font-size:13px;color:var(--heading)}
 .settings-row small{display:block;color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .settings-row .category-icon{width:36px;height:36px}
+.dashboard-setting{grid-template-columns:1fr auto}
+.settings-actions{display:flex;align-items:center;gap:4px}
+.settings-actions .mini-icon{background:#f7f8fa;border:1px solid var(--line)}
+.settings-actions .mini-icon:disabled{opacity:.35;cursor:default}
 .file-row{cursor:pointer}
 .file-row input{display:none}
 .danger-row{color:var(--red)}
@@ -286,6 +292,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .form-field{display:grid;gap:6px}
 .form-field>span{font-size:11px;color:var(--muted);font-weight:700}
 .form-field input,.form-field select,.form-field textarea{width:100%;border:1px solid var(--line-strong);background:#fff;border-radius:12px;padding:12px 13px}
+.file-picker img{width:72px;height:72px;border-radius:14px;object-fit:cover;border:1px solid var(--line);box-shadow:var(--shadow-soft)}
 .form-field input:focus,.form-field select:focus,.form-field textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(76,175,80,.12)}
 .form-field small,.toggle-field small{color:var(--muted);font-size:9px;line-height:1.35}
 .toggle-field{display:flex;align-items:center;gap:10px;background:#f5f6f8;border-radius:13px;padding:12px}

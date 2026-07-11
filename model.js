@@ -148,41 +148,45 @@ export function categoryBudget(period,category){return category.kind==='food'?fo
 export function periodIncome(period){return roundMoney(Number(period.salary||0)+Number(period.extraIncome||0))}
 export function periodPayment(state,key){let item=state.payments.find(p=>p.periodKey===key);if(!item){item=payment(key,0);state.payments.push(item)}return item}
 export function savingsBalanceUsd(state){return roundMoney(state.savings.reduce((s,t)=>s+(t.type==='deposit'?1:-1)*Number(t.amountUsd||0),0))}
+const savingAmountByn=(state,t)=>Number(t.amountByn??(Number(t.amountUsd||0)*Number(state.settings?.usdRate||0)));
+export function savingsBalanceByn(state){return roundMoney(state.savings.reduce((s,t)=>s+(t.type==='deposit'?1:-1)*savingAmountByn(state,t),0))}
 export function petBalanceByn(state){return roundMoney(state.pet.transactions.reduce((s,t)=>s+(t.type==='topup'?1:-1)*Number(t.amountByn||0),0))}
 export function paymentsPaidTotal(state){return roundMoney(state.payments.reduce((s,p)=>s+Number(p.paid||0),0))}
 export function debtRemaining(state){return Math.max(0,roundMoney(Number(state.settings.debtInitial||0)-paymentsPaidTotal(state)))}
 export function plannedCategoryTotal(state,period){return roundMoney(state.categories.filter(c=>c.visible).reduce((s,c)=>s+categoryBudget(period,c).plan,0))}
 export function periodSavingsDepositedUsd(state,key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(parseISODate(t.date),state.settings.salaryDay)===key).reduce((s,t)=>s+Number(t.amountUsd||0),0))}
+export function periodSavingsDepositedByn(state,key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(parseISODate(t.date),state.settings.salaryDay)===key).reduce((s,t)=>s+savingAmountByn(state,t),0))}
 export function captureBalanceSnapshot(state,period){
   const payment=periodPayment(state,period.key);
   period.balanceSnapshot={
-    housingSpent:Number(period.mandatory.housingSpent||0),reserveAllocated:Number(period.mandatory.reserveAllocated||0),paymentPaid:Number(payment.paid||0),savingsDepositedUsd:periodSavingsDepositedUsd(state,period.key),
+    housingSpent:Number(period.mandatory.housingSpent||0),reserveAllocated:Number(period.mandatory.reserveAllocated||0),paymentPaid:Number(payment.paid||0),savingsDepositedUsd:periodSavingsDepositedUsd(state,period.key),savingsDepositedByn:periodSavingsDepositedByn(state,period.key),
     categories:Object.fromEntries(Object.entries(period.categoryBudgets).map(([id,b])=>[id,Number(b.spent||0)])),
     food:period.foodWeeks.map(w=>Number(w.spent||0))
   };
   return period.balanceSnapshot;
 }
 export function plannedFreeBalance(state,period){
-  const base=periodIncome(period)-Number(period.mandatory.housingPlan||0)-Number(periodPayment(state,period.key).planned||0)-Number(period.mandatory.reservePlan||0)-Number(period.mandatory.savingsPlanUsd||0)*Number(state.settings.usdRate||0)-plannedCategoryTotal(state,period);
+  const savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
+  const base=periodIncome(period)-Number(period.mandatory.housingPlan||0)-Number(periodPayment(state,period.key).planned||0)-Number(period.mandatory.reservePlan||0)-savingsPlanByn-plannedCategoryTotal(state,period);
   const overCategories=state.categories.filter(c=>c.visible&&c.kind!=='food').reduce((s,c)=>{const b=categoryBudget(period,c);return s+Math.min(0,Number(b.plan||0)-Number(b.spent||0))},0);
   const foodVariance=period.foodWeeks.reduce((s,w)=>{const delta=Number(w.plan||0)-Number(w.spent||0);return s+(w.closed?delta:Math.min(0,delta))},0);
   return roundMoney(base+overCategories+foodVariance);
 }
 export function liveFreeBalance(state,period){
   if(period.balanceNow==null)return plannedFreeBalance(state,period);
-  const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period),payment=periodPayment(state,period.key),rate=Number(state.settings.usdRate||0),saved=periodSavingsDepositedUsd(state,period.key);
-  const remainingMandatory=Math.max(0,Number(period.mandatory.housingPlan||0)-Number(period.mandatory.housingSpent||0))+Math.max(0,Number(payment.planned||0)-Number(payment.paid||0))+Math.max(0,Number(period.mandatory.reservePlan||0)-Number(period.mandatory.reserveAllocated||0))+Math.max(0,Number(period.mandatory.savingsPlanUsd||0)-saved)*rate;
+  const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period),payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key),savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
+  const remainingMandatory=Math.max(0,Number(period.mandatory.housingPlan||0)-Number(period.mandatory.housingSpent||0))+Math.max(0,Number(payment.planned||0)-Number(payment.paid||0))+Math.max(0,Number(period.mandatory.reservePlan||0)-Number(period.mandatory.reserveAllocated||0))+Math.max(0,savingsPlanByn-saved);
   const remainingCategories=state.categories.filter(c=>c.visible).reduce((sum,c)=>{
     if(c.kind==='food') return sum+period.foodWeeks.reduce((s,w)=>s+(w.closed?0:Math.max(0,Number(w.plan||0)-Number(w.spent||0))),0);
     const b=categoryBudget(period,c);return sum+Math.max(0,Number(b.plan||0)-Number(b.spent||0));
   },0);
-  const newMandatorySpend=(Number(period.mandatory.housingSpent||0)-Number(snapshot.housingSpent||0))+(Number(period.mandatory.reserveAllocated||0)-Number(snapshot.reserveAllocated||0))+(Number(payment.paid||0)-Number(snapshot.paymentPaid||0))+(saved-Number(snapshot.savingsDepositedUsd||0))*rate;
+  const newMandatorySpend=(Number(period.mandatory.housingSpent||0)-Number(snapshot.housingSpent||0))+(Number(period.mandatory.reserveAllocated||0)-Number(snapshot.reserveAllocated||0))+(Number(payment.paid||0)-Number(snapshot.paymentPaid||0))+(saved-Number(snapshot.savingsDepositedByn??snapshot.savingsDepositedUsd??0));
   const newCategorySpend=state.categories.filter(c=>c.visible).reduce((sum,c)=>{
     if(c.kind==='food')return sum+period.foodWeeks.reduce((s,w,i)=>s+Number(w.spent||0)-Number(snapshot.food?.[i]||0),0);
     const b=categoryBudget(period,c);return sum+Number(b.spent||0)-Number(snapshot.categories?.[c.id]||0);
   },0);
   return roundMoney(Number(period.balanceNow||0)+Number(period.cashNow||0)-remainingMandatory-remainingCategories-newMandatorySpend-newCategorySpend);
 }
-export function purchaseAvailable(state,cost){return savingsBalanceUsd(state)*Number(state.settings.usdRate||0)>=Number(cost||0)}
-export function monthlySavingsRows(state){const map=new Map();for(const t of state.savings){const key=t.date.slice(0,7),row=map.get(key)||{period:key,deposited:0,withdrawn:0,notes:[]};if(t.type==='deposit')row.deposited+=t.amountUsd;else row.withdrawn+=t.amountUsd;if(t.note)row.notes.push(t.note);map.set(key,row)}return[...map.values()].sort((a,b)=>b.period.localeCompare(a.period))}
+export function purchaseAvailable(state,cost){return savingsBalanceByn(state)>=Number(cost||0)}
+export function monthlySavingsRows(state){const map=new Map();for(const t of state.savings){const key=t.date.slice(0,7),row=map.get(key)||{period:key,deposited:0,withdrawn:0,depositedByn:0,withdrawnByn:0,notes:[]};if(t.type==='deposit'){row.deposited+=Number(t.amountUsd||0);row.depositedByn+=savingAmountByn(state,t)}else{row.withdrawn+=Number(t.amountUsd||0);row.withdrawnByn+=savingAmountByn(state,t)}if(t.note)row.notes.push(t.note);map.set(key,row)}return[...map.values()].sort((a,b)=>b.period.localeCompare(a.period))}
 export function validateState(v){return !!v&&typeof v==='object'&&v.version===VERSION&&v.settings&&Array.isArray(v.categories)&&v.periods&&Array.isArray(v.payments)&&Array.isArray(v.savings)&&Array.isArray(v.purchases)&&v.pet}

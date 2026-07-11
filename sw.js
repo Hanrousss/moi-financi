@@ -1,4 +1,4 @@
-const CACHE='moi-dengi-private-v1.0.2';
+const CACHE='moi-dengi-private-v1.0.3';
 const CORE=['./','./index.html','./styles.css','./app.bundle.js','./app.js','./model.js','./storage.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png','./icons/pet-face.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()))});

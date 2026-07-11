@@ -3,7 +3,7 @@ import {
   periodKeyForDate, shiftPeriodKey, periodTitle, formatPeriodRange,
   periodStart, periodEnd, currentWeekIndex, daysToNextSalary,
   seedState, ensurePeriod, foodBudget, categoryBudget, periodIncome,
-  periodPayment, savingsBalanceUsd, petBalanceByn, paymentsPaidTotal,
+  periodPayment, savingsBalanceUsd, savingsBalanceByn, petBalanceByn, paymentsPaidTotal,
   debtRemaining, plannedCategoryTotal, plannedFreeBalance, liveFreeBalance,
   purchaseAvailable, monthlySavingsRows, validateState, toISODate, captureBalanceSnapshot
 } from './model.js';
@@ -13,6 +13,26 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
+const imageToDataUrl = (file,maxSize=900) => new Promise((resolve,reject)=>{
+  if(!file){resolve('');return;}
+  const reader=new FileReader();
+  reader.onerror=()=>reject(reader.error);
+  reader.onload=()=>{
+    const img=new Image();
+    img.onerror=()=>reject(new Error('image'));
+    img.onload=()=>{
+      const scale=Math.min(1,maxSize/Math.max(img.width,img.height));
+      const canvas=document.createElement('canvas');
+      canvas.width=Math.max(1,Math.round(img.width*scale));
+      canvas.height=Math.max(1,Math.round(img.height*scale));
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      resolve(canvas.toDataURL('image/jpeg',.82));
+    };
+    img.src=reader.result;
+  };
+  reader.readAsDataURL(file);
+});
 const todayISO = () => toISODate(new Date());
 const dateLabel = value => value ? new Date(`${value}T12:00:00`).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}) : '';
 const shortDate = value => value ? new Date(`${value}T12:00:00`).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'}) : '';
@@ -66,6 +86,12 @@ function visibleCategories(){return [...state.categories].filter(c=>c.visible).s
 function totalOpenNeeds(){return state.pet.needs.filter(n=>!n.completed).reduce((s,n)=>s+num(n.costByn),0);}
 function greeting(){const h=new Date().getHours();return h<12?'Доброе утро':h<18?'Добрый день':'Добрый вечер';}
 function dashboardStatus(value){return value<0?'status-bad':'status-good';}
+function savingTxByn(t){return num(t.amountByn??(num(t.amountUsd)*num(state.settings.usdRate||0)));}
+const dashboardDefaults=['savings','payments','pet','purchases'];
+function dashboardCards(){
+  state.settings.dashboardCards=Array.isArray(state.settings.dashboardCards)?state.settings.dashboardCards.filter(id=>dashboardDefaults.includes(id)):[...dashboardDefaults];
+  return state.settings.dashboardCards;
+}
 
 async function commit(render=true){
   if(saving)return;
@@ -111,19 +137,21 @@ function renderHome(){
   $('#weekCard').classList.toggle('card-warning',num(week.plan)>0&&available>=0&&available<=num(week.plan)*0.2);
   $('#daysToSalary').textContent=pluralDays(daysToNextSalary(new Date(),state.settings.salaryDay));
 
-  const savings=savingsBalanceUsd(state), pet=petBalanceByn(state), debt=debtRemaining(state);
+  const savings=savingsBalanceUsd(state), pet=petBalanceByn(state), debt=Math.max(0,roundMoney((num(state.settings.debtInitial)||state.payments.reduce((s,p)=>s+num(p.planned),0))-paymentsPaidTotal(state)));
   const openPurchases=state.purchases.filter(pu=>!pu.completed);
   const affordable=openPurchases.filter(pu=>purchaseAvailable(state,pu.costByn)).length;
-  const rows=[
-    {id:'savings',icon:'piggy',tone:'green',title:'Накопления',value:formatUsd(savings),meta:`≈ ${formatByn(savings*state.settings.usdRate)}`},
-    {id:'payments',icon:'money',tone:'blue',title:'Платежи',value:formatByn(debt),meta:'осталось закрыть'},
-    {id:'pet',icon:'paw',tone:'peach',title:'Питомец',value:formatByn(pet),meta:`нужно запланировано ${formatByn(totalOpenNeeds())}`},
-    {id:'purchases',icon:'bag',tone:'lavender',title:'Покупки',value:`${openPurchases.length}`,meta:affordable?`${affordable} уже доступны`:'пока накоплений не хватает'}
-  ];
+  const rowMap={
+    savings:{id:'savings',icon:'piggy',tone:'green',title:'Накопления',value:formatUsd(savings),meta:formatByn(savingsBalanceByn(state))},
+    payments:{id:'payments',icon:'money',tone:'blue',title:'Платежи',value:formatByn(debt),meta:'осталось закрыть'},
+    pet:{id:'pet',icon:'paw',tone:'peach',title:'Питомец',value:formatByn(pet),meta:`нужно запланировано ${formatByn(totalOpenNeeds())}`},
+    purchases:{id:'purchases',icon:'bag',tone:'lavender',title:'Покупки',value:`${openPurchases.length}`,meta:affordable?`${affordable} уже доступны`:'пока накоплений не хватает'}
+  };
+  const rows=dashboardCards().map(id=>rowMap[id]).filter(Boolean);
   $('#dashboardList').innerHTML=rows.map(r=>`<button class="dashboard-row" data-dashboard="${r.id}"><span class="dashboard-icon ${r.tone}">${icon(r.icon)}</span><span class="dashboard-copy"><b>${esc(r.title)}</b><small>${esc(r.meta)}</small></span><strong>${esc(r.value)}</strong>${icon('chevronRight',18)}</button>`).join('');
 }
 
 function metric(label,value,fieldHtml=''){return `<div class="metric"><span>${label}</span>${fieldHtml||`<strong>${value}</strong>`}</div>`;}
+function categoryIconHtml(category,size=22){return category.iconImage?`<img class="custom-category-icon" src="${category.iconImage}" alt="">`:icon(category.icon,size);}
 function renderMandatoryCard(name,plan,spent,kind){
   const available=roundMoney(plan-spent);
   return `<article class="mandatory-card ${budgetToneClass(plan,available)}"><div class="mandatory-title"><b>${esc(name)}</b><button class="mini-icon" data-edit-mandatory="${kind}" aria-label="Изменить">${icon('edit',17)}</button></div><div class="metrics-row">${metric('План',formatByn(plan))}${metric('Потрачено',formatByn(spent))}${metric('Доступно',`<span class="${budgetValueClass(plan,available)}">${formatByn(available)}</span>`)}</div></article>`;
@@ -133,7 +161,7 @@ function renderCategoryCard(category,period){
   const food=category.kind==='food', pet=category.kind==='pet';
   const input=food ? `<button class="inline-link" data-open-food="1">${formatByn(b.spent)}</button>` : pet ? `<button class="inline-link" data-nav-to="pet">${formatByn(b.spent)}</button>` : `<input class="number-field compact" data-category-spent="${category.id}" inputmode="decimal" type="number" min="0" step="1" value="${num(b.spent)}" aria-label="Потрачено: ${esc(category.name)}">`;
   return `<article class="category-card ${budgetToneClass(b.plan,available)}" data-category="${category.id}">
-    <div class="category-head"><span class="category-icon" style="background:${esc(category.color)}">${icon(category.icon)}</span><div><b>${esc(category.name)}</b><small>${category.kind==='food'?'по неделям':category.kind==='pet'?'пополнение внутреннего баланса':'месячный лимит'}</small></div><button class="mini-icon" data-edit-category="${category.id}" aria-label="Изменить категорию">${icon('edit',17)}</button></div>
+    <div class="category-head"><span class="category-icon" style="background:${esc(category.color)}">${categoryIconHtml(category)}</span><div><b>${esc(category.name)}</b><small>${category.kind==='food'?'по неделям':category.kind==='pet'?'пополнение внутреннего баланса':'месячный лимит'}</small></div><button class="mini-icon" data-edit-category="${category.id}" aria-label="Изменить категорию">${icon('edit',17)}</button></div>
     <div class="metrics-row">${metric('План',formatByn(b.plan))}${metric('Потрачено','',input)}${metric('Доступно',`<span class="${budgetValueClass(b.plan,available)}">${formatByn(available)}</span>`)}</div>
   </article>`;
 }
@@ -146,7 +174,7 @@ function renderMonth(){
     renderMandatoryCard('Квартира',num(p.mandatory.housingPlan),num(p.mandatory.housingSpent),'housing'),
     renderMandatoryCard('Платежи',num(payment.planned),num(payment.paid),'payment'),
     renderMandatoryCard('Резерв',num(p.mandatory.reservePlan),num(p.mandatory.reserveAllocated),'reserve')
-  ].join('')+`<article class="pass-through"><span>${icon('info',18)}</span><div><b>Коммунальные ${formatByn(p.passThroughs?.[0]?.amount||120)}</b><small>Аванс 25 числа приходит и сразу уходит. Основной доход не уменьшается.</small></div></article>`;
+  ].join('')+`<article class="pass-through"><label class="check-label"><input type="checkbox" data-utility-paid="${p.key}" ${p.passThroughs?.[0]?.paid?'checked':''}><span>${p.passThroughs?.[0]?.paid?'Оплачено':'Не оплачено'}</span></label><div><b>Коммунальные ${formatByn(p.passThroughs?.[0]?.amount||120)}</b><small>Аванс 25 числа приходит и сразу уходит. Основной доход не уменьшается.</small></div></article>`;
   $('#categoryList').innerHTML=visibleCategories().map(c=>renderCategoryCard(c,p)).join('');
   const free=p.balanceNow==null?plannedFreeBalance(state,p):liveFreeBalance(state,p);
   $('#monthFreeValue').textContent=formatByn(free);
@@ -168,11 +196,11 @@ function renderFood(){
 }
 
 function renderSavings(){
-  const balance=savingsBalanceUsd(state);
-  $('#savingsBalance').textContent=formatUsd(balance);$('#savingsEquivalent').textContent=`≈ ${formatByn(balance*state.settings.usdRate)} по курсу ${state.settings.usdRate}`;
+  const balance=savingsBalanceUsd(state), balanceByn=savingsBalanceByn(state);
+  $('#savingsBalance').textContent=formatUsd(balance);$('#savingsEquivalent').textContent=formatByn(balanceByn);
   const rows=monthlySavingsRows(state);
-  $('#monthlySavings').innerHTML=rows.length?rows.map(row=>{const net=roundMoney(row.deposited-row.withdrawn);return `<article class="monthly-row"><div><b>${periodTitle(row.period)}</b><small>${row.notes.slice(0,2).map(esc).join(' · ')||'Без комментария'}</small></div><div><span>Отложила ${formatUsd(row.deposited)}</span><span>Взяла ${formatUsd(row.withdrawn)}</span><strong class="${net<0?'negative-number':''}">${net>=0?'+':''}${formatUsd(net)}</strong></div></article>`}).join(''):'<div class="empty-state">В этом разделе пока нет данных</div>';
-  $('#savingsHistory').innerHTML=state.savings.length?[...state.savings].sort((a,b)=>b.date.localeCompare(a.date)).map(t=>`<article class="history-row"><span class="history-icon ${t.type==='deposit'?'green':'red'}">${icon(t.type==='deposit'?'arrowDown':'arrowUp',18)}</span><div><b class="${t.type==='withdraw'?'negative-number':''}">${t.type==='deposit'?'+':'−'} ${formatUsd(t.amountUsd)}</b><small>${esc(t.note||'Без комментария')} · ${dateLabel(t.date)}</small></div><button class="mini-icon" data-delete-saving="${t.id}" aria-label="Удалить">${icon('trash',17)}</button></article>`).join(''):'<div class="empty-state">История пока пустая</div>';
+  $('#monthlySavings').innerHTML=rows.length?rows.map(row=>{const net=roundMoney(row.deposited-row.withdrawn), netByn=roundMoney(row.depositedByn-row.withdrawnByn);return `<article class="monthly-row"><div><b>${periodTitle(row.period)}</b><small>${row.notes.slice(0,2).map(esc).join(' · ')||'Без комментария'}</small></div><div><span>Отложила ${formatUsd(row.deposited)} · ${formatByn(row.depositedByn)}</span><span>Взяла ${formatUsd(row.withdrawn)} · ${formatByn(row.withdrawnByn)}</span><strong class="${netByn<0?'negative-number':''}">${net>=0?'+':''}${formatUsd(net)} · ${netByn>=0?'+':''}${formatByn(netByn)}</strong></div></article>`}).join(''):'<div class="empty-state">В этом разделе пока нет данных</div>';
+  $('#savingsHistory').innerHTML=state.savings.length?[...state.savings].sort((a,b)=>b.date.localeCompare(a.date)).map(t=>`<article class="history-row"><span class="history-icon ${t.type==='deposit'?'green':'red'}">${icon(t.type==='deposit'?'arrowDown':'arrowUp',18)}</span><div><b class="${t.type==='withdraw'?'negative-number':''}">${t.type==='deposit'?'+':'−'} ${formatUsd(t.amountUsd)} · ${formatByn(savingTxByn(t))}</b><small>${esc(t.note||'Без комментария')} · ${dateLabel(t.date)}</small></div><button class="mini-icon" data-delete-saving="${t.id}" aria-label="Удалить">${icon('trash',17)}</button></article>`).join(''):'<div class="empty-state">История пока пустая</div>';
 }
 
 function renderPet(){
@@ -185,23 +213,25 @@ function renderPet(){
 
 const purchaseTitles={required:'Обязательные',desired:'Желательные',wish:'Просто хочется'};
 function renderPurchases(){
-  const savings=savingsBalanceUsd(state), byn=roundMoney(savings*state.settings.usdRate);
+  const savings=savingsBalanceUsd(state), byn=savingsBalanceByn(state);
   $('#purchaseSavingsByn').textContent=formatByn(byn);$('#purchaseSavingsUsd').textContent=formatUsd(savings);
   $$('#purchaseTabs button').forEach(b=>b.classList.toggle('active',b.dataset.purchaseTab===purchaseTab));$('#purchaseTitle').textContent=purchaseTitles[purchaseTab];
   const items=state.purchases.filter(p=>p.priority===purchaseTab&&!p.completed);
-  $('#purchaseList').innerHTML=items.length?items.map(p=>{const enough=purchaseAvailable(state,p.costByn), missing=Math.max(0,num(p.costByn)-byn);return `<article class="purchase-card ${enough?'affordable':''}"><div><b>${esc(p.name)}</b><small>${esc(p.note||purchaseTitles[p.priority])}</small></div><div class="purchase-cost"><b>${formatByn(p.costByn)}</b><small class="${enough?'success-text':'negative-number'}">${enough?'Накоплений хватает':`Не хватает ${formatByn(missing)}`}</small><div><button class="mini-icon" data-complete-purchase="${p.id}">${icon('check',16)}</button><button class="mini-icon" data-edit-purchase="${p.id}">${icon('edit',16)}</button></div></div></article>`}).join(''):'<div class="empty-state">В этом разделе пока нет покупок</div>';
+  $('#purchaseList').innerHTML=items.length?items.map(p=>{const enough=purchaseAvailable(state,p.costByn), missing=Math.max(0,num(p.costByn)-byn);return `<article class="purchase-card ${enough?'affordable':''}">${p.imageDataUrl?`<img class="purchase-thumb" src="${p.imageDataUrl}" alt="">`:''}<div><b>${esc(p.name)}</b><small>${esc(p.note||purchaseTitles[p.priority])}</small></div><div class="purchase-cost"><b>${formatByn(p.costByn)}</b><small class="${enough?'success-text':'negative-number'}">${enough?'Накоплений хватает':`Не хватает ${formatByn(missing)}`}</small><div><button class="mini-icon" data-complete-purchase="${p.id}">${icon('check',16)}</button><button class="mini-icon" data-edit-purchase="${p.id}">${icon('edit',16)}</button></div></div></article>`}).join(''):'<div class="empty-state">В этом разделе пока нет покупок</div>';
 }
 
 function renderPayments(){
-  const remaining=debtRemaining(state), paid=paymentsPaidTotal(state), initial=num(state.settings.debtInitial), progress=initial?Math.min(100,paid/initial*100):0;
+  const paid=paymentsPaidTotal(state), planned=roundMoney(state.payments.reduce((s,p)=>s+num(p.planned),0)), initial=num(state.settings.debtInitial)||planned, remaining=Math.max(0,roundMoney(initial-paid)), progress=initial?Math.min(100,paid/initial*100):0;
   $('#debtRemaining').textContent=formatByn(remaining);$('#debtProgress').style.width=`${progress}%`;$('#debtMeta').textContent=`Оплачено ${formatByn(paid)} из ${formatByn(initial)}`;
   const sorted=[...state.payments].sort((a,b)=>a.periodKey.localeCompare(b.periodKey));
   $('#paymentsList').innerHTML=sorted.map(p=>{const left=Math.max(0,num(p.planned)-num(p.paid));return `<article class="payment-row ${p.planned>0&&p.paid<=0?'planned':''}"><div><b>${periodTitle(p.periodKey)}</b><small>${p.note?esc(p.note):left===0&&p.planned>0?'Оплачено':'Плановый платеж'}</small></div><div><span>План ${formatByn(p.planned)}</span><span>Оплачено ${formatByn(p.paid)}</span><strong>${left?`Осталось ${formatByn(left)}`:'Закрыто'}</strong><button class="mini-icon" data-edit-payment="${p.id}">${icon('edit',16)}</button></div></article>`}).join('');
 }
 
 function renderSettings(){
-  $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа · $ ${state.settings.usdRate}</small></span>${icon('chevronRight',18)}`;
-  $('#settingsCategories').innerHTML=[...state.categories].sort((a,b)=>a.order-b.order).map(c=>`<button class="settings-row" data-settings-category="${c.id}"><span class="category-icon" style="background:${esc(c.color)}">${icon(c.icon)}</span><span><b>${esc(c.name)}</b><small>${c.visible?'Показывается':'Скрыта'} · ${c.kind==='food'?'по неделям':c.kind==='pet'?'расширенная':'обычная'}</small></span>${icon('chevronRight',18)}</button>`).join('');
+  $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
+  const cardLabels={savings:'Накопления',payments:'Платежи',pet:'Питомец',purchases:'Покупки'};
+  $('#settingsDashboardCards').innerHTML=dashboardCards().map((id,index)=>`<article class="settings-row dashboard-setting"><span><b>${cardLabels[id]}</b><small>${index+1} на главной</small></span><span class="settings-actions"><button class="mini-icon" data-card-up="${id}" ${index===0?'disabled':''}>${icon('chevronLeft',16)}</button><button class="mini-icon" data-card-down="${id}" ${index===dashboardCards().length-1?'disabled':''}>${icon('chevronRight',16)}</button><button class="mini-icon" data-card-remove="${id}" aria-label="Скрыть">${icon('close',16)}</button></span></article>`).join('')+dashboardDefaults.filter(id=>!dashboardCards().includes(id)).map(id=>`<button class="settings-row" data-card-add="${id}"><span><b>${cardLabels[id]}</b><small>Скрыта</small></span>${icon('plus',18)}</button>`).join('');
+  $('#settingsCategories').innerHTML=[...state.categories].sort((a,b)=>a.order-b.order).map(c=>`<button class="settings-row" data-settings-category="${c.id}"><span><span class="category-icon" style="background:${esc(c.color)}">${categoryIconHtml(c,20)}</span><span><b>${esc(c.name)}</b><small>${c.visible?'Показывается':'Скрыта'} · ${c.kind==='food'?'по неделям':c.kind==='pet'?'расширенная':'обычная'}</small></span></span>${icon('chevronRight',18)}</button>`).join('');
   $('#exportBtn').innerHTML=`<span>${icon('download',20)}<b>Скачать резервную копию</b></span>${icon('chevronRight',18)}`;
   $('#importContent').innerHTML=`<span>${icon('upload',20)}<b>Восстановить из копии</b></span>${icon('chevronRight',18)}`;
   $('#resetBtn').innerHTML=`<span>${icon('trash',20)}<b>Сбросить данные</b></span>${icon('chevronRight',18)}`;
@@ -221,13 +251,14 @@ function fieldHtml(field){
   if(field.type==='select')return `<label class="form-field"><span>${esc(field.label)}</span><select ${common}>${field.options.map(o=>`<option value="${esc(o.value)}" ${String(o.value)===String(value)?'selected':''}>${esc(o.label)}</option>`).join('')}</select>${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
   if(field.type==='textarea')return `<label class="form-field"><span>${esc(field.label)}</span><textarea ${common} rows="3" placeholder="${esc(field.placeholder||'')}">${esc(value)}</textarea>${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
   if(field.type==='checkbox')return `<label class="toggle-field"><input type="checkbox" ${common} ${value?'checked':''}><span><b>${esc(field.label)}</b>${field.help?`<small>${esc(field.help)}</small>`:''}</span></label>`;
+  if(field.type==='file')return `<label class="form-field file-picker"><span>${esc(field.label)}</span>${field.preview?`<img src="${esc(field.preview)}" alt="">`:''}<input ${common} type="file" accept="${esc(field.accept||'image/*')}">${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
   return `<label class="form-field"><span>${esc(field.label)}</span><input ${common} type="${field.type||'text'}" value="${esc(value)}" placeholder="${esc(field.placeholder||'')}" ${field.min!=null?`min="${field.min}"`:''} ${field.step!=null?`step="${field.step}"`:''} ${field.inputmode?`inputmode="${field.inputmode}"`:''}>${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
 }
 let modalSubmitHandler=null, modalExtraHandler=null;
 function openModal(title,fields,onSubmit,{submitLabel='Сохранить',extraAction=null}={}){
   $('#modalTitle').textContent=title;$('#modalBody').innerHTML=fields.map(fieldHtml).join('')+(extraAction?`<button type="button" id="modalExtra" class="danger-button">${esc(extraAction.label)}</button>`:'');$('#modalSubmit').textContent=submitLabel;$('#modalBackdrop').hidden=false;document.body.classList.add('modal-open');modalSubmitHandler=onSubmit;modalExtraHandler=extraAction?.handler||null;setTimeout(()=>$('#modalBody input:not([type="checkbox"]), #modalBody select')?.focus(),40);}
 function closeModal(){$('#modalBackdrop').hidden=true;document.body.classList.remove('modal-open');modalSubmitHandler=null;modalExtraHandler=null;}
-function formValues(form){const result={};form.querySelectorAll('[name]').forEach(el=>{result[el.name]=el.type==='checkbox'?el.checked:el.value;});return result;}
+function formValues(form){const result={};form.querySelectorAll('[name]').forEach(el=>{result[el.name]=el.type==='checkbox'?el.checked:el.type==='file'?el.files?.[0]||null:el.value;});return result;}
 
 function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0]||{amount:120};openModal(`Параметры · ${periodTitle(p.key)}`,[
   {name:'salary',label:'Зарплата, BYN',type:'number',step:'1',value:p.salary},
@@ -239,9 +270,11 @@ function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0
   {name:'reservePlan',label:'Резерв — план, BYN',type:'number',step:'1',value:p.mandatory.reservePlan},
   {name:'reserveAllocated',label:'Резерв — уже отложено, BYN',type:'number',step:'1',value:p.mandatory.reserveAllocated},
   {name:'savingsUsd',label:'Накопления — план, $',type:'number',step:'1',value:p.mandatory.savingsPlanUsd},
+  {name:'savingsByn',label:'Накопления — план, BYN',type:'number',step:'1',value:p.mandatory.savingsPlanByn??p.mandatory.savingsPlanUsd??0},
   {name:'utilities',label:'Коммунальные из аванса, BYN',type:'number',step:'1',value:utility.amount},
+  {name:'utilitiesPaid',label:'Коммунальные оплачены',type:'checkbox',value:!!utility.paid},
   {name:'note',label:'Комментарий',type:'textarea',value:p.note}
-],async v=>{p.salary=num(v.salary);p.extraIncome=num(v.extra);p.balanceNow=v.balance===''?null:num(v.balance);p.cashNow=num(v.cash);p.mandatory.housingPlan=num(v.housingPlan);p.mandatory.housingSpent=num(v.housingSpent);p.mandatory.reservePlan=num(v.reservePlan);p.mandatory.reserveAllocated=num(v.reserveAllocated);p.mandatory.savingsPlanUsd=num(v.savingsUsd);p.passThroughs=[{...(p.passThroughs?.[0]||{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25}),amount:num(v.utilities),note:'Аванс приходит и сразу уходит'}];p.note=v.note;if(p.balanceNow==null)p.balanceSnapshot=null;else captureBalanceSnapshot(state,p);await commit();closeModal();});}
+],async v=>{p.salary=num(v.salary);p.extraIncome=num(v.extra);p.balanceNow=v.balance===''?null:num(v.balance);p.cashNow=num(v.cash);p.mandatory.housingPlan=num(v.housingPlan);p.mandatory.housingSpent=num(v.housingSpent);p.mandatory.reservePlan=num(v.reservePlan);p.mandatory.reserveAllocated=num(v.reserveAllocated);p.mandatory.savingsPlanUsd=num(v.savingsUsd);p.mandatory.savingsPlanByn=num(v.savingsByn);p.passThroughs=[{...(p.passThroughs?.[0]||{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25}),amount:num(v.utilities),paid:v.utilitiesPaid,note:'Аванс приходит и сразу уходит'}];p.note=v.note;if(p.balanceNow==null)p.balanceSnapshot=null;else captureBalanceSnapshot(state,p);await commit();closeModal();});}
 function openBalanceEditor(){const p=currentPeriod();openModal('Текущий баланс',[{name:'balance',label:'На счету, BYN',type:'number',step:'1',value:p.balanceNow??''},{name:'cash',label:'Отдельно отложено / наличные, BYN',type:'number',step:'1',value:p.cashNow}],async v=>{p.balanceNow=v.balance===''?null:num(v.balance);p.cashNow=num(v.cash);if(p.balanceNow==null)p.balanceSnapshot=null;else captureBalanceSnapshot(state,p);await commit();closeModal();});}
 function openMandatoryEditor(kind){const p=selectedPeriod(), pay=periodPayment(state,p.key);const config={housing:{title:'Квартира',plan:p.mandatory.housingPlan,spent:p.mandatory.housingSpent},payment:{title:'Платежи',plan:pay.planned,spent:pay.paid},reserve:{title:'Резерв',plan:p.mandatory.reservePlan,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'plan',label:'План, BYN',type:'number',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'number',value:config.spent}],async v=>{if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}await commit();closeModal();});}
 
@@ -249,17 +282,17 @@ const iconOptions=['wallet','utensils','dumbbell','paw','sparkles','heart','shir
 const colorOptions=['#dfece1','#e5edf8','#f4e8dc','#ebe5f5','#f2e6e6','#e9efe2','#f2edda','#e4edf0','#eee7f4','#f5e9dc'].map(c=>({label:c,value:c}));
 function openCategoryEditor(id){
   const c=categoryById(id), p=selectedPeriod(), b=categoryBudget(p,c);const deletable=!['food','pet'].includes(c.kind);
-  const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:b.plan,help:c.kind==='food'?'Для еды лимиты меняются по неделям. Значение здесь распределится на четыре недели.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'color',label:'Цвет',type:'select',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
-  openModal('Категория',fields,async v=>{c.name=v.name.trim()||c.name;c.icon=v.icon;c.color=v.color;c.visible=v.visible;const plan=num(v.plan);if(c.kind==='food'){const per=roundMoney(plan/4);p.foodWeeks.forEach((w,i)=>w.plan=i===3?roundMoney(plan-per*3):per)}else ensurePeriod(state,p.key).categoryBudgets[c.id].plan=plan;await commit();closeModal();},{extraAction:deletable?{label:'Удалить категорию',handler:async()=>{if(!confirm(`Удалить «${c.name}»?`))return;state.categories=state.categories.filter(x=>x.id!==id);Object.values(state.periods).forEach(period=>delete period.categoryBudgets[id]);await commit();closeModal();}}:null});
+  const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:b.plan,help:c.kind==='food'?'Для еды лимиты меняются по неделям. Значение здесь распределится на четыре недели.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',preview:c.iconImage||'',help:'Загруженная картинка заменит выбранную иконку.'},{name:'color',label:'Цвет',type:'select',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
+  openModal('Категория',fields,async v=>{c.name=v.name.trim()||c.name;c.icon=v.icon;c.color=v.color;c.visible=v.visible;if(v.iconImage)c.iconImage=await imageToDataUrl(v.iconImage,256);const plan=num(v.plan);if(c.kind==='food'){const per=roundMoney(plan/4);p.foodWeeks.forEach((w,i)=>w.plan=i===3?roundMoney(plan-per*3):per)}else ensurePeriod(state,p.key).categoryBudgets[c.id].plan=plan;await commit();closeModal();},{extraAction:deletable?{label:'Удалить категорию',handler:async()=>{if(!confirm(`Удалить «${c.name}»?`))return;state.categories=state.categories.filter(x=>x.id!==id);Object.values(state.periods).forEach(period=>delete period.categoryBudgets[id]);await commit();closeModal();}}:null});
 }
-function openNewCategory(){openModal('Новая категория',[{name:'name',label:'Название',required:true},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:0},{name:'icon',label:'Иконка',type:'select',value:'wallet',options:iconOptions},{name:'color',label:'Цвет',type:'select',value:'#e5edf8',options:colorOptions}],async v=>{const id=`category-${uid()}`;const order=Math.max(0,...state.categories.map(c=>c.order))+1;state.categories.push({id,name:v.name.trim()||'Новая категория',icon:v.icon,color:v.color,kind:'monthly',order,visible:true});Object.values(state.periods).forEach(period=>{period.categoryBudgets[id]={plan:period.key===selectedPeriodKey?num(v.plan):0,spent:0}});await commit();closeModal();});}
+function openNewCategory(){openModal('Новая категория',[{name:'name',label:'Название',required:true},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:0},{name:'icon',label:'Иконка',type:'select',value:'wallet',options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',help:'Можно загрузить свою картинку.'},{name:'color',label:'Цвет',type:'select',value:'#e5edf8',options:colorOptions}],async v=>{const id=`category-${uid()}`;const order=Math.max(0,...state.categories.map(c=>c.order))+1;state.categories.push({id,name:v.name.trim()||'Новая категория',icon:v.icon,iconImage:v.iconImage?await imageToDataUrl(v.iconImage,256):'',color:v.color,kind:'monthly',order,visible:true});Object.values(state.periods).forEach(period=>{period.categoryBudgets[id]={plan:period.key===selectedPeriodKey?num(v.plan):0,spent:0}});await commit();closeModal();});}
 
-function savingsModal(type){openModal(type==='deposit'?'Отложить в накопления':'Взять из накоплений',[{name:'amount',label:'Сумма, $',type:'number',min:0,step:'1',required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{state.savings.push({id:uid(),type,amountUsd:num(v.amount),date:v.date||todayISO(),note:v.note.trim()});await commit();closeModal();});}
+function savingsModal(type){openModal(type==='deposit'?'Отложить в накопления':'Взять из накоплений',[{name:'amountUsd',label:'Сумма, $',type:'number',min:0,step:'1',required:true},{name:'amountByn',label:'Сумма, BYN',type:'number',min:0,step:'1',required:true,help:'Введи BYN вручную, без курса.'},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{state.savings.push({id:uid(),type,amountUsd:num(v.amountUsd),amountByn:num(v.amountByn),date:v.date||todayISO(),note:v.note.trim()});await commit();closeModal();});}
 function petTransactionModal(type){openModal(type==='topup'?'Пополнить баланс питомца':'Потратить с баланса питомца',[{name:'amount',label:'Сумма, BYN',type:'number',min:0,step:'1',required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:type==='topup'?'Комментарий':'На что потратила',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();const tx={id:uid(),type,amountByn:amount,date,note:v.note.trim()};if(type==='topup'){const key=periodKeyForDate(new Date(`${date}T12:00:00`),state.settings.salaryDay);const p=ensurePeriod(state,key);p.categoryBudgets.pet=p.categoryBudgets.pet||{plan:0,spent:0};p.categoryBudgets.pet.spent=roundMoney(p.categoryBudgets.pet.spent+amount);tx.budgetPeriodKey=key;}state.pet.transactions.push(tx);await commit();closeModal();});}
 function needModal(item=null){openModal(item?'План питомца':'Добавить для питомца',[{name:'name',label:'Что нужно',value:item?.name||'',required:true},{name:'cost',label:'Стоимость, BYN',type:'number',value:item?.costByn||0},{name:'due',label:'Срок',type:'date',value:item?.dueDate||''},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){item.name=v.name;item.costByn=num(v.cost);item.dueDate=v.due;item.note=v.note}else state.pet.needs.push({id:uid(),name:v.name,costByn:num(v.cost),dueDate:v.due,note:v.note,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{state.pet.needs=state.pet.needs.filter(n=>n.id!==item.id);await commit();closeModal();}}:null});}
-function purchaseModal(item=null){openModal(item?'Покупка':'Новая покупка',[{name:'name',label:'Название',value:item?.name||'',required:true},{name:'priority',label:'Раздел',type:'select',value:item?.priority||purchaseTab,options:Object.entries(purchaseTitles).map(([value,label])=>({value,label}))},{name:'cost',label:'Стоимость, BYN',type:'number',value:item?.costByn||0},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){item.name=v.name;item.priority=v.priority;item.costByn=num(v.cost);item.note=v.note}else state.purchases.push({id:uid(),name:v.name,priority:v.priority,costByn:num(v.cost),note:v.note,completed:false});purchaseTab=v.priority;await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{state.purchases=state.purchases.filter(p=>p.id!==item.id);await commit();closeModal();}}:null});}
+function purchaseModal(item=null){openModal(item?'Покупка':'Новая покупка',[{name:'name',label:'Название',value:item?.name||'',required:true},{name:'priority',label:'Раздел',type:'select',value:item?.priority||purchaseTab,options:Object.entries(purchaseTitles).map(([value,label])=>({value,label}))},{name:'cost',label:'Стоимость, BYN',type:'number',value:item?.costByn||0},{name:'image',label:'Изображение',type:'file',preview:item?.imageDataUrl||'',help:'Можно добавить фото товара или скрин.'},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const imageDataUrl=v.image?await imageToDataUrl(v.image):item?.imageDataUrl||'';if(item){item.name=v.name;item.priority=v.priority;item.costByn=num(v.cost);item.note=v.note;item.imageDataUrl=imageDataUrl}else state.purchases.push({id:uid(),name:v.name,priority:v.priority,costByn:num(v.cost),note:v.note,imageDataUrl,completed:false});purchaseTab=v.priority;await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{state.purchases=state.purchases.filter(p=>p.id!==item.id);await commit();closeModal();}}:null});}
 function paymentModal(item=null){openModal(item?'Платеж':'Новый платеж',[{name:'period',label:'Месяц',type:'month',value:item?.periodKey||selectedPeriodKey},{name:'planned',label:'План, BYN',type:'number',value:item?.planned||0},{name:'paid',label:'Оплачено, BYN',type:'number',value:item?.paid||0},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){item.periodKey=v.period;item.planned=num(v.planned);item.paid=num(v.paid);item.note=v.note}else state.payments.push({id:uid(),periodKey:v.period,planned:num(v.planned),paid:num(v.paid),note:v.note});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{state.payments=state.payments.filter(p=>p.id!==item.id);await commit();closeModal();}}:null});}
-function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay},{name:'rate',label:'Курс $ в BYN',type:'number',step:'0.01',value:state.settings.usdRate},{name:'debt',label:'Первоначальная сумма платежей, BYN',type:'number',value:state.settings.debtInitial}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));state.settings.usdRate=num(v.rate)||1;state.settings.debtInitial=num(v.debt);selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
+function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 
 function exportBackup(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`moi-dengi-backup-${todayISO()}.json`;a.click();URL.revokeObjectURL(url);toast('Резервная копия сохранена');}
 async function importBackup(file){try{const parsed=JSON.parse(await file.text());if(!validateState(parsed))throw new Error('format');state=parsed;await commit();toast('Данные восстановлены');setScreen('home')}catch{toast('Не удалось прочитать резервную копию')}}
@@ -288,6 +321,10 @@ function bindDelegatedEvents(){
     const mandatory=e.target.closest('[data-edit-mandatory]');if(mandatory){openMandatoryEditor(mandatory.dataset.editMandatory);return;}
     const editCategory=e.target.closest('[data-edit-category]');if(editCategory){openCategoryEditor(editCategory.dataset.editCategory);return;}
     const settingsCategory=e.target.closest('[data-settings-category]');if(settingsCategory){openCategoryEditor(settingsCategory.dataset.settingsCategory);return;}
+    const cardUp=e.target.closest('[data-card-up]');if(cardUp){const list=dashboardCards(),i=list.indexOf(cardUp.dataset.cardUp);if(i>0){[list[i-1],list[i]]=[list[i],list[i-1]];await commit()}return;}
+    const cardDown=e.target.closest('[data-card-down]');if(cardDown){const list=dashboardCards(),i=list.indexOf(cardDown.dataset.cardDown);if(i>=0&&i<list.length-1){[list[i+1],list[i]]=[list[i],list[i+1]];await commit()}return;}
+    const cardRemove=e.target.closest('[data-card-remove]');if(cardRemove){state.settings.dashboardCards=dashboardCards().filter(id=>id!==cardRemove.dataset.cardRemove);await commit();return;}
+    const cardAdd=e.target.closest('[data-card-add]');if(cardAdd){const list=dashboardCards();if(!list.includes(cardAdd.dataset.cardAdd))list.push(cardAdd.dataset.cardAdd);await commit();return;}
     const savingDelete=e.target.closest('[data-delete-saving]');if(savingDelete){if(!confirm('Удалить запись?'))return;state.savings=state.savings.filter(t=>t.id!==savingDelete.dataset.deleteSaving);await commit();return;}
     const petDelete=e.target.closest('[data-delete-pet-tx]');if(petDelete){if(!confirm('Удалить запись?'))return;const tx=state.pet.transactions.find(t=>t.id===petDelete.dataset.deletePetTx);if(tx?.type==='topup'&&tx.budgetPeriodKey){const p=ensurePeriod(state,tx.budgetPeriodKey);p.categoryBudgets.pet.spent=Math.max(0,roundMoney(p.categoryBudgets.pet.spent-tx.amountByn))}state.pet.transactions=state.pet.transactions.filter(t=>t.id!==petDelete.dataset.deletePetTx);await commit();return;}
     const completeNeed=e.target.closest('[data-complete-need]');if(completeNeed){const n=state.pet.needs.find(x=>x.id===completeNeed.dataset.completeNeed);if(n){n.completed=true;await commit()}return;}
@@ -301,6 +338,7 @@ function bindDelegatedEvents(){
     if(e.target.matches('[data-week-plan]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekPlan)].plan=Math.max(0,num(e.target.value));await commit();return;}
     if(e.target.matches('[data-week-spent]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekSpent)].spent=Math.max(0,num(e.target.value));await commit();return;}
     if(e.target.matches('[data-week-closed]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekClosed)].closed=e.target.checked;await commit();return;}
+    if(e.target.matches('[data-utility-paid]')){const p=ensurePeriod(state,e.target.dataset.utilityPaid);p.passThroughs=p.passThroughs?.length?p.passThroughs:[{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25,amount:120}];p.passThroughs[0].paid=e.target.checked;await commit();return;}
   });
   document.addEventListener('focusin',e=>{if(e.target.matches('input[type="number"]'))e.target.select()});
 }

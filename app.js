@@ -90,12 +90,33 @@ let selectedPeriodKey=periodKeyForDate(new Date(),5);
 let foodPeriodKey=selectedPeriodKey;
 let purchaseTab='required';
 let saving=false;
+let autoCloseTimer=null;
 
-function currentPeriod(){return ensurePeriod(state,periodKeyForDate(new Date(),state.settings.salaryDay));}
-function selectedPeriod(){return ensurePeriod(state,selectedPeriodKey);}
+function currentPeriod(){const p=ensurePeriod(state,periodKeyForDate(new Date(),state.settings.salaryDay));syncPeriodAutoClosedWeeks(p);return p;}
+function selectedPeriod(){const p=ensurePeriod(state,selectedPeriodKey);syncPeriodAutoClosedWeeks(p);return p;}
 function categoryById(id){return state.categories.find(c=>c.id===id);}
 function periodSavingsDeposited(key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(new Date(`${t.date}T12:00:00`),state.settings.salaryDay)===key).reduce((s,t)=>s+num(t.amountUsd),0));}
 function weekAvailable(week){return roundMoney(num(week.plan)-num(week.spent));}
+function foodWeekAutoClosed(week,now=new Date()){
+  const [y,m,d]=String(week.end).split('-').map(Number);
+  return Number.isFinite(y)&&now>=new Date(y,m-1,d+1);
+}
+function syncPeriodAutoClosedWeeks(period,now=new Date()){
+  let changed=false;
+  for(const week of period?.foodWeeks||[]){
+    const closed=foodWeekAutoClosed(week,now);
+    if(week.closed!==closed){week.closed=closed;changed=true;}
+  }
+  return changed;
+}
+function syncAllAutoClosedWeeks(){
+  return Object.values(state.periods||{}).reduce((changed,period)=>syncPeriodAutoClosedWeeks(period)||changed,false);
+}
+function scheduleAutoWeekClose(){
+  clearTimeout(autoCloseTimer);
+  const now=new Date(), nextMidnight=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,1);
+  autoCloseTimer=setTimeout(async()=>{if(syncAllAutoClosedWeeks())await commit();else renderAll();scheduleAutoWeekClose();},Math.max(1000,nextMidnight-now));
+}
 function categoryAvailable(period,category){const b=categoryBudget(period,category);return roundMoney(num(b.plan)-num(b.spent));}
 function visibleCategories(){return [...state.categories].filter(c=>c.visible).sort((a,b)=>a.order-b.order);}
 function totalOpenNeeds(){return state.pet.needs.filter(n=>!n.completed).reduce((s,n)=>s+num(n.costByn),0);}
@@ -280,6 +301,7 @@ function renderMonth(){
 
 function renderFood(){
   const p=ensurePeriod(state,foodPeriodKey), total=foodBudget(p);
+  syncPeriodAutoClosedWeeks(p);
   $('#foodMonthTitle').textContent=periodTitle(p.key);$('#foodMonthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
   const available=roundMoney(total.plan-total.spent);
   $('#foodTotal').innerHTML=`<div>${metric('План',formatByn(total.plan))}${metric('Потрачено',formatByn(total.spent))}${metric('Доступно',`<span class="${budgetValueClass(total.plan,available)}">${formatByn(available)}</span>`)}</div>`;
@@ -287,7 +309,7 @@ function renderFood(){
   $('#foodTotal').classList.toggle('card-warning',num(total.plan)>0&&available>=0&&available<=num(total.plan)*0.2);
   $('#foodWeeks').innerHTML=p.foodWeeks.map((w,index)=>{
     const av=weekAvailable(w);
-    return `<article class="food-week ${budgetToneClass(w.plan,av)}"><header><div><b>Неделя ${index+1}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}</small></div><label class="check-label"><input type="checkbox" data-week-closed="${index}" ${w.closed?'checked':''}><span>${w.closed?'Закрыта':'Не закрыта'}</span></label></header><div class="metrics-row">${metric('План','',`<input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-plan="${index}" value="${num(w.plan)}">`)}${metric('Потрачено','',`<input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-spent="${index}" value="${num(w.spent)}">`)}${metric('Доступно',`<span class="${budgetValueClass(w.plan,av)}">${formatByn(av)}</span>`)}</div></article>`;
+    return `<article class="food-week ${budgetToneClass(w.plan,av)}"><header><div><b>Неделя ${index+1}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}</small></div><label class="check-label"><input type="checkbox" ${w.closed?'checked':''} disabled><span>${w.closed?'Закрыта':'Закроется автоматически'}</span></label></header><div class="metrics-row">${metric('План','',`<input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-plan="${index}" value="${num(w.plan)}">`)}${metric('Потрачено','',`<input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-spent="${index}" value="${num(w.spent)}">`)}${metric('Доступно',`<span class="${budgetValueClass(w.plan,av)}">${formatByn(av)}</span>`)}</div></article>`;
   }).join('');
 }
 
@@ -472,7 +494,6 @@ function bindDelegatedEvents(){
     if(e.target.matches('[data-category-spent]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categorySpent);if(c){p.categoryBudgets[c.id].spent=Math.max(0,num(e.target.value));await commit()}return;}
     if(e.target.matches('[data-week-plan]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekPlan)].plan=Math.max(0,num(e.target.value));await commit();return;}
     if(e.target.matches('[data-week-spent]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekSpent)].spent=Math.max(0,num(e.target.value));await commit();return;}
-    if(e.target.matches('[data-week-closed]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekClosed)].closed=e.target.checked;await commit();return;}
     if(e.target.matches('[data-utility-paid]')){const p=ensurePeriod(state,e.target.dataset.utilityPaid);p.passThroughs=p.passThroughs?.length?p.passThroughs:[{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25,amount:120}];p.passThroughs[0].paid=e.target.checked;await commit();return;}
     if(e.target.matches('[data-nav-labels]')){state.settings.navLabels=e.target.checked;await commit();return;}
     if(e.target.matches('[data-nav-item]')){const id=e.target.dataset.navItem;if(['home','month'].includes(id))return;const list=navItems().filter(x=>!['home','month'].includes(x));state.settings.navItems=['home','month',...(e.target.checked?[...list,id]:list.filter(x=>x!==id))];await commit();return;}
@@ -483,8 +504,10 @@ function bindDelegatedEvents(){
 async function init(){
   const saved=await loadState();state=validateState(saved)?saved:seedState(new Date());
   normalizeState();
+  if(syncAllAutoClosedWeeks())await saveState(state);
   selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;ensurePeriod(state,selectedPeriodKey);
   bindStaticEvents();bindDelegatedEvents();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
+  scheduleAutoWeekClose();
   if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
 init();

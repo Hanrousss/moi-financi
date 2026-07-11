@@ -64,7 +64,9 @@ export function makeFoodWeeks(key, plans=[], salaryDay=5) {
   const weeks = [];
   for(let from = mondayStart(periodFrom), index = 0; from <= periodTo; index++){
     const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 6);
-    weeks.push({id:`${key}-w${index+1}`,index:index+1,start:toISODate(from),end:toISODate(to),plan:Number(plans[index]||0),spent:0,closed:false});
+    const clippedFrom = from < periodFrom ? periodFrom : from;
+    const clippedTo = to > periodTo ? periodTo : to;
+    weeks.push({id:`${key}-w${index+1}`,index:index+1,start:toISODate(clippedFrom),end:toISODate(clippedTo),partial:clippedFrom.getTime()!==from.getTime()||clippedTo.getTime()!==to.getTime(),plan:Number(plans[index]||0),spent:0,closed:false});
     from = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 7);
   }
   return weeks;
@@ -159,7 +161,11 @@ function alignFoodWeeks(period,salaryDay=5) {
   const expected = makeFoodWeeks(period.key,[],salaryDay);
   const current = Array.isArray(period.foodWeeks) ? period.foodWeeks : [];
   const aligned = current.length === expected.length && current.every((week,index)=>week.start===expected[index].start&&week.end===expected[index].end);
-  if(aligned)return false;
+  if(aligned){
+    let changed = false;
+    current.forEach((week,index)=>{if(week.partial!==expected[index].partial){week.partial=expected[index].partial;changed=true;}});
+    return changed;
+  }
   const migrated = expected.map(week=>({...week}));
   for(const oldWeek of current){
     const oldStart = parseISODate(oldWeek.start);

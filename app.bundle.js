@@ -68,7 +68,9 @@ function makeFoodWeeks(key, plans=[], salaryDay=5) {
   const weeks = [];
   for(let from = mondayStart(periodFrom), index = 0; from <= periodTo; index++){
     const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 6);
-    weeks.push({id:`${key}-w${index+1}`,index:index+1,start:toISODate(from),end:toISODate(to),plan:Number(plans[index]||0),spent:0,closed:false});
+    const clippedFrom = from < periodFrom ? periodFrom : from;
+    const clippedTo = to > periodTo ? periodTo : to;
+    weeks.push({id:`${key}-w${index+1}`,index:index+1,start:toISODate(clippedFrom),end:toISODate(clippedTo),partial:clippedFrom.getTime()!==from.getTime()||clippedTo.getTime()!==to.getTime(),plan:Number(plans[index]||0),spent:0,closed:false});
     from = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 7);
   }
   return weeks;
@@ -163,7 +165,11 @@ function alignFoodWeeks(period,salaryDay=5) {
   const expected = makeFoodWeeks(period.key,[],salaryDay);
   const current = Array.isArray(period.foodWeeks) ? period.foodWeeks : [];
   const aligned = current.length === expected.length && current.every((week,index)=>week.start===expected[index].start&&week.end===expected[index].end);
-  if(aligned)return false;
+  if(aligned){
+    let changed = false;
+    current.forEach((week,index)=>{if(week.partial!==expected[index].partial){week.partial=expected[index].partial;changed=true;}});
+    return changed;
+  }
   const migrated = expected.map(week=>({...week}));
   for(const oldWeek of current){
     const oldStart = parseISODate(oldWeek.start);
@@ -600,7 +606,7 @@ function renderFood(){
   $('#foodTotal').classList.toggle('card-warning',num(total.plan)>0&&available>=0&&available<=num(total.plan)*0.2);
   $('#foodWeeks').innerHTML=p.foodWeeks.map((w,index)=>{
     const av=weekAvailable(w);
-    return `<article class="food-week ${budgetToneClass(w.plan,av)}"><header><div><b>Неделя ${index+1}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}</small></div><label class="check-label"><input type="checkbox" ${w.closed?'checked':''} disabled><span>${w.closed?'Закрыта':'Закроется автоматически'}</span></label></header><div class="metrics-row">${metric('План','',`<input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-plan="${index}" value="${num(w.plan)}">`)}${metric('Потрачено','',`<input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-spent="${index}" value="${num(w.spent)}">`)}${metric('Доступно',`<span class="${budgetValueClass(w.plan,av)}">${formatByn(av)}</span>`)}</div></article>`;
+    return `<article class="food-week ${budgetToneClass(w.plan,av)}"><header><div><b>Неделя ${index+1}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}${w.partial?' · неполная неделя':''}</small></div><label class="check-label"><input type="checkbox" ${w.closed?'checked':''} disabled><span>${w.closed?'Закрыта':'Закроется автоматически'}</span></label></header><div class="metrics-row">${metric('План','',`<input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-plan="${index}" value="${num(w.plan)}">`)}${metric('Потрачено','',`<input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-spent="${index}" value="${num(w.spent)}">`)}${metric('Доступно',`<span class="${budgetValueClass(w.plan,av)}">${formatByn(av)}</span>`)}</div></article>`;
   }).join('');
 }
 

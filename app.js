@@ -508,6 +508,7 @@ function openMandatoryEditor(kind){const p=selectedPeriod(), pay=periodPayment(s
 
 const iconOptions=['wallet','home','calendar','piggy','paw','bag','money','utensils','dumbbell','sparkles','heart','shirt','gift','ticket','palette','shield'].map(i=>({label:i,value:i}));
 const colorOptions=[
+  '#FFFFFF',
   '#FFB76D','#F97940','#FFCCCC','#EABD86','#F9E5CC','#ADCCD1','#9FAF64','#FEA365','#FFD283',
   '#C8E4E8','#FBC9AE','#D8B69B','#FFDB7B','#B9D672','#77C9C5','#FF9969','#D9A373','#B2D0B5',
   '#EEAC60','#AA695B','#FEE8DD','#6C909E','#E6B16D','#EFA681','#EAAF3E','#F6E2C7','#E8755B'

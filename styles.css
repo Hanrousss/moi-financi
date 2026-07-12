@@ -324,7 +324,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .form-field input,.form-field select,.form-field textarea{width:100%;min-width:0;border:1px solid var(--line-strong);background:#fff;border-radius:12px;padding:12px 13px}
 .form-field input[type="date"]{display:block;min-height:45px;-webkit-appearance:none;appearance:none}
 .palette-field{border:0;margin:0;padding:0;display:grid;gap:8px}
-.color-palette{display:grid;grid-template-columns:repeat(9,1fr);gap:8px}
+.color-palette{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
 .color-dot{position:relative;display:grid;place-items:center}
 .color-dot input{position:absolute;opacity:0;pointer-events:none}
 .color-dot span{width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(17,24,39,.12),0 3px 8px rgba(17,24,39,.08);transition:.16s}

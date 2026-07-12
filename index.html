@@ -50,6 +50,7 @@
 
       <section id="savings" class="screen">
         <article class="savings-hero"><span>Текущий итог</span><strong id="savingsBalance">$0</strong><small id="savingsEquivalent"></small></article>
+        <article id="safetyCard" class="safety-card"></article>
         <div class="button-row"><button id="depositSavings" class="primary-button"></button><button id="withdrawSavings" class="secondary-button"></button></div>
         <div class="section-row"><h2>По месяцам</h2></div><div id="monthlySavings" class="monthly-savings"></div>
         <div class="section-row"><h2>История</h2></div><div id="savingsHistory" class="history-list"></div>
@@ -63,7 +64,7 @@
       </section>
 
       <section id="purchases" class="screen">
-        <article class="purchase-summary"><span>Накопления для сравнения</span><strong id="purchaseSavingsUsd">$0</strong><small id="purchaseSavingsByn">0 BYN</small></article>
+        <article class="purchase-summary"><span>Отложено для покупок</span><strong id="purchaseSavingsUsd">$0</strong><small id="purchaseSavingsByn">0 BYN</small></article>
         <div id="purchaseTabs" class="segmented-control"><button data-purchase-tab="required" class="active">Обязательные</button><button data-purchase-tab="desired">Желательные</button><button data-purchase-tab="wish">Просто хочется</button></div>
         <div class="section-row"><h2 id="purchaseTitle">Обязательные</h2><button id="addPurchaseBtn" class="text-button"></button></div><div id="purchaseList" class="purchase-list"></div>
       </section>
@@ -71,6 +72,13 @@
       <section id="food" class="screen overlay-screen">
         <div class="month-switcher"><button id="foodPrevMonth" aria-label="Предыдущий месяц"></button><div><strong id="foodMonthTitle"></strong><small id="foodMonthRange"></small></div><button id="foodNextMonth" aria-label="Следующий месяц"></button></div>
         <article id="foodTotal" class="food-total"></article><div id="foodWeeks" class="food-weeks"></div>
+      </section>
+
+      <section id="gifts" class="screen overlay-screen">
+        <article class="gift-hero"><div class="gift-mark">✉</div><div><span>Конверт подарков</span><strong id="giftBalance">0 BYN</strong><small id="giftSummary"></small></div></article>
+        <div class="button-row"><button id="topupGifts" class="primary-button"></button><button id="spendGifts" class="secondary-button"></button></div>
+        <div class="section-row"><h2>Подарки</h2><button id="addGiftPlan" class="text-button"></button></div><div id="giftPlans" class="gift-list"></div>
+        <div class="section-row"><h2>История конверта</h2></div><div id="giftHistory" class="history-list"></div>
       </section>
 
       <section id="payments" class="screen overlay-screen">

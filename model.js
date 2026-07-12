@@ -93,7 +93,7 @@ export const DEFAULT_CATEGORIES = [
   category('beauty','Косметика / уход','sparkles','#f2e6e6','monthly',4),
   category('health','Здоровье / аптека','heart','#e9efe2','monthly',5),
   category('clothing','Одежда / обувь','shirt','#f2edda','monthly',6),
-  category('gifts','Подарки','gift','#e4edf0','monthly',7),
+  category('gifts','Подарки','gift','#e4edf0','gift',7),
   category('leisure','Отдых / развлечения','ticket','#eee7f4','monthly',8),
   category('home','Уют дома','home','#f5e9dc','monthly',9),
   category('hobby','Хобби','palette','#e5eef0','monthly',10),
@@ -153,7 +153,9 @@ export function seedState(now=new Date()) {
     payments: [],
     savings: [],
     purchases: [],
-    pet: {balanceByn:0,avatarImage:'',transactions:[],needs:[]}
+    pet: {balanceByn:0,avatarImage:'',transactions:[],needs:[]},
+    safety: {amountUsd:0,goalUsd:2000,icon:'shield',iconImage:''},
+    gifts: {balanceByn:0,transactions:[],plans:[],recipients:['Паше','Маме','Другому']}
   };
 }
 

@@ -85,7 +85,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   margin:0 0 14px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 
-.hero-card,.summary-card,.income-card,.mandatory-card,.category-card,.bottom-total,.food-total,.food-week,.savings-hero,.pet-hero,.purchase-summary,.debt-hero,.monthly-row,.history-row,.need-card,.purchase-card,.payment-row,.settings-row,.pass-through{
+.hero-card,.summary-card,.income-card,.mandatory-card,.category-card,.bottom-total,.food-total,.food-week,.savings-hero,.safety-card,.pet-hero,.gift-hero,.purchase-summary,.debt-hero,.monthly-row,.history-row,.need-card,.gift-card,.purchase-card,.payment-row,.settings-row,.pass-through{
   background:rgba(255,255,255,.96);
   border:1px solid var(--line);
   border-radius:var(--radius-lg);
@@ -146,8 +146,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .bottom-nav.icons-only{align-items:center;padding:6px 9px calc(6px + var(--safe-bottom))}
 .bottom-nav.icons-only button{min-height:38px;place-items:center;padding:4px 2px}
 .bottom-nav.icons-only .icon{width:28px;height:28px}
-.custom-nav-icon{width:21px;height:21px;border-radius:7px;object-fit:cover;display:block}
-.bottom-nav.icons-only .custom-nav-icon{width:28px;height:28px;border-radius:8px}
+.custom-nav-icon{width:26px;height:26px;border-radius:8px;object-fit:cover;display:block}
+.bottom-nav.icons-only .custom-nav-icon{width:34px;height:34px;border-radius:10px}
 
 .month-switcher{display:grid;grid-template-columns:42px 1fr 42px;align-items:center;gap:10px;text-align:center;margin:2px 0 14px}
 .month-switcher button{height:41px;border:1px solid var(--line);border-radius:12px;background:#fff;display:grid;place-items:center;box-shadow:none}
@@ -174,7 +174,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .category-head>div{flex:1;min-width:0;display:grid;gap:2px}
 .category-head small{font-size:11px;color:var(--muted)}
 .category-icon{width:40px;height:40px;border-radius:12px;color:#1f2937}
-.custom-category-icon{width:24px;height:24px;border-radius:7px;object-fit:cover;display:block}
+.custom-category-icon{width:30px;height:30px;border-radius:8px;object-fit:cover;display:block}
 .metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
 .metric{min-width:0;padding:0 10px;border-right:1px solid var(--line)}
 .metric:first-child{padding-left:0}
@@ -209,6 +209,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .savings-hero span,.savings-hero small{color:rgba(255,255,255,.86)}
 .savings-hero strong{display:block;font-size:39px;letter-spacing:0;margin:8px 0}
 .savings-alert{border:1px solid rgba(255,255,255,.48);background:rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:8px 11px;font-size:11px;font-weight:750}
+.safety-card{margin-top:12px;padding:16px;display:grid;grid-template-columns:48px 1fr 32px;align-items:center;gap:12px}
+.safe-icon,.gift-mark,.gift-envelope{border:0;width:48px;height:48px;border-radius:15px;background:#eef5ef;color:var(--green-dark);display:grid;place-items:center}
+.safe-icon .custom-category-icon{width:34px;height:34px}
+.safety-card>div{display:grid;gap:3px}
+.safety-card span,.gift-hero span{font-size:11px;color:var(--muted)}
+.safety-card strong{font-size:20px;color:var(--heading)}
+.safety-card small{font-size:10px;color:var(--muted)}
 .button-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:13px 0}
 .primary-button,.secondary-button,.danger-button{
   width:100%;border-radius:12px;min-height:46px;padding:11px 14px;font-weight:750;
@@ -231,23 +238,26 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .history-row b{font-size:14px;color:var(--heading)}
 .history-row small{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.pet-hero{padding:18px;display:flex;align-items:center;gap:14px;background:linear-gradient(145deg,#fff7ef,#fff)}
+.pet-hero,.gift-hero{padding:18px;display:flex;align-items:center;gap:14px;background:linear-gradient(145deg,#fff7ef,#fff)}
 #petAvatar{width:76px;height:76px;flex:0 0 auto}
 .pet-avatar-button{width:100%;height:100%;padding:0;border:0;background:transparent;border-radius:50%;display:block}
 #petAvatar img{width:100%;height:100%;display:block;border-radius:50%;object-fit:cover;box-shadow:0 7px 18px rgba(17,24,39,.12);border:3px solid #fff;outline:1px solid rgba(76,175,80,.28)}
-.pet-hero>div:last-child{display:grid;gap:4px}
-.pet-hero strong{font-size:29px;letter-spacing:0;color:var(--heading)}
-.pet-hero small{font-size:10px;color:var(--muted)}
-.need-card,.purchase-card,.payment-row{padding:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:var(--shadow-soft)}
-.need-card.affordable,.purchase-card.affordable{background:var(--green-tint);border-color:#cbe6d0}
+.pet-hero>div:last-child,.gift-hero>div:last-child{display:grid;gap:4px}
+.pet-hero strong,.gift-hero strong{font-size:29px;letter-spacing:0;color:var(--heading)}
+.pet-hero small,.gift-hero small{font-size:10px;color:var(--muted)}
+.need-card,.gift-card,.purchase-card,.payment-row{padding:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;box-shadow:var(--shadow-soft)}
+.need-card.affordable,.gift-card.affordable,.purchase-card.affordable{background:var(--green-tint);border-color:#cbe6d0}
+.gift-card{background:linear-gradient(90deg,var(--gift-color,#e4edf0),#fff 42%)}
 .need-main{display:flex;align-items:center;gap:10px;min-width:0}
-.need-main>div,.purchase-card>div:first-child{min-width:0;display:grid;gap:3px}
-.need-main b,.purchase-card b{font-size:14px;color:var(--heading)}
-.need-main small,.purchase-card small{color:var(--muted);font-size:10px;line-height:1.3}
+.need-main>div,.gift-card>div:nth-child(2),.purchase-card>div:first-child{min-width:0;display:grid;gap:3px;flex:1}
+.purchase-card>img+div{min-width:0;display:grid;gap:3px;flex:1}
+.need-main b,.gift-card b,.purchase-card b{font-size:14px;color:var(--heading)}
+.need-main small,.gift-card small,.purchase-card small{color:var(--muted);font-size:10px;line-height:1.35;white-space:normal;overflow-wrap:anywhere}
+.gift-card a{font-size:10px;color:var(--green-dark);overflow-wrap:anywhere}
 .purchase-thumb{width:54px;height:54px;border-radius:12px;object-fit:cover;flex:0 0 auto;border:1px solid var(--line)}
 .round-check input{display:none}
 .round-check span{width:26px;height:26px;border-radius:50%;border:1px solid var(--line-strong);display:grid;place-items:center;color:var(--green)}
-.need-value,.purchase-cost{text-align:right;display:grid;justify-items:end;gap:3px;flex:0 0 auto}
+.need-value,.purchase-cost{text-align:right;display:grid;justify-items:end;gap:3px;flex:0 0 auto;max-width:38%}
 .need-value small,.purchase-cost small{font-size:10px}
 .purchase-cost>div{display:flex}
 
@@ -279,7 +289,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .settings-row small{display:block;color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .settings-row .category-icon{width:36px;height:36px}
 .nav-icon-preview{width:36px;height:36px;border-radius:12px;background:#f4f6f8;color:#4b5563;display:grid;place-items:center;flex:0 0 auto}
-.nav-icon-preview .custom-nav-icon{width:24px;height:24px}
+.nav-icon-preview .custom-nav-icon{width:30px;height:30px}
 .dashboard-setting{grid-template-columns:1fr auto}
 .settings-actions{display:flex;align-items:center;gap:4px}
 .settings-actions .mini-icon{background:#f7f8fa;border:1px solid var(--line)}

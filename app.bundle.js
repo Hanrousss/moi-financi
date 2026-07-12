@@ -288,8 +288,7 @@ function periodSpendDeltaSinceSnapshot(state,period){
 function accountBalanceAfterSpending(state,period){
   return period.balanceNow==null?null:roundMoney(Number(period.balanceNow||0)-periodSpendDeltaSinceSnapshot(state,period));
 }
-function liveFreeBalance(state,period){
-  if(period.balanceNow==null)return plannedFreeBalance(state,period);
+function remainingPlannedOutflows(state,period){
   const payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key),savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
   const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
   const remainingPayment=sections.includes('payment')?Math.max(0,Number(payment.planned||0)-Number(payment.paid||0)):0;
@@ -299,7 +298,11 @@ function liveFreeBalance(state,period){
     if(c.kind==='food') return sum+period.foodWeeks.reduce((s,w)=>s+(w.closed?0:Math.max(0,Number(w.plan||0)-Number(w.spent||0))),0);
     const b=categoryBudget(period,c);return sum+Math.max(0,Number(b.plan||0)-Number(b.spent||0));
   },0);
-  return roundMoney(Number(period.balanceNow||0)-remainingMandatory-remainingCategories-periodSpendDeltaSinceSnapshot(state,period));
+  return roundMoney(remainingMandatory+remainingCategories);
+}
+function liveFreeBalance(state,period){
+  if(period.balanceNow==null)return plannedFreeBalance(state,period);
+  return roundMoney(Number(period.balanceNow||0)-remainingPlannedOutflows(state,period)-periodSpendDeltaSinceSnapshot(state,period));
 }
 function purchaseAvailable(state,cost){return savingsBalanceUsd(state)>=Number(cost||0)}
 function monthlySavingsRows(state){const map=new Map();for(const t of state.savings){const key=t.date.slice(0,7),row=map.get(key)||{period:key,deposited:0,withdrawn:0,depositedByn:0,withdrawnByn:0,notes:[]};if(t.type==='deposit'){row.deposited+=savingUsdAmount(t);row.depositedByn+=savingAmountByn(state,t)}else{row.withdrawn+=savingUsdAmount(t);row.withdrawnByn+=savingAmountByn(state,t)}if(t.note)row.notes.push(t.note);map.set(key,row)}return[...map.values()].sort((a,b)=>b.period.localeCompare(a.period))}
@@ -691,7 +694,7 @@ function renderHome(){
   const available=weekAvailable(week);
   $('#periodPill').textContent=`${periodTitle(p.key)} · ${formatPeriodRange(p.key,state.settings.salaryDay)}`;
   $('#freeValue').textContent=formatByn(free);
-  $('#freeMeta').textContent=p.balanceNow==null ? `План месяца: ${formatByn(plannedFreeBalance(state,p))}` : `На счету ${formatByn(accountBalanceAfterSpending(state,p))}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
+  $('#freeMeta').textContent=p.balanceNow==null ? `План месяца: ${formatByn(plannedFreeBalance(state,p))}` : `На счету ${formatByn(accountBalanceAfterSpending(state,p))} · осталось по плану ${formatByn(remainingPlannedOutflows(state,p))}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
   $('#freeCard').className=`hero-card ${dashboardStatus(free)}`;
   $('#weekAvailable').textContent=formatByn(available);
   $('#weekCard span').textContent=`${sectionLabel('food')} · эта неделя`;
@@ -749,7 +752,7 @@ function renderMonth(){
   $('#categoryList').innerHTML=optionalCategories(p).map(c=>renderCategoryCard(c,p)).join('')||'<div class="empty-state">Все видимые категории уже в обязательном для этого месяца</div>';
   const free=p.balanceNow==null?plannedFreeBalance(state,p):liveFreeBalance(state,p);
   $('#monthFreeValue').textContent=formatByn(free);
-  $('#monthLimitMeta').textContent=p.balanceNow==null?`Лимиты категорий: ${formatByn(plannedCategoryTotal(state,p))}`:`На счету после трат: ${formatByn(accountBalanceAfterSpending(state,p))} · лимиты ${formatByn(plannedCategoryTotal(state,p))}`;
+  $('#monthLimitMeta').textContent=p.balanceNow==null?`Лимиты категорий: ${formatByn(plannedCategoryTotal(state,p))}`:`На счету после трат: ${formatByn(accountBalanceAfterSpending(state,p))} · осталось по плану ${formatByn(remainingPlannedOutflows(state,p))}`;
   $('#monthFreeCard').classList.toggle('negative',free<0);
 }
 

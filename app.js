@@ -5,7 +5,7 @@ import {
   seedState, ensurePeriod, foodBudget, distributeFoodPlan, categoryBudget, periodIncome,
   periodPayment, savingsBalanceUsd, savingsBalanceByn, petBalanceByn, paymentsPaidTotal,
   debtRemaining, plannedCategoryTotal, periodCarryover, plannedFreeBalance, liveFreeBalance,
-  accountBalanceAfterSpending, purchaseAvailable, monthlySavingsRows, validateState, toISODate, captureBalanceSnapshot
+  accountBalanceAfterSpending, remainingPlannedOutflows, purchaseAvailable, monthlySavingsRows, validateState, toISODate, captureBalanceSnapshot
 } from './model.js';
 import { loadState, saveState, clearState } from './storage.js';
 
@@ -374,7 +374,7 @@ function renderHome(){
   const available=weekAvailable(week);
   $('#periodPill').textContent=`${periodTitle(p.key)} · ${formatPeriodRange(p.key,state.settings.salaryDay)}`;
   $('#freeValue').textContent=formatByn(free);
-  $('#freeMeta').textContent=p.balanceNow==null ? `План месяца: ${formatByn(plannedFreeBalance(state,p))}` : `На счету ${formatByn(accountBalanceAfterSpending(state,p))}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
+  $('#freeMeta').textContent=p.balanceNow==null ? `План месяца: ${formatByn(plannedFreeBalance(state,p))}` : `На счету ${formatByn(accountBalanceAfterSpending(state,p))} · осталось по плану ${formatByn(remainingPlannedOutflows(state,p))}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
   $('#freeCard').className=`hero-card ${dashboardStatus(free)}`;
   $('#weekAvailable').textContent=formatByn(available);
   $('#weekCard span').textContent=`${sectionLabel('food')} · эта неделя`;
@@ -432,7 +432,7 @@ function renderMonth(){
   $('#categoryList').innerHTML=optionalCategories(p).map(c=>renderCategoryCard(c,p)).join('')||'<div class="empty-state">Все видимые категории уже в обязательном для этого месяца</div>';
   const free=p.balanceNow==null?plannedFreeBalance(state,p):liveFreeBalance(state,p);
   $('#monthFreeValue').textContent=formatByn(free);
-  $('#monthLimitMeta').textContent=p.balanceNow==null?`Лимиты категорий: ${formatByn(plannedCategoryTotal(state,p))}`:`На счету после трат: ${formatByn(accountBalanceAfterSpending(state,p))} · лимиты ${formatByn(plannedCategoryTotal(state,p))}`;
+  $('#monthLimitMeta').textContent=p.balanceNow==null?`Лимиты категорий: ${formatByn(plannedCategoryTotal(state,p))}`:`На счету после трат: ${formatByn(accountBalanceAfterSpending(state,p))} · осталось по плану ${formatByn(remainingPlannedOutflows(state,p))}`;
   $('#monthFreeCard').classList.toggle('negative',free<0);
 }
 

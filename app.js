@@ -13,7 +13,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const ICON_CENTER_VERSION=1;
+const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
   canvas.width=img.width;canvas.height=img.height;
@@ -240,7 +240,7 @@ function savingTxByn(t){return txSavingCurrency(t)==='byn'?num(t.amountByn):0;}
 function formatSavingsTotal(usd,byn){return num(byn)!==0?`${formatUsd(usd)} + ${formatByn(byn)}`:formatUsd(usd);}
 function formatSavingTx(t){return txSavingCurrency(t)==='byn'?formatByn(savingTxByn(t)):formatUsd(savingTxUsd(t));}
 function purchaseCostUsd(item){return num(item?.costUsd ?? item?.costByn);}
-function safetyIconHtml(size=25){return state.safety.iconImage?`<img class="custom-category-icon" src="${esc(state.safety.iconImage)}" alt="">`:icon(state.safety.icon||'shield',size);}
+function safetyIconHtml(size=25){return state.safety.iconImage?`<img class="custom-category-icon safe-custom-icon" src="${esc(state.safety.iconImage)}" alt="">`:icon(state.safety.icon||'shield',size);}
 function safetyProgressText(){return num(state.safety.amountUsd)>=num(state.safety.goalUsd)?formatUsd(state.safety.amountUsd):`${formatUsd(state.safety.amountUsd)} / ${formatUsd(state.safety.goalUsd)}`;}
 function giftBalanceByn(){return roundMoney(state.gifts.transactions.reduce((sum,t)=>sum+(t.type==='topup'?1:-1)*num(t.amountByn),num(state.gifts.balanceByn||0)));}
 function giftPinnedRank(item){return item.recipient==='Паше'?0:item.recipient==='Маме'?1:2;}
@@ -506,8 +506,8 @@ function renderSettings(){
   const dashboardList=dashboardCards(), availableDashboard=[...dashboardDefaults,...visibleCategories().map(c=>dashboardCategoryKey(c.id))].filter(id=>!dashboardList.includes(id)&&isDashboardCardAvailable(id));
   $('#settingsDashboardCards').innerHTML=dashboardList.map((id,index)=>`<article class="settings-row dashboard-setting"><span><b>${esc(dashboardLabel(id))}</b><small>${index+1} на главной</small></span><span class="settings-actions"><button class="mini-icon" data-card-up="${id}" ${index===0?'disabled':''}>${icon('chevronLeft',16)}</button><button class="mini-icon" data-card-down="${id}" ${index===dashboardList.length-1?'disabled':''}>${icon('chevronRight',16)}</button><button class="mini-icon" data-card-remove="${id}" aria-label="Скрыть">${icon('close',16)}</button></span></article>`).join('')+availableDashboard.map(id=>`<button class="settings-row" data-card-add="${id}"><span><b>${esc(dashboardLabel(id))}</b><small>${dashboardCategoryId(id)?'Категория · скрыта':'Скрыта'}</small></span>${icon('plus',18)}</button>`).join('');
   $('#settingsCategories').innerHTML=[...state.categories].sort((a,b)=>a.order-b.order).map(c=>`<button class="settings-row" data-settings-category="${c.id}"><span><span class="category-icon" style="background:${esc(c.color)}">${categoryIconHtml(c,20)}</span><span><b>${esc(c.name)}</b><small>${c.visible?'Показывается':'Скрыта'} · ${c.kind==='food'?'по неделям':['pet','gift'].includes(c.kind)?'расширенная':'обычная'}</small></span></span>${icon('chevronRight',18)}</button>`).join('');
-  $('#exportBtn').innerHTML=`<span>${icon('download',20)}<b>Скачать резервную копию</b></span>${icon('chevronRight',18)}`;
-  $('#importContent').innerHTML=`<span>${icon('upload',20)}<b>Восстановить из копии</b></span>${icon('chevronRight',18)}`;
+  $('#exportBtn').innerHTML=`<span>${icon('download',20)}<b>Скачать полную резервную копию</b></span>${icon('chevronRight',18)}`;
+  $('#importContent').innerHTML=`<span>${icon('upload',20)}<b>Восстановить полную копию</b></span>${icon('chevronRight',18)}`;
   $('#resetBtn').innerHTML=`<span>${icon('trash',20)}<b>Сбросить данные</b></span>${icon('chevronRight',18)}`;
 }
 
@@ -652,8 +652,100 @@ function paymentModal(item=null){openModal(item?'Платеж':'Новый пл�
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appearanceModal(){const a=appearanceSettings();openModal('Внешний вид',[{name:'primary',label:'Основной цвет',type:'palette',value:a.primary||'#9FAF64',options:colorOptions},{name:'background',label:'Цвет фона',type:'palette',value:a.background||'#FEE8DD',options:colorOptions},{name:'card',label:'Цвет карточек',type:'palette',value:a.card||'#F9E5CC',options:colorOptions},{name:'heading',label:'Цвет заголовков',type:'palette',value:a.heading||'#6C909E',options:colorOptions},{name:'backgroundImage',label:'Свой фон',type:'file',preview:a.backgroundImage||'',accept:'image/png,image/jpeg,image/webp,image/*'},{name:'appIcon',label:'Иконка приложения',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png',accept:'image/png,image/*',help:'После выбора файла можно настроить кроп и масштаб.'}],async v=>{a.primary=safeHex(v.primary,'#9FAF64');a.background=safeHex(v.background,'#FEE8DD');a.card=safeHex(v.card,'#F9E5CC');a.heading=safeHex(v.heading,'#6C909E');if(v.backgroundImage)a.backgroundImage=await imageToDataUrl(v.backgroundImage,1400);if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));applyAppearance();await commit();closeModal();},{extraAction:a.backgroundImage||a.appIcon?{label:'Сбросить фон и иконку',handler:async()=>{a.backgroundImage='';a.appIcon='';applyAppearance();await commit();closeModal();}}:null});}
 
-function exportBackup(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`moi-dengi-backup-${todayISO()}.json`;a.click();URL.revokeObjectURL(url);toast('Резервная копия сохранена');}
-async function importBackup(file){try{const parsed=JSON.parse(await file.text());if(!validateState(parsed))throw new Error('format');state=parsed;await commit();toast('Данные восстановлены');setScreen('home')}catch{toast('Не удалось прочитать резервную копию')}}
+const BACKUP_KIND='moi-dengi-full-backup';
+const BACKUP_VERSION=1;
+function backupSummaryForState(data){
+  const periods=Object.keys(data.periods||{}).sort();
+  const dataUrlCount=(JSON.stringify(data).match(/data:image\//g)||[]).length;
+  return {
+    profileName:data.settings?.profileName||'',
+    periods:periods.length,
+    periodFrom:periods[0]||'',
+    periodTo:periods.at(-1)||'',
+    categories:Array.isArray(data.categories)?data.categories.length:0,
+    payments:Array.isArray(data.payments)?data.payments.length:0,
+    savings:Array.isArray(data.savings)?data.savings.length:0,
+    purchases:Array.isArray(data.purchases)?data.purchases.length:0,
+    petTransactions:Array.isArray(data.pet?.transactions)?data.pet.transactions.length:0,
+    giftPlans:Array.isArray(data.gifts?.plans)?data.gifts.plans.length:0,
+    images:dataUrlCount,
+    hasAppearance:!!(data.settings?.appearance?.backgroundImage||data.settings?.appearance?.appIcon)
+  };
+}
+function backupSummaryText(summary){
+  return [
+    `Профиль: ${summary.profileName||'без имени'}`,
+    `Месяцы: ${summary.periods}${summary.periodFrom&&summary.periodTo?` (${summary.periodFrom} — ${summary.periodTo})`:''}`,
+    `Категории: ${summary.categories}`,
+    `Платежи: ${summary.payments}`,
+    `Сбережения: ${summary.savings}`,
+    `Покупки: ${summary.purchases}`,
+    `Операции питомца: ${summary.petTransactions}`,
+    `Подарки: ${summary.giftPlans}`,
+    `Картинки/иконки/фон: ${summary.images}`,
+    `Внешний вид: ${summary.hasAppearance?'есть':'стандартный'}`
+  ].join('\n');
+}
+async function textChecksum(text){
+  if(globalThis.crypto?.subtle){
+    const hash=await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
+    return [...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('');
+  }
+  let hash=0;for(let i=0;i<text.length;i++)hash=(hash*31+text.charCodeAt(i))>>>0;
+  return `fallback-${hash.toString(16)}`;
+}
+function migrateBackupState(input){
+  if(!input||typeof input!=='object')throw new Error('format');
+  if(Number(input.version)>VERSION)throw new Error('newer-version');
+  const restored=structuredClone(input);
+  restored.version=VERSION;
+  restored.settings=restored.settings&&typeof restored.settings==='object'?restored.settings:{};
+  restored.settings.navIcons=restored.settings.navIcons&&typeof restored.settings.navIcons==='object'?restored.settings.navIcons:{};
+  restored.settings.sectionLabels=restored.settings.sectionLabels&&typeof restored.settings.sectionLabels==='object'?restored.settings.sectionLabels:{};
+  restored.settings.mandatoryLabels=restored.settings.mandatoryLabels&&typeof restored.settings.mandatoryLabels==='object'?restored.settings.mandatoryLabels:{};
+  restored.categories=Array.isArray(restored.categories)?restored.categories:[];
+  restored.periods=restored.periods&&typeof restored.periods==='object'?restored.periods:{};
+  restored.payments=Array.isArray(restored.payments)?restored.payments:[];
+  restored.savings=Array.isArray(restored.savings)?restored.savings:[];
+  restored.purchases=Array.isArray(restored.purchases)?restored.purchases:[];
+  restored.pet=restored.pet&&typeof restored.pet==='object'?restored.pet:{balanceByn:0,avatarImage:'',transactions:[],needs:[]};
+  restored.pet.transactions=Array.isArray(restored.pet.transactions)?restored.pet.transactions:[];
+  restored.pet.needs=Array.isArray(restored.pet.needs)?restored.pet.needs:[];
+  restored.safety=restored.safety&&typeof restored.safety==='object'?restored.safety:{amountUsd:0,goalUsd:2000,icon:'shield',iconImage:''};
+  restored.gifts=restored.gifts&&typeof restored.gifts==='object'?restored.gifts:{balanceByn:0,transactions:[],plans:[],recipients:['Паше','Маме','Другому']};
+  restored.gifts.transactions=Array.isArray(restored.gifts.transactions)?restored.gifts.transactions:[];
+  restored.gifts.plans=Array.isArray(restored.gifts.plans)?restored.gifts.plans:[];
+  restored.gifts.recipients=Array.isArray(restored.gifts.recipients)&&restored.gifts.recipients.length?restored.gifts.recipients:['Паше','Маме','Другому'];
+  if(!validateState(restored))throw new Error('format');
+  return restored;
+}
+async function exportBackup(){
+  const payload=structuredClone(state);
+  const payloadJson=JSON.stringify(payload);
+  const backup={kind:BACKUP_KIND,backupVersion:BACKUP_VERSION,exportedAt:new Date().toISOString(),appStateVersion:VERSION,summary:backupSummaryForState(payload),checksum:await textChecksum(payloadJson),payload};
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url;a.download=`moi-dengi-full-backup-${todayISO()}.json`;a.click();URL.revokeObjectURL(url);
+  toast('Полная резервная копия сохранена');
+}
+async function importBackup(file){
+  try{
+    const text=await file.text(), parsed=JSON.parse(text);
+    const isFullBackup=parsed?.kind===BACKUP_KIND;
+    const payload=isFullBackup?parsed.payload:parsed;
+    if(isFullBackup&&parsed.checksum){
+      const actual=await textChecksum(JSON.stringify(payload));
+      if(actual!==parsed.checksum)throw new Error('checksum');
+    }
+    const restored=migrateBackupState(payload), summary=backupSummaryForState(restored);
+    const exportedAt=isFullBackup&&parsed.exportedAt?`\nДата копии: ${new Date(parsed.exportedAt).toLocaleString('ru-RU')}`:'';
+    if(!confirm(`Восстановить эту резервную копию?${exportedAt}\n\n${backupSummaryText(summary)}\n\nТекущие данные на этом устройстве будут заменены.`))return;
+    state=restored;normalizeState();const iconsCentered=await centerStoredIconImages();if(iconsCentered)await saveState(state);
+    await commit();toast('Данные полностью восстановлены');setScreen('home');
+  }catch(error){
+    toast(error?.message==='checksum'?'Резервная копия повреждена':error?.message==='newer-version'?'Обнови приложение перед восстановлением':'Не удалось прочитать резервную копию');
+  }
+}
 
 function bindStaticEvents(){
   $$('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>setScreen(b.dataset.nav)));

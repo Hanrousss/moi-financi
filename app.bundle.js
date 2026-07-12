@@ -679,7 +679,8 @@ function renderFood(){
   syncPeriodAutoClosedWeeks(p);
   $('#foodMonthTitle').textContent=periodTitle(p.key);$('#foodMonthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
   const available=roundMoney(total.plan-total.spent);
-  $('#foodTotal').innerHTML=`<div>${metric('План',formatByn(total.plan))}${metric('Потрачено',formatByn(total.spent))}${metric('Доступно',`<span class="${budgetValueClass(total.plan,available)}">${formatByn(available)}</span>`)}</div>`;
+  const planInput=`<label class="inline-money-input"><input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-food-total-plan value="${num(total.plan)}" aria-label="Общий план на еду"><span>BYN</span></label>`;
+  $('#foodTotal').innerHTML=`<div>${metric('План','',planInput)}${metric('Потрачено',formatByn(total.spent))}${metric('Доступно',`<span class="${budgetValueClass(total.plan,available)}">${formatByn(available)}</span>`)}</div>`;
   $('#foodTotal').classList.toggle('card-negative',available<0);
   $('#foodTotal').classList.toggle('card-warning',num(total.plan)>0&&available>=0&&available<=num(total.plan)*0.2);
   $('#foodWeeks').innerHTML=p.foodWeeks.map((w,index)=>{
@@ -942,6 +943,7 @@ function bindDelegatedEvents(){
   });
   document.addEventListener('change',async e=>{
     if(e.target.matches('[data-category-spent]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categorySpent);if(c){p.categoryBudgets[c.id].spent=Math.max(0,num(e.target.value));await commit()}return;}
+    if(e.target.matches('[data-food-total-plan]')){const p=ensurePeriod(state,foodPeriodKey);distributeFoodPlan(p,Math.max(0,num(e.target.value)));await commit();return;}
     if(e.target.matches('[data-week-plan]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekPlan)].plan=Math.max(0,num(e.target.value));await commit();return;}
     if(e.target.matches('[data-week-spent]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekSpent)].spent=Math.max(0,num(e.target.value));await commit();return;}
     if(e.target.matches('[data-utility-paid]')){const p=ensurePeriod(state,e.target.dataset.utilityPaid);p.passThroughs=p.passThroughs?.length?p.passThroughs:[{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25,amount:120}];p.passThroughs[0].paid=e.target.checked;await commit();return;}

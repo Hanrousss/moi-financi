@@ -13,7 +13,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const imageToDataUrl = (file,maxSize=900,{cropSquare=false}={}) => new Promise((resolve,reject)=>{
+const imageToDataUrl = (file,maxSize=900,{cropSquare=false,zoom=1,offsetX=0,offsetY=0}={}) => new Promise((resolve,reject)=>{
   if(!file){resolve('');return;}
   const reader=new FileReader();
   reader.onerror=()=>reject(reader.error);
@@ -22,14 +22,18 @@ const imageToDataUrl = (file,maxSize=900,{cropSquare=false}={}) => new Promise((
     img.onerror=()=>reject(new Error('image'));
     img.onload=()=>{
       const sourceSize=Math.min(img.width,img.height);
-      const scale=Math.min(1,maxSize/(cropSquare?sourceSize:Math.max(img.width,img.height)));
+      const zoomValue=cropSquare?Math.max(1,Math.min(4,num(zoom)||1)):1;
+      const cropSize=sourceSize/zoomValue;
+      const scale=Math.min(1,maxSize/(cropSquare?cropSize:Math.max(img.width,img.height)));
       const canvas=document.createElement('canvas');
-      canvas.width=Math.max(1,Math.round((cropSquare?sourceSize:img.width)*scale));
-      canvas.height=Math.max(1,Math.round((cropSquare?sourceSize:img.height)*scale));
+      canvas.width=Math.max(1,Math.round((cropSquare?cropSize:img.width)*scale));
+      canvas.height=Math.max(1,Math.round((cropSquare?cropSize:img.height)*scale));
       const ctx=canvas.getContext('2d');
       if(cropSquare){
-        const sx=(img.width-sourceSize)/2, sy=(img.height-sourceSize)/2;
-        ctx.drawImage(img,sx,sy,sourceSize,sourceSize,0,0,canvas.width,canvas.height);
+        const maxShiftX=(img.width-cropSize)/2,maxShiftY=(img.height-cropSize)/2;
+        const sx=Math.max(0,Math.min(img.width-cropSize,(img.width-cropSize)/2+(num(offsetX)||0)/100*maxShiftX));
+        const sy=Math.max(0,Math.min(img.height-cropSize,(img.height-cropSize)/2+(num(offsetY)||0)/100*maxShiftY));
+        ctx.drawImage(img,sx,sy,cropSize,cropSize,0,0,canvas.width,canvas.height);
       }else ctx.drawImage(img,0,0,canvas.width,canvas.height);
       const transparentSource=file.type==='image/png'||file.type==='image/webp'||file.name?.toLowerCase().endsWith('.png');
       const format=transparentSource?(file.type==='image/webp'?'image/webp':'image/png'):'image/jpeg';
@@ -39,6 +43,9 @@ const imageToDataUrl = (file,maxSize=900,{cropSquare=false}={}) => new Promise((
   };
   reader.readAsDataURL(file);
 });
+function cropOptions(values,name){
+  return {cropSquare:true,zoom:num(values[`${name}Zoom`])||1,offsetX:num(values[`${name}X`])||0,offsetY:num(values[`${name}Y`])||0};
+}
 const todayISO = () => toISODate(new Date());
 const dateLabel = value => value ? new Date(`${value}T12:00:00`).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}) : '';
 const shortDate = value => value ? new Date(`${value}T12:00:00`).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'}) : '';
@@ -449,7 +456,10 @@ function fieldHtml(field){
   if(field.type==='select')return `<label class="form-field"><span>${esc(field.label)}</span><select ${common}>${field.options.map(o=>`<option value="${esc(o.value)}" ${String(o.value)===String(value)?'selected':''}>${esc(o.label)}</option>`).join('')}</select>${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
   if(field.type==='textarea')return `<label class="form-field"><span>${esc(field.label)}</span><textarea ${common} rows="3" placeholder="${esc(field.placeholder||'')}">${esc(value)}</textarea>${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
   if(field.type==='checkbox')return `<label class="toggle-field"><input type="checkbox" ${common} ${value?'checked':''}><span><b>${esc(field.label)}</b>${field.help?`<small>${esc(field.help)}</small>`:''}</span></label>`;
-  if(field.type==='file')return `<label class="form-field file-picker"><span>${esc(field.label)}</span>${field.preview?`<img src="${esc(field.preview)}" alt="">`:''}<input ${common} type="file" accept="${esc(field.accept||'image/*')}">${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
+  if(field.type==='file'){
+    if(field.crop)return `<label class="form-field file-picker crop-picker" data-crop-field="${esc(field.name)}"><span>${esc(field.label)}</span><div class="crop-preview" data-crop-preview="${esc(field.name)}" ${field.preview?`style="background-image:url('${esc(field.preview)}')"`:''}></div><input ${common} type="file" accept="${esc(field.accept||'image/*')}" data-crop-input="${esc(field.name)}"><div class="crop-controls" data-crop-controls="${esc(field.name)}" hidden><label><span>Масштаб</span><input name="${esc(field.name)}Zoom" type="range" min="1" max="3" step="0.05" value="1" data-crop-slider="${esc(field.name)}"></label><label><span>Горизонталь</span><input name="${esc(field.name)}X" type="range" min="-100" max="100" step="1" value="0" data-crop-slider="${esc(field.name)}"></label><label><span>Вертикаль</span><input name="${esc(field.name)}Y" type="range" min="-100" max="100" step="1" value="0" data-crop-slider="${esc(field.name)}"></label></div>${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
+    return `<label class="form-field file-picker"><span>${esc(field.label)}</span>${field.preview?`<img src="${esc(field.preview)}" alt="">`:''}<input ${common} type="file" accept="${esc(field.accept||'image/*')}">${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
+  }
   return `<label class="form-field"><span>${esc(field.label)}</span><input ${common} type="${field.type||'text'}" value="${esc(value)}" placeholder="${esc(field.placeholder||'')}" ${field.min!=null?`min="${field.min}"`:''} ${field.step!=null?`step="${field.step}"`:''} ${field.inputmode?`inputmode="${field.inputmode}"`:''}>${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
 }
 let modalSubmitHandler=null, modalExtraHandler=null;
@@ -457,6 +467,23 @@ function openModal(title,fields,onSubmit,{submitLabel='Сохранить',extra
   $('#modalTitle').textContent=title;$('#modalBody').innerHTML=fields.map(fieldHtml).join('')+(extraAction?`<button type="button" id="modalExtra" class="danger-button">${esc(extraAction.label)}</button>`:'');$('#modalSubmit').textContent=submitLabel;$('#modalBackdrop').hidden=false;document.body.classList.add('modal-open');modalSubmitHandler=onSubmit;modalExtraHandler=extraAction?.handler||null;setTimeout(()=>$('#modalBody input:not([type="checkbox"]), #modalBody select')?.focus(),40);}
 function closeModal(){$('#modalBackdrop').hidden=true;document.body.classList.remove('modal-open');modalSubmitHandler=null;modalExtraHandler=null;}
 function formValues(form){const result={};form.querySelectorAll('[name]').forEach(el=>{result[el.name]=el.type==='checkbox'?el.checked:el.type==='file'?el.files?.[0]||null:el.value;});return result;}
+async function updateCropPreview(root,name){
+  const preview=root.querySelector(`[data-crop-preview="${name}"]`);
+  const input=root.querySelector(`[data-crop-input="${name}"]`);
+  const controls=root.querySelector(`[data-crop-controls="${name}"]`);
+  if(!preview)return;
+  const file=input?.files?.[0];
+  const zoom=Math.max(1,num(root.querySelector(`[name="${name}Zoom"]`)?.value)||1);
+  const x=num(root.querySelector(`[name="${name}X"]`)?.value)||0;
+  const y=num(root.querySelector(`[name="${name}Y"]`)?.value)||0;
+  if(file){
+    if(controls)controls.hidden=false;
+    const dataUrl=await imageToDataUrl(file,176,{cropSquare:true,zoom,offsetX:x,offsetY:y});
+    preview.style.backgroundImage=`url("${dataUrl}")`;
+  }
+  preview.style.backgroundSize='cover';
+  preview.style.backgroundPosition='center';
+}
 
 function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0]||{amount:120};openModal(`Параметры · ${periodTitle(p.key)}`,[
   {name:'salary',label:'Зарплата, BYN',type:'number',step:'1',value:p.salary},
@@ -481,9 +508,9 @@ const colorOptions=['#dfece1','#e5edf8','#f4e8dc','#ebe5f5','#f2e6e6','#e9efe2',
 function navIconModal(id){
   const item=navDefaults.find(x=>x.id===id);if(!item)return;
   const settings=navIconSettings(), current=settings[id]||{};
-  openModal(`Раздел: ${sectionLabel(item.id)}`,[{name:'name',label:'Название',value:sectionLabel(item.id)},{name:'icon',label:'Стандартная иконка',type:'select',value:current.icon||item.icon,options:iconOptions},{name:'image',label:'Своя картинка',type:'file',preview:current.image||'',accept:'image/png,image/jpeg,image/webp,image/*',help:'PNG с прозрачным фоном сохранится вместе с альфа-каналом.'}],async v=>{
+  openModal(`Раздел: ${sectionLabel(item.id)}`,[{name:'name',label:'Название',value:sectionLabel(item.id)},{name:'icon',label:'Стандартная иконка',type:'select',value:current.icon||item.icon,options:iconOptions},{name:'image',label:'Своя картинка',type:'file',crop:true,preview:current.image||'',accept:'image/png,image/jpeg,image/webp,image/*',help:'PNG с прозрачным фоном сохранится вместе с альфа-каналом. После выбора файла можно вручную настроить кроп.'}],async v=>{
     setSectionLabel(id,v.name);
-    const image=v.image?await imageToDataUrl(v.image,160,{cropSquare:true}):current.image||'';
+    const image=v.image?await imageToDataUrl(v.image,160,cropOptions(v,'image')):current.image||'';
     settings[id]={icon:v.icon||item.icon,image};
     if(settings[id].icon===item.icon&&!settings[id].image)delete settings[id];
     const linkedCategory=state.categories?.find(c=>c.id===id&&['food','pet'].includes(c.kind));
@@ -492,16 +519,16 @@ function navIconModal(id){
   },{extraAction:current.icon||current.image?{label:'Сбросить иконку',handler:async()=>{delete settings[id];await commit();closeModal();}}:null});
 }
 function petAvatarModal(){
-  openModal('Аватар питомца',[{name:'avatar',label:'Картинка питомца',type:'file',preview:state.pet.avatarImage||'./icons/pet-face.png',accept:'image/png,image/jpeg,image/webp,image/*',help:'Можно загрузить новую картинку или сбросить к стандартной.'}],async v=>{if(v.avatar)state.pet.avatarImage=await imageToDataUrl(v.avatar,512,{cropSquare:true});await commit();closeModal();},{extraAction:state.pet.avatarImage?{label:'Вернуть стандартную картинку',handler:async()=>{state.pet.avatarImage='';await commit();closeModal();}}:null});
+  openModal('Аватар питомца',[{name:'avatar',label:'Картинка питомца',type:'file',crop:true,preview:state.pet.avatarImage||'./icons/pet-face.png',accept:'image/png,image/jpeg,image/webp,image/*',help:'Можно загрузить новую картинку, настроить кроп или сбросить к стандартной.'}],async v=>{if(v.avatar)state.pet.avatarImage=await imageToDataUrl(v.avatar,512,cropOptions(v,'avatar'));await commit();closeModal();},{extraAction:state.pet.avatarImage?{label:'Вернуть стандартную картинку',handler:async()=>{state.pet.avatarImage='';await commit();closeModal();}}:null});
 }
 function openCategoryEditor(id){
   const c=categoryById(id), p=selectedPeriod(), b=categoryBudget(p,c);const deletable=!['food','pet'].includes(c.kind);
-  const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:b.plan,help:c.kind==='food'?'Для еды лимиты меняются по неделям. Значение здесь распределится на четыре недели.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',preview:c.iconImage||'',help:'Загруженная картинка заменит выбранную иконку.'},{name:'color',label:'Цвет',type:'select',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
+  const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:b.plan,help:c.kind==='food'?'Для еды лимиты меняются по неделям. Значение здесь распределится на четыре недели.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,preview:c.iconImage||'',help:'Загруженная картинка заменит выбранную иконку. После выбора файла можно вручную настроить кроп.'},{name:'color',label:'Цвет',type:'select',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
   openModal('Категория',fields,async v=>{
     c.name=v.name.trim()||c.name;
     if(['food','pet'].includes(c.kind))setSectionLabel(c.id,c.name);
     c.icon=v.icon;c.color=v.color;c.visible=v.visible;
-    if(v.iconImage)c.iconImage=await imageToDataUrl(v.iconImage,256,{cropSquare:true});
+    if(v.iconImage)c.iconImage=await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage'));
     if(['food','pet'].includes(c.kind)){
       const item=navDefaults.find(x=>x.id===c.id);
       navIconSettings()[c.id]={icon:c.icon||item?.icon,image:c.iconImage||''};
@@ -520,10 +547,10 @@ function openCategoryEditor(id){
     await commit();closeModal();
   }}:null});
 }
-function openNewCategory(){openModal('Новая категория',[{name:'name',label:'Название',required:true},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:0},{name:'icon',label:'Иконка',type:'select',value:'wallet',options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',help:'Можно загрузить свою картинку.'},{name:'color',label:'Цвет',type:'select',value:'#e5edf8',options:colorOptions}],async v=>{const id=`category-${uid()}`;const order=Math.max(0,...state.categories.map(c=>c.order))+1;state.categories.push({id,name:v.name.trim()||'Новая категория',icon:v.icon,iconImage:v.iconImage?await imageToDataUrl(v.iconImage,256,{cropSquare:true}):'',color:v.color,kind:'monthly',order,visible:true});Object.values(state.periods).forEach(period=>{period.categoryBudgets[id]={plan:period.key===selectedPeriodKey?num(v.plan):0,spent:0}});await commit();closeModal();});}
+function openNewCategory(){openModal('Новая категория',[{name:'name',label:'Название',required:true},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:0},{name:'icon',label:'Иконка',type:'select',value:'wallet',options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,help:'Можно загрузить свою картинку и вручную настроить кроп.'},{name:'color',label:'Цвет',type:'select',value:'#e5edf8',options:colorOptions}],async v=>{const id=`category-${uid()}`;const order=Math.max(0,...state.categories.map(c=>c.order))+1;state.categories.push({id,name:v.name.trim()||'Новая категория',icon:v.icon,iconImage:v.iconImage?await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage')):'',color:v.color,kind:'monthly',order,visible:true});Object.values(state.periods).forEach(period=>{period.categoryBudgets[id]={plan:period.key===selectedPeriodKey?num(v.plan):0,spent:0}});await commit();closeModal();});}
 
 function savingsModal(type){openModal(type==='deposit'?'Отложить в накопления':'Взять из накоплений',[{name:'currency',label:'Валюта',type:'select',value:'usd',options:[{value:'usd',label:'USD'},{value:'byn',label:'BYN'}]},{name:'amount',label:'Сумма',type:'number',min:0,step:'1',required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const currency=v.currency==='byn'?'byn':'usd', amount=num(v.amount);if(amount<=0){toast('Введи сумму');return;}state.savings.push({id:uid(),type,currency,amountUsd:currency==='usd'?amount:0,amountByn:currency==='byn'?amount:0,date:v.date||todayISO(),note:v.note.trim()});await commit();closeModal();});}
-function safetyModal(){openModal('Подушка безопасности',[{name:'amount',label:'Сумма в сейфе, USD',type:'number',min:0,step:'1',value:state.safety.amountUsd},{name:'goal',label:'Цель, USD',type:'number',min:1,step:'1',value:state.safety.goalUsd||2000},{name:'icon',label:'Иконка',type:'select',value:state.safety.icon||'shield',options:iconOptions},{name:'iconImage',label:'Своя иконка сейфа',type:'file',preview:state.safety.iconImage||'',help:'Картинка будет обрезана в квадрат без потери прозрачности.'}],async v=>{state.safety.amountUsd=num(v.amount);state.safety.goalUsd=num(v.goal)||2000;state.safety.icon=v.icon||'shield';if(v.iconImage)state.safety.iconImage=await imageToDataUrl(v.iconImage,256,{cropSquare:true});await commit();closeModal();},{extraAction:state.safety.iconImage?{label:'Сбросить свою иконку',handler:async()=>{state.safety.iconImage='';await commit();closeModal();}}:null});}
+function safetyModal(){openModal('Подушка безопасности',[{name:'amount',label:'Сумма в сейфе, USD',type:'number',min:0,step:'1',value:state.safety.amountUsd},{name:'goal',label:'Цель, USD',type:'number',min:1,step:'1',value:state.safety.goalUsd||2000},{name:'icon',label:'Иконка',type:'select',value:state.safety.icon||'shield',options:iconOptions},{name:'iconImage',label:'Своя иконка сейфа',type:'file',crop:true,preview:state.safety.iconImage||'',help:'Картинка будет обрезана в квадрат без потери прозрачности, кроп можно настроить вручную.'}],async v=>{state.safety.amountUsd=num(v.amount);state.safety.goalUsd=num(v.goal)||2000;state.safety.icon=v.icon||'shield';if(v.iconImage)state.safety.iconImage=await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage'));await commit();closeModal();},{extraAction:state.safety.iconImage?{label:'Сбросить свою иконку',handler:async()=>{state.safety.iconImage='';await commit();closeModal();}}:null});}
 function exchangeSavingsBynModal(){
   const byn=savingsBalanceByn(state);
   if(byn<=0)return;
@@ -542,7 +569,7 @@ function giftModal(item=null){const recipients=[...new Set([...(state.gifts.reci
 function purchaseModal(item=null){openModal(item?'Покупка':'Новая покупка',[{name:'name',label:'Название',value:item?.name||'',required:true},{name:'priority',label:'Раздел',type:'select',value:item?.priority||purchaseTab,options:Object.entries(purchaseTitles).map(([value,label])=>({value,label}))},{name:'cost',label:'Стоимость, USD',type:'number',value:purchaseCostUsd(item)},{name:'image',label:'Изображение',type:'file',preview:item?.imageDataUrl||'',help:'Можно добавить фото товара или скрин.'},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const imageDataUrl=v.image?await imageToDataUrl(v.image):item?.imageDataUrl||'';if(item){item.name=v.name;item.priority=v.priority;item.costUsd=num(v.cost);delete item.costByn;item.note=v.note;item.imageDataUrl=imageDataUrl}else state.purchases.push({id:uid(),name:v.name,priority:v.priority,costUsd:num(v.cost),note:v.note,imageDataUrl,completed:false});purchaseTab=v.priority;await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{state.purchases=state.purchases.filter(p=>p.id!==item.id);await commit();closeModal();}}:null});}
 function paymentModal(item=null){openModal(item?'Платеж':'Новый платеж',[{name:'title',label:'Название',value:item?.title||''},{name:'period',label:'Месяц',type:'month',value:item?.periodKey||selectedPeriodKey},{name:'planned',label:'План, BYN',type:'number',value:item?.planned||0},{name:'paid',label:'Оплачено, BYN',type:'number',value:item?.paid||0},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){item.title=v.title.trim();item.periodKey=v.period;item.planned=num(v.planned);item.paid=num(v.paid);item.note=v.note}else state.payments.push({id:uid(),title:v.title.trim(),periodKey:v.period,planned:num(v.planned),paid:num(v.paid),note:v.note});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{state.payments=state.payments.filter(p=>p.id!==item.id);await commit();closeModal();}}:null});}
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
-function appearanceModal(){const a=appearanceSettings();openModal('Внешний вид',[{name:'primary',label:'Основной цвет',type:'colorText',value:a.primary||'#4caf50'},{name:'background',label:'Цвет фона',type:'colorText',value:a.background||'#fbfcfb'},{name:'card',label:'Цвет карточек',type:'colorText',value:a.card||'#ffffff'},{name:'heading',label:'Цвет заголовков',type:'colorText',value:a.heading||'#111827'},{name:'backgroundImage',label:'Свой фон',type:'file',preview:a.backgroundImage||'',accept:'image/png,image/jpeg,image/webp,image/*'},{name:'appIcon',label:'Иконка приложения',type:'file',preview:a.appIcon||'./icons/apple-touch-icon.png',accept:'image/png,image/*'}],async v=>{a.primary=safeHex(v.primary,'#4caf50');a.background=safeHex(v.background,'#fbfcfb');a.card=safeHex(v.card,'#ffffff');a.heading=safeHex(v.heading,'#111827');if(v.backgroundImage)a.backgroundImage=await imageToDataUrl(v.backgroundImage,1400);if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,{cropSquare:true});applyAppearance();await commit();closeModal();},{extraAction:a.backgroundImage||a.appIcon?{label:'Сбросить фон и иконку',handler:async()=>{a.backgroundImage='';a.appIcon='';applyAppearance();await commit();closeModal();}}:null});}
+function appearanceModal(){const a=appearanceSettings();openModal('Внешний вид',[{name:'primary',label:'Основной цвет',type:'colorText',value:a.primary||'#4caf50'},{name:'background',label:'Цвет фона',type:'colorText',value:a.background||'#fbfcfb'},{name:'card',label:'Цвет карточек',type:'colorText',value:a.card||'#ffffff'},{name:'heading',label:'Цвет заголовков',type:'colorText',value:a.heading||'#111827'},{name:'backgroundImage',label:'Свой фон',type:'file',preview:a.backgroundImage||'',accept:'image/png,image/jpeg,image/webp,image/*'},{name:'appIcon',label:'Иконка приложения',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png',accept:'image/png,image/*',help:'После выбора файла можно настроить кроп и масштаб.'}],async v=>{a.primary=safeHex(v.primary,'#4caf50');a.background=safeHex(v.background,'#fbfcfb');a.card=safeHex(v.card,'#ffffff');a.heading=safeHex(v.heading,'#111827');if(v.backgroundImage)a.backgroundImage=await imageToDataUrl(v.backgroundImage,1400);if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));applyAppearance();await commit();closeModal();},{extraAction:a.backgroundImage||a.appIcon?{label:'Сбросить фон и иконку',handler:async()=>{a.backgroundImage='';a.appIcon='';applyAppearance();await commit();closeModal();}}:null});}
 
 function exportBackup(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`moi-dengi-backup-${todayISO()}.json`;a.click();URL.revokeObjectURL(url);toast('Резервная копия сохранена');}
 async function importBackup(file){try{const parsed=JSON.parse(await file.text());if(!validateState(parsed))throw new Error('format');state=parsed;await commit();toast('Данные восстановлены');setScreen('home')}catch{toast('Не удалось прочитать резервную копию')}}
@@ -562,7 +589,8 @@ function bindStaticEvents(){
   $('#modalClose').addEventListener('click',closeModal);$('#modalCancel').addEventListener('click',closeModal);$('#modalBackdrop').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal()});
   $('#modalForm').addEventListener('submit',async e=>{e.preventDefault();if(modalSubmitHandler)await modalSubmitHandler(formValues(e.currentTarget))});
   $('#modalBody').addEventListener('click',async e=>{if(e.target.closest('#modalExtra')&&modalExtraHandler)await modalExtraHandler()});
-  $('#modalBody').addEventListener('input',e=>{if(e.target.matches('[data-color-code]')){const swatch=e.target.nextElementSibling;if(swatch)swatch.style.background=e.target.value||'#fff'}});
+  $('#modalBody').addEventListener('input',e=>{if(e.target.matches('[data-color-code]')){const swatch=e.target.nextElementSibling;if(swatch)swatch.style.background=e.target.value||'#fff'}if(e.target.matches('[data-crop-slider]'))updateCropPreview($('#modalBody'),e.target.dataset.cropSlider)});
+  $('#modalBody').addEventListener('change',e=>{if(e.target.matches('[data-crop-input]'))updateCropPreview($('#modalBody'),e.target.dataset.cropInput)});
   $('#purchaseTabs').addEventListener('click',e=>{const b=e.target.closest('[data-purchase-tab]');if(!b)return;purchaseTab=b.dataset.purchaseTab;renderPurchases()});
 }
 function bindDelegatedEvents(){

@@ -146,8 +146,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .bottom-nav.icons-only{align-items:center;padding:6px 9px calc(6px + var(--safe-bottom))}
 .bottom-nav.icons-only button{min-height:38px;place-items:center;padding:4px 2px}
 .bottom-nav.icons-only .icon{width:28px;height:28px}
-.custom-nav-icon{width:26px;height:26px;border-radius:8px;object-fit:cover;display:block}
-.bottom-nav.icons-only .custom-nav-icon{width:34px;height:34px;border-radius:10px}
+.custom-nav-icon{width:30px;height:30px;border-radius:9px;object-fit:cover;display:block}
+.bottom-nav.icons-only .custom-nav-icon{width:38px;height:38px;border-radius:11px}
 
 .month-switcher{display:grid;grid-template-columns:42px 1fr 42px;align-items:center;gap:10px;text-align:center;margin:2px 0 14px}
 .month-switcher button{height:41px;border:1px solid var(--line);border-radius:12px;background:#fff;display:grid;place-items:center;box-shadow:none}
@@ -174,7 +174,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .category-head>div{flex:1;min-width:0;display:grid;gap:2px}
 .category-head small{font-size:11px;color:var(--muted)}
 .category-icon{width:40px;height:40px;border-radius:12px;color:#1f2937}
-.custom-category-icon{width:30px;height:30px;border-radius:8px;object-fit:cover;display:block}
+.custom-category-icon{width:38px;height:38px;border-radius:10px;object-fit:cover;display:block}
 .metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
 .metric{min-width:0;padding:0 10px;border-right:1px solid var(--line)}
 .metric:first-child{padding-left:0}
@@ -211,7 +211,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .savings-alert{border:1px solid rgba(255,255,255,.48);background:rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:8px 11px;font-size:11px;font-weight:750}
 .safety-card{margin-top:12px;padding:16px;display:grid;grid-template-columns:48px 1fr 32px;align-items:center;gap:12px}
 .safe-icon,.gift-mark,.gift-envelope{border:0;width:48px;height:48px;border-radius:15px;background:#eef5ef;color:var(--green-dark);display:grid;place-items:center}
-.safe-icon .custom-category-icon{width:34px;height:34px}
+.safe-icon .custom-category-icon{width:44px;height:44px}
 .safety-card>div{display:grid;gap:3px}
 .safety-card span,.gift-hero span{font-size:11px;color:var(--muted)}
 .safety-card strong{font-size:20px;color:var(--heading)}
@@ -289,7 +289,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .settings-row small{display:block;color:var(--muted);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .settings-row .category-icon{width:36px;height:36px}
 .nav-icon-preview{width:36px;height:36px;border-radius:12px;background:#f4f6f8;color:#4b5563;display:grid;place-items:center;flex:0 0 auto}
-.nav-icon-preview .custom-nav-icon{width:30px;height:30px}
+.nav-icon-preview .custom-nav-icon{width:34px;height:34px}
 .dashboard-setting{grid-template-columns:1fr auto}
 .settings-actions{display:flex;align-items:center;gap:4px}
 .settings-actions .mini-icon{background:#f7f8fa;border:1px solid var(--line)}
@@ -326,6 +326,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .color-code-field{display:grid;grid-template-columns:1fr 38px;align-items:center;gap:9px}
 .color-code-field i{width:38px;height:38px;border-radius:10px;border:1px solid var(--line-strong);display:block}
 .file-picker img{width:72px;height:72px;border-radius:14px;object-fit:cover;border:1px solid var(--line);box-shadow:var(--shadow-soft)}
+.crop-picker .crop-preview{width:88px;height:88px;border-radius:18px;background:#f7f8fa center/100% 100% no-repeat;border:1px solid var(--line);box-shadow:var(--shadow-soft),inset 0 0 0 6px rgba(255,255,255,.5)}
+.crop-controls{display:grid;gap:10px;padding:12px;border-radius:16px;background:#f7f8fa;border:1px solid var(--line)}
+.crop-controls[hidden]{display:none}
+.crop-controls label{display:grid;grid-template-columns:82px 1fr;align-items:center;gap:10px;font-size:11px;color:var(--muted)}
+.crop-controls input{width:100%;accent-color:var(--green)}
 .form-field input:focus,.form-field select:focus,.form-field textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(76,175,80,.12)}
 .form-field small,.toggle-field small{color:var(--muted);font-size:9px;line-height:1.35}
 .toggle-field{display:flex;align-items:center;gap:10px;background:#f5f6f8;border-radius:13px;padding:12px}

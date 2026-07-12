@@ -265,6 +265,8 @@ function navItemIconHtml(item,size=21){
   return icon(custom.icon||item.icon,size);
 }
 function sharedSectionIconHtml(id,size=22){
+  const linkedCategory=state.categories?.find(category=>category.id===id);
+  if(linkedCategory)return categoryIconHtml(linkedCategory,size);
   const item=navDefaults.find(x=>x.id===id);
   return item?navItemIconHtml(item,size):icon(id,size);
 }

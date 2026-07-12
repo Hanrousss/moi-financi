@@ -2,7 +2,7 @@ import {
   VERSION, MONTHS_RU, uid, roundMoney, formatByn, formatUsd,
   periodKeyForDate, shiftPeriodKey, periodTitle, formatPeriodRange,
   periodStart, periodEnd, currentWeekIndex, daysToNextSalary,
-  seedState, ensurePeriod, foodBudget, categoryBudget, periodIncome,
+  seedState, ensurePeriod, foodBudget, distributeFoodPlan, categoryBudget, periodIncome,
   periodPayment, savingsBalanceUsd, savingsBalanceByn, petBalanceByn, paymentsPaidTotal,
   debtRemaining, plannedCategoryTotal, periodCarryover, plannedFreeBalance, liveFreeBalance,
   purchaseAvailable, monthlySavingsRows, validateState, toISODate, captureBalanceSnapshot
@@ -136,8 +136,9 @@ function syncPeriodAutoClosedWeeks(period,now=new Date()){
 }
 function syncAllAutoClosedWeeks(){
   return Object.keys(state.periods||{}).reduce((changed,key)=>{
+    const previousLayoutVersion=state.periods[key]?.foodPlanLayoutVersion;
     const period=ensurePeriod(state,key);
-    return syncPeriodAutoClosedWeeks(period)||changed;
+    return syncPeriodAutoClosedWeeks(period)||previousLayoutVersion!==period.foodPlanLayoutVersion||changed;
   },false);
 }
 function scheduleAutoWeekClose(){
@@ -531,7 +532,7 @@ function petAvatarModal(){
 }
 function openCategoryEditor(id){
   const c=categoryById(id), p=selectedPeriod(), b=categoryBudget(p,c);const deletable=!['food','pet'].includes(c.kind);
-  const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:b.plan,help:c.kind==='food'?'Для еды лимиты меняются по неделям. Значение здесь распределится на четыре недели.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,preview:c.iconImage||'',help:'Загруженная картинка заменит выбранную иконку. После выбора файла можно вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
+  const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:b.plan,help:c.kind==='food'?'Для еды лимит распределится по неделям пропорционально количеству дней.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,preview:c.iconImage||'',help:'Загруженная картинка заменит выбранную иконку. После выбора файла можно вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
   openModal('Категория',fields,async v=>{
     c.name=v.name.trim()||c.name;
     if(['food','pet'].includes(c.kind))setSectionLabel(c.id,c.name);
@@ -543,10 +544,8 @@ function openCategoryEditor(id){
       if(navIconSettings()[c.id].icon===item?.icon&&!navIconSettings()[c.id].image)delete navIconSettings()[c.id];
     }
     const plan=num(v.plan);
-    if(c.kind==='food'){
-      const count=Math.max(1,p.foodWeeks.length), per=roundMoney(plan/count);
-      p.foodWeeks.forEach((w,i)=>w.plan=i===count-1?roundMoney(plan-per*(count-1)):per);
-    }else ensurePeriod(state,p.key).categoryBudgets[c.id].plan=plan;
+    if(c.kind==='food')distributeFoodPlan(p,plan);
+    else ensurePeriod(state,p.key).categoryBudgets[c.id].plan=plan;
     await commit();closeModal();
   },{extraAction:deletable?{label:'Удалить категорию',handler:async()=>{
     if(!confirm(`Удалить «${c.name}»?`))return;

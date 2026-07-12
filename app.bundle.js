@@ -62,6 +62,31 @@ function dateOverlapDays(aStart,aEnd,bStart,bEnd) {
   const end = Math.min(aEnd.getTime(), bEnd.getTime());
   return Math.max(0, Math.ceil((end - start) / 86400000));
 }
+function foodWeekDays(week) {
+  return Math.max(1, dateOverlapDays(parseISODate(week.start), dayAfterISO(week.end), parseISODate(week.start), dayAfterISO(week.end)));
+}
+function distributeFoodPlan(period,total) {
+  const weeks = Array.isArray(period?.foodWeeks) ? period.foodWeeks : [];
+  if(!weeks.length)return;
+  const amount = Math.max(0,Number(total||0));
+  const totalDays = weeks.reduce((sum,week)=>sum+foodWeekDays(week),0);
+  let allocated = 0;
+  weeks.forEach((week,index)=>{
+    const plan = index===weeks.length-1 ? roundMoney(amount-allocated) : roundMoney(amount*foodWeekDays(week)/totalDays);
+    week.plan=Math.max(0,plan);
+    allocated=roundMoney(allocated+week.plan);
+  });
+  period.foodPlanLayoutVersion=1;
+}
+function hasLegacyEvenFoodPlan(period) {
+  const weeks=period.foodWeeks||[];
+  if(weeks.length<2)return false;
+  const total=roundMoney(weeks.reduce((sum,week)=>sum+Number(week.plan||0),0));
+  if(total<=0)return false;
+  const even=roundMoney(total/weeks.length);
+  return weeks.slice(0,-1).every(week=>Math.abs(Number(week.plan||0)-even)<0.011)
+    && Math.abs(Number(weeks.at(-1).plan||0)-roundMoney(total-even*(weeks.length-1)))<0.011;
+}
 function makeFoodWeeks(key, plans=[], salaryDay=5) {
   const periodFrom = periodStart(key,salaryDay);
   const periodTo = periodEnd(key,salaryDay);
@@ -167,25 +192,31 @@ function alignFoodWeeks(period,salaryDay=5) {
   const expected = makeFoodWeeks(period.key,[],salaryDay);
   const current = Array.isArray(period.foodWeeks) ? period.foodWeeks : [];
   const aligned = current.length === expected.length && current.every((week,index)=>week.start===expected[index].start&&week.end===expected[index].end);
+  let changed = false;
   if(aligned){
-    let changed = false;
     current.forEach((week,index)=>{if(week.partial!==expected[index].partial){week.partial=expected[index].partial;changed=true;}});
-    return changed;
+  }else{
+    const migrated = expected.map(week=>({...week}));
+    for(const oldWeek of current){
+      const oldStart = parseISODate(oldWeek.start);
+      const oldEnd = dayAfterISO(oldWeek.end);
+      let bestIndex = 0, bestOverlap = -1;
+      migrated.forEach((week,index)=>{
+        const overlap = dateOverlapDays(oldStart,oldEnd,parseISODate(week.start),dayAfterISO(week.end));
+        if(overlap>bestOverlap){bestOverlap=overlap;bestIndex=index;}
+      });
+      migrated[bestIndex].plan = roundMoney(Number(migrated[bestIndex].plan||0) + Number(oldWeek.plan||0));
+      migrated[bestIndex].spent = roundMoney(Number(migrated[bestIndex].spent||0) + Number(oldWeek.spent||0));
+    }
+    period.foodWeeks = migrated;
+    changed=true;
   }
-  const migrated = expected.map(week=>({...week}));
-  for(const oldWeek of current){
-    const oldStart = parseISODate(oldWeek.start);
-    const oldEnd = dayAfterISO(oldWeek.end);
-    let bestIndex = 0, bestOverlap = -1;
-    migrated.forEach((week,index)=>{
-      const overlap = dateOverlapDays(oldStart,oldEnd,parseISODate(week.start),dayAfterISO(week.end));
-      if(overlap>bestOverlap){bestOverlap=overlap;bestIndex=index;}
-    });
-    migrated[bestIndex].plan = roundMoney(Number(migrated[bestIndex].plan||0) + Number(oldWeek.plan||0));
-    migrated[bestIndex].spent = roundMoney(Number(migrated[bestIndex].spent||0) + Number(oldWeek.spent||0));
+  if(period.foodPlanLayoutVersion!==1){
+    if(hasLegacyEvenFoodPlan(period))distributeFoodPlan(period,foodBudget(period).plan);
+    else period.foodPlanLayoutVersion=1;
+    changed=true;
   }
-  period.foodWeeks = migrated;
-  return true;
+  return changed;
 }
 
 function ensurePeriod(state,key) {
@@ -413,8 +444,9 @@ function syncPeriodAutoClosedWeeks(period,now=new Date()){
 }
 function syncAllAutoClosedWeeks(){
   return Object.keys(state.periods||{}).reduce((changed,key)=>{
+    const previousLayoutVersion=state.periods[key]?.foodPlanLayoutVersion;
     const period=ensurePeriod(state,key);
-    return syncPeriodAutoClosedWeeks(period)||changed;
+    return syncPeriodAutoClosedWeeks(period)||previousLayoutVersion!==period.foodPlanLayoutVersion||changed;
   },false);
 }
 function scheduleAutoWeekClose(){
@@ -808,7 +840,7 @@ function petAvatarModal(){
 }
 function openCategoryEditor(id){
   const c=categoryById(id), p=selectedPeriod(), b=categoryBudget(p,c);const deletable=!['food','pet'].includes(c.kind);
-  const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:b.plan,help:c.kind==='food'?'Для еды лимиты меняются по неделям. Значение здесь распределится на четыре недели.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,preview:c.iconImage||'',help:'Загруженная картинка заменит выбранную иконку. После выбора файла можно вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
+  const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:b.plan,help:c.kind==='food'?'Для еды лимит распределится по неделям пропорционально количеству дней.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,preview:c.iconImage||'',help:'Загруженная картинка заменит выбранную иконку. После выбора файла можно вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
   openModal('Категория',fields,async v=>{
     c.name=v.name.trim()||c.name;
     if(['food','pet'].includes(c.kind))setSectionLabel(c.id,c.name);
@@ -820,10 +852,8 @@ function openCategoryEditor(id){
       if(navIconSettings()[c.id].icon===item?.icon&&!navIconSettings()[c.id].image)delete navIconSettings()[c.id];
     }
     const plan=num(v.plan);
-    if(c.kind==='food'){
-      const count=Math.max(1,p.foodWeeks.length), per=roundMoney(plan/count);
-      p.foodWeeks.forEach((w,i)=>w.plan=i===count-1?roundMoney(plan-per*(count-1)):per);
-    }else ensurePeriod(state,p.key).categoryBudgets[c.id].plan=plan;
+    if(c.kind==='food')distributeFoodPlan(p,plan);
+    else ensurePeriod(state,p.key).categoryBudgets[c.id].plan=plan;
     await commit();closeModal();
   },{extraAction:deletable?{label:'Удалить категорию',handler:async()=>{
     if(!confirm(`Удалить «${c.name}»?`))return;

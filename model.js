@@ -58,6 +58,31 @@ function dateOverlapDays(aStart,aEnd,bStart,bEnd) {
   const end = Math.min(aEnd.getTime(), bEnd.getTime());
   return Math.max(0, Math.ceil((end - start) / 86400000));
 }
+function foodWeekDays(week) {
+  return Math.max(1, dateOverlapDays(parseISODate(week.start), dayAfterISO(week.end), parseISODate(week.start), dayAfterISO(week.end)));
+}
+export function distributeFoodPlan(period,total) {
+  const weeks = Array.isArray(period?.foodWeeks) ? period.foodWeeks : [];
+  if(!weeks.length)return;
+  const amount = Math.max(0,Number(total||0));
+  const totalDays = weeks.reduce((sum,week)=>sum+foodWeekDays(week),0);
+  let allocated = 0;
+  weeks.forEach((week,index)=>{
+    const plan = index===weeks.length-1 ? roundMoney(amount-allocated) : roundMoney(amount*foodWeekDays(week)/totalDays);
+    week.plan=Math.max(0,plan);
+    allocated=roundMoney(allocated+week.plan);
+  });
+  period.foodPlanLayoutVersion=1;
+}
+function hasLegacyEvenFoodPlan(period) {
+  const weeks=period.foodWeeks||[];
+  if(weeks.length<2)return false;
+  const total=roundMoney(weeks.reduce((sum,week)=>sum+Number(week.plan||0),0));
+  if(total<=0)return false;
+  const even=roundMoney(total/weeks.length);
+  return weeks.slice(0,-1).every(week=>Math.abs(Number(week.plan||0)-even)<0.011)
+    && Math.abs(Number(weeks.at(-1).plan||0)-roundMoney(total-even*(weeks.length-1)))<0.011;
+}
 export function makeFoodWeeks(key, plans=[], salaryDay=5) {
   const periodFrom = periodStart(key,salaryDay);
   const periodTo = periodEnd(key,salaryDay);
@@ -163,25 +188,31 @@ function alignFoodWeeks(period,salaryDay=5) {
   const expected = makeFoodWeeks(period.key,[],salaryDay);
   const current = Array.isArray(period.foodWeeks) ? period.foodWeeks : [];
   const aligned = current.length === expected.length && current.every((week,index)=>week.start===expected[index].start&&week.end===expected[index].end);
+  let changed = false;
   if(aligned){
-    let changed = false;
     current.forEach((week,index)=>{if(week.partial!==expected[index].partial){week.partial=expected[index].partial;changed=true;}});
-    return changed;
+  }else{
+    const migrated = expected.map(week=>({...week}));
+    for(const oldWeek of current){
+      const oldStart = parseISODate(oldWeek.start);
+      const oldEnd = dayAfterISO(oldWeek.end);
+      let bestIndex = 0, bestOverlap = -1;
+      migrated.forEach((week,index)=>{
+        const overlap = dateOverlapDays(oldStart,oldEnd,parseISODate(week.start),dayAfterISO(week.end));
+        if(overlap>bestOverlap){bestOverlap=overlap;bestIndex=index;}
+      });
+      migrated[bestIndex].plan = roundMoney(Number(migrated[bestIndex].plan||0) + Number(oldWeek.plan||0));
+      migrated[bestIndex].spent = roundMoney(Number(migrated[bestIndex].spent||0) + Number(oldWeek.spent||0));
+    }
+    period.foodWeeks = migrated;
+    changed=true;
   }
-  const migrated = expected.map(week=>({...week}));
-  for(const oldWeek of current){
-    const oldStart = parseISODate(oldWeek.start);
-    const oldEnd = dayAfterISO(oldWeek.end);
-    let bestIndex = 0, bestOverlap = -1;
-    migrated.forEach((week,index)=>{
-      const overlap = dateOverlapDays(oldStart,oldEnd,parseISODate(week.start),dayAfterISO(week.end));
-      if(overlap>bestOverlap){bestOverlap=overlap;bestIndex=index;}
-    });
-    migrated[bestIndex].plan = roundMoney(Number(migrated[bestIndex].plan||0) + Number(oldWeek.plan||0));
-    migrated[bestIndex].spent = roundMoney(Number(migrated[bestIndex].spent||0) + Number(oldWeek.spent||0));
+  if(period.foodPlanLayoutVersion!==1){
+    if(hasLegacyEvenFoodPlan(period))distributeFoodPlan(period,foodBudget(period).plan);
+    else period.foodPlanLayoutVersion=1;
+    changed=true;
   }
-  period.foodWeeks = migrated;
-  return true;
+  return changed;
 }
 
 export function ensurePeriod(state,key) {

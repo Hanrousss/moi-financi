@@ -13,6 +13,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
+const APP_BUILD='1.0.36';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -819,6 +820,26 @@ async function init(){
   selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;ensurePeriod(state,selectedPeriodKey);
   bindStaticEvents();bindDelegatedEvents();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
   scheduleAutoWeekClose();
-  if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  registerServiceWorker();
+}
+function registerServiceWorker(){
+  if(!('serviceWorker' in navigator))return;
+  let reloading=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(reloading)return;
+    reloading=true;
+    location.reload();
+  });
+  navigator.serviceWorker.register(`./sw.js?v=${APP_BUILD}`).then(registration=>{
+    const activate=worker=>worker?.postMessage?.({type:'SKIP_WAITING'});
+    if(registration.waiting)activate(registration.waiting);
+    registration.update().catch(()=>{});
+    registration.addEventListener('updatefound',()=>{
+      const worker=registration.installing;
+      worker?.addEventListener('statechange',()=>{
+        if(worker.state==='installed'&&navigator.serviceWorker.controller)activate(worker);
+      });
+    });
+  }).catch(()=>{});
 }
 init();

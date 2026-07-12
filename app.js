@@ -210,8 +210,16 @@ function setMandatoryLabel(id,name){
   if(value===defaults[id])delete mandatoryLabels()[id];else mandatoryLabels()[id]=value;
 }
 function dashboardCards(){
-  state.settings.dashboardCards=Array.isArray(state.settings.dashboardCards)?state.settings.dashboardCards.filter(id=>dashboardDefaults.includes(id)):[...dashboardDefaults];
+  state.settings.dashboardCards=Array.isArray(state.settings.dashboardCards)?state.settings.dashboardCards:[...dashboardDefaults];
+  state.settings.dashboardCards=state.settings.dashboardCards.filter((id,index,arr)=>isDashboardCardAvailable(id)&&arr.indexOf(id)===index);
   return state.settings.dashboardCards;
+}
+function dashboardCategoryKey(id){return `cat:${id}`;}
+function dashboardCategoryId(key){return String(key||'').startsWith('cat:')?String(key).slice(4):'';}
+function isDashboardCardAvailable(id){
+  if(dashboardDefaults.includes(id))return true;
+  const categoryId=dashboardCategoryId(id);
+  return !!categoryId&&!!state.categories?.some(c=>c.id===categoryId&&c.visible);
 }
 function navIconSettings(){
   state.settings.navIcons=state.settings.navIcons&&typeof state.settings.navIcons==='object'?state.settings.navIcons:{};
@@ -307,8 +315,9 @@ function renderHome(){
     pet:{id:'pet',icon:'paw',tone:'peach',title:sectionLabel('pet'),value:formatByn(pet),meta:`нужно запланировано ${formatByn(totalOpenNeeds())}`},
     purchases:{id:'purchases',icon:'bag',tone:'lavender',title:sectionLabel('purchases'),value:`${openPurchases.length}`,meta:affordable?`${affordable} уже доступны`:'пока накоплений не хватает'}
   };
-  const rows=dashboardCards().map(id=>rowMap[id]).filter(Boolean);
-  $('#dashboardList').innerHTML=rows.map(r=>`<button class="dashboard-row" data-dashboard="${r.id}"><span class="dashboard-icon ${r.tone}">${sharedSectionIconHtml(r.id)}</span><span class="dashboard-copy"><b>${esc(r.title)}</b><small>${esc(r.meta)}</small></span><strong>${esc(r.value)}</strong>${icon('chevronRight',18)}</button>`).join('');
+  const categoryRow=id=>{const c=categoryById(dashboardCategoryId(id));if(!c||!c.visible)return null;const b=categoryBudget(p,c), left=roundMoney(num(b.plan)-num(b.spent));return {id,category:c,title:c.name,value:formatByn(left),meta:`план ${formatByn(b.plan)} · потрачено ${formatByn(b.spent)}`};};
+  const rows=dashboardCards().map(id=>rowMap[id]||categoryRow(id)).filter(Boolean);
+  $('#dashboardList').innerHTML=rows.map(r=>`<button class="dashboard-row" data-dashboard="${r.id}"><span class="dashboard-icon ${r.tone||''}" ${r.category?`style="background:${esc(r.category.color)}"`:''}>${r.category?categoryIconHtml(r.category):sharedSectionIconHtml(r.id)}</span><span class="dashboard-copy"><b>${esc(r.title)}</b><small>${esc(r.meta)}</small></span><strong>${esc(r.value)}</strong>${icon('chevronRight',18)}</button>`).join('');
 }
 
 function metric(label,value,fieldHtml=''){return `<div class="metric"><span>${label}</span>${fieldHtml||`<strong>${value}</strong>`}</div>`;}
@@ -413,8 +422,10 @@ function renderSettings(){
   $('#editAppearanceBtn').innerHTML=`<span><b>Цвета, фон и иконка</b><small>HEX-коды, кастомный фон и иконка приложения</small></span>${icon('chevronRight',18)}`;
   $('#settingsNavIcons').innerHTML=`<label class="toggle-field"><input type="checkbox" data-nav-labels ${showNavLabels()?'checked':''}><span><b>Показывать названия</b><small>Если выключить, нижнее меню останется только с крупными иконками.</small></span></label>`+navDefaults.map(item=>`<article class="settings-row dashboard-setting"><span><span class="nav-icon-preview">${navItemIconHtml(item,20)}</span><span><b>${esc(sectionLabel(item.id))}</b><small>${['home','month'].includes(item.id)?'Обязательный раздел':navItems().includes(item.id)?'Показывается':'Скрыт'}</small></span></span><span class="settings-actions"><label class="mini-toggle"><input type="checkbox" data-nav-item="${item.id}" ${navItems().includes(item.id)?'checked':''} ${['home','month'].includes(item.id)?'disabled':''}><span></span></label><button class="mini-icon" data-edit-nav-icon="${item.id}" aria-label="Изменить раздел">${icon('edit',16)}</button></span></article>`).join('');
   const cardLabels={savings:sectionLabel('savings'),payments:sectionLabel('payments'),pet:sectionLabel('pet'),purchases:sectionLabel('purchases')};
-  $('#settingsDashboardCards').innerHTML=dashboardCards().map((id,index)=>`<article class="settings-row dashboard-setting"><span><b>${cardLabels[id]}</b><small>${index+1} на главной</small></span><span class="settings-actions"><button class="mini-icon" data-card-up="${id}" ${index===0?'disabled':''}>${icon('chevronLeft',16)}</button><button class="mini-icon" data-card-down="${id}" ${index===dashboardCards().length-1?'disabled':''}>${icon('chevronRight',16)}</button><button class="mini-icon" data-card-remove="${id}" aria-label="Скрыть">${icon('close',16)}</button></span></article>`).join('')+dashboardDefaults.filter(id=>!dashboardCards().includes(id)).map(id=>`<button class="settings-row" data-card-add="${id}"><span><b>${cardLabels[id]}</b><small>Скрыта</small></span>${icon('plus',18)}</button>`).join('');
-  $('#settingsCategories').innerHTML=[...state.categories].sort((a,b)=>a.order-b.order).map(c=>`<button class="settings-row" data-settings-category="${c.id}"><span><span class="category-icon" style="background:${esc(c.color)}">${categoryIconHtml(c,20)}</span><span><b>${esc(c.name)}</b><small>${c.visible?'Показывается':'Скрыта'} · ${c.kind==='food'?'по неделям':c.kind==='pet'?'расширенная':'обычная'}</small></span></span>${icon('chevronRight',18)}</button>`).join('');
+  const dashboardLabel=id=>cardLabels[id]||categoryById(dashboardCategoryId(id))?.name||id;
+  const dashboardList=dashboardCards(), availableDashboard=[...dashboardDefaults,...visibleCategories().map(c=>dashboardCategoryKey(c.id))].filter(id=>!dashboardList.includes(id)&&isDashboardCardAvailable(id));
+  $('#settingsDashboardCards').innerHTML=dashboardList.map((id,index)=>`<article class="settings-row dashboard-setting"><span><b>${esc(dashboardLabel(id))}</b><small>${index+1} на главной</small></span><span class="settings-actions"><button class="mini-icon" data-card-up="${id}" ${index===0?'disabled':''}>${icon('chevronLeft',16)}</button><button class="mini-icon" data-card-down="${id}" ${index===dashboardList.length-1?'disabled':''}>${icon('chevronRight',16)}</button><button class="mini-icon" data-card-remove="${id}" aria-label="Скрыть">${icon('close',16)}</button></span></article>`).join('')+availableDashboard.map(id=>`<button class="settings-row" data-card-add="${id}"><span><b>${esc(dashboardLabel(id))}</b><small>${dashboardCategoryId(id)?'Категория · скрыта':'Скрыта'}</small></span>${icon('plus',18)}</button>`).join('');
+  $('#settingsCategories').innerHTML=[...state.categories].sort((a,b)=>a.order-b.order).map(c=>`<button class="settings-row" data-settings-category="${c.id}"><span><span class="category-icon" style="background:${esc(c.color)}">${categoryIconHtml(c,20)}</span><span><b>${esc(c.name)}</b><small>${c.visible?'Показывается':'Скрыта'} · ${c.kind==='food'?'по неделям':['pet','gift'].includes(c.kind)?'расширенная':'обычная'}</small></span></span>${icon('chevronRight',18)}</button>`).join('');
   $('#exportBtn').innerHTML=`<span>${icon('download',20)}<b>Скачать резервную копию</b></span>${icon('chevronRight',18)}`;
   $('#importContent').innerHTML=`<span>${icon('upload',20)}<b>Восстановить из копии</b></span>${icon('chevronRight',18)}`;
   $('#resetBtn').innerHTML=`<span>${icon('trash',20)}<b>Сбросить данные</b></span>${icon('chevronRight',18)}`;
@@ -556,7 +567,7 @@ function bindStaticEvents(){
 }
 function bindDelegatedEvents(){
   document.addEventListener('click',async e=>{
-    const dashboard=e.target.closest('[data-dashboard]');if(dashboard){const id=dashboard.dataset.dashboard;if(id==='payments')openOverlay('payments');else setScreen(id);return;}
+    const dashboard=e.target.closest('[data-dashboard]');if(dashboard){const id=dashboard.dataset.dashboard,category=categoryById(dashboardCategoryId(id));if(category){if(category.kind==='food'){foodPeriodKey=currentPeriod().key;openOverlay('food')}else if(category.kind==='pet')setScreen('pet');else if(category.kind==='gift')openOverlay('gifts');else setScreen('month');return;}if(id==='payments')openOverlay('payments');else setScreen(id);return;}
     const nav=e.target.closest('[data-nav-to]');if(nav){setScreen(nav.dataset.navTo);return;}
     if(e.target.closest('[data-open-food]')){foodPeriodKey=selectedPeriodKey;openOverlay('food');return;}
     const detail=e.target.closest('[data-open-category-detail]');if(detail&&!e.target.closest('button,input,label,.settings-actions')){const id=detail.dataset.openCategoryDetail;if(id==='food'){foodPeriodKey=selectedPeriodKey;openOverlay('food')}else if(id==='pet')setScreen('pet');else if(id==='gifts')openOverlay('gifts');return;}

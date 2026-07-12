@@ -190,6 +190,10 @@ const navDefaults=[
   {id:'pet',icon:'paw',label:'Питомец'},
   {id:'purchases',icon:'bag',label:'Покупки'}
 ];
+const settingsControlDefault={id:'settings',icon:'settings',label:'Настройки'};
+function menuIconItem(id){
+  return id==='settings'?settingsControlDefault:navDefaults.find(x=>x.id===id);
+}
 function sectionLabels(){
   state.settings.sectionLabels=state.settings.sectionLabels&&typeof state.settings.sectionLabels==='object'?state.settings.sectionLabels:{};
   return state.settings.sectionLabels;
@@ -431,7 +435,8 @@ function renderPayments(){
 function renderSettings(){
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><b>Цвета, фон и иконка</b><small>HEX-коды, кастомный фон и иконка приложения</small></span>${icon('chevronRight',18)}`;
-  $('#settingsNavIcons').innerHTML=`<label class="toggle-field"><input type="checkbox" data-nav-labels ${showNavLabels()?'checked':''}><span><b>Показывать названия</b><small>Если выключить, нижнее меню останется только с крупными иконками.</small></span></label>`+navDefaults.map(item=>`<article class="settings-row dashboard-setting"><span><span class="nav-icon-preview">${navItemIconHtml(item,20)}</span><span><b>${esc(sectionLabel(item.id))}</b><small>${['home','month'].includes(item.id)?'Обязательный раздел':navItems().includes(item.id)?'Показывается':'Скрыт'}</small></span></span><span class="settings-actions"><label class="mini-toggle"><input type="checkbox" data-nav-item="${item.id}" ${navItems().includes(item.id)?'checked':''} ${['home','month'].includes(item.id)?'disabled':''}><span></span></label><button class="mini-icon" data-edit-nav-icon="${item.id}" aria-label="Изменить раздел">${icon('edit',16)}</button></span></article>`).join('');
+  const settingsIconRow=`<article class="settings-row dashboard-setting"><span><span class="nav-icon-preview">${navItemIconHtml(settingsControlDefault,20)}</span><span><b>Кнопка настроек</b><small>Верхняя кнопка справа</small></span></span><span class="settings-actions"><button class="mini-icon" data-edit-nav-icon="settings" aria-label="Изменить иконку настроек">${icon('edit',16)}</button></span></article>`;
+  $('#settingsNavIcons').innerHTML=`<label class="toggle-field"><input type="checkbox" data-nav-labels ${showNavLabels()?'checked':''}><span><b>Показывать названия</b><small>Если выключить, нижнее меню останется только с крупными иконками.</small></span></label>`+settingsIconRow+navDefaults.map(item=>`<article class="settings-row dashboard-setting"><span><span class="nav-icon-preview">${navItemIconHtml(item,20)}</span><span><b>${esc(sectionLabel(item.id))}</b><small>${['home','month'].includes(item.id)?'Обязательный раздел':navItems().includes(item.id)?'Показывается':'Скрыт'}</small></span></span><span class="settings-actions"><label class="mini-toggle"><input type="checkbox" data-nav-item="${item.id}" ${navItems().includes(item.id)?'checked':''} ${['home','month'].includes(item.id)?'disabled':''}><span></span></label><button class="mini-icon" data-edit-nav-icon="${item.id}" aria-label="Изменить раздел">${icon('edit',16)}</button></span></article>`).join('');
   const cardLabels={savings:sectionLabel('savings'),payments:sectionLabel('payments'),pet:sectionLabel('pet'),purchases:sectionLabel('purchases')};
   const dashboardLabel=id=>cardLabels[id]||categoryById(dashboardCategoryId(id))?.name||id;
   const dashboardList=dashboardCards(), availableDashboard=[...dashboardDefaults,...visibleCategories().map(c=>dashboardCategoryKey(c.id))].filter(id=>!dashboardList.includes(id)&&isDashboardCardAvailable(id));
@@ -448,7 +453,7 @@ function renderNav(){
   nav.style.setProperty('--nav-count',visible.length);
   nav.classList.toggle('icons-only',!labels);
   $$('.bottom-nav button').forEach((button,index)=>{const item=navDefaults[index],shown=visible.includes(item.id);button.hidden=!shown;button.innerHTML=`${navItemIconHtml(item,labels?21:31)}${labels?`<small>${sectionLabel(item.id)}</small>`:''}`;button.classList.toggle('active',activeScreen===item.id);});
-  $('#settingsBtn').innerHTML=icon('settings',21);$('#closeOverlayBtn').innerHTML=icon('close',21);
+  $('#settingsBtn').innerHTML=navItemIconHtml(settingsControlDefault,21);$('#closeOverlayBtn').innerHTML=icon('close',21);
   $('#prevMonth').innerHTML=icon('chevronLeft');$('#nextMonth').innerHTML=icon('chevronRight');$('#foodPrevMonth').innerHTML=icon('chevronLeft');$('#foodNextMonth').innerHTML=icon('chevronRight');
   $('#editBalanceBtn').innerHTML=icon('edit',17);$('#addCategoryBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#depositSavings').innerHTML=`${icon('plus',18)} Отложить`;$('#withdrawSavings').innerHTML=`${icon('minus',18)} Взять`;$('#topupPet').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendPet').innerHTML=`${icon('minus',18)} Вычесть`;$('#topupGifts').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendGifts').innerHTML=`${icon('minus',18)} Вычесть`;$('#addPetNeed').innerHTML=`${icon('plus',17)} Добавить`;$('#addGiftPlan').innerHTML=`${icon('plus',17)} Добавить`;$('#addPurchaseBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#addPaymentBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#settingsAddCategory').innerHTML=`${icon('plus',17)} Добавить`;$('#modalClose').innerHTML=icon('close',19);
 }
@@ -518,10 +523,12 @@ const colorOptions=[
   '#EEAC60','#AA695B','#FEE8DD','#6C909E','#E6B16D','#EFA681','#EAAF3E','#F6E2C7','#E8755B'
 ].map(c=>({label:c,value:c}));
 function navIconModal(id){
-  const item=navDefaults.find(x=>x.id===id);if(!item)return;
+  const item=menuIconItem(id);if(!item)return;
+  const isSettings=id==='settings';
   const settings=navIconSettings(), current=settings[id]||{};
-  openModal(`Раздел: ${sectionLabel(item.id)}`,[{name:'name',label:'Название',value:sectionLabel(item.id)},{name:'icon',label:'Стандартная иконка',type:'select',value:current.icon||item.icon,options:iconOptions},{name:'image',label:'Своя картинка',type:'file',crop:true,preview:current.image||'',accept:'image/png,image/jpeg,image/webp,image/*',help:'PNG с прозрачным фоном сохранится вместе с альфа-каналом. После выбора файла можно вручную настроить кроп.'}],async v=>{
-    setSectionLabel(id,v.name);
+  const fields=[...(isSettings?[]:[{name:'name',label:'Название',value:sectionLabel(item.id)}]),{name:'icon',label:'Стандартная иконка',type:'select',value:current.icon||item.icon,options:iconOptions},{name:'image',label:'Своя картинка',type:'file',crop:true,preview:current.image||'',accept:'image/png,image/jpeg,image/webp,image/*',help:'PNG с прозрачным фоном сохранится вместе с альфа-каналом. После выбора файла можно вручную настроить кроп.'}];
+  openModal(isSettings?'Кнопка настроек':`Раздел: ${sectionLabel(item.id)}`,fields,async v=>{
+    if(!isSettings)setSectionLabel(id,v.name);
     const image=v.image?await imageToDataUrl(v.image,160,cropOptions(v,'image')):current.image||'';
     settings[id]={icon:v.icon||item.icon,image};
     if(settings[id].icon===item.icon&&!settings[id].image)delete settings[id];

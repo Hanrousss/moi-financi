@@ -71,6 +71,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   box-shadow:var(--shadow-soft);
 }
 .icon-button.subtle{box-shadow:none;background:#f7f8fa}
+.icon-button .custom-nav-icon{width:30px;height:30px;border-radius:9px}
 .mini-icon{width:32px;height:32px;border-radius:10px;background:transparent;color:#4b5563}
 .mini-icon:active{background:#f1f3f5}
 

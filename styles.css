@@ -221,8 +221,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .savings-alert{border:1px solid rgba(255,255,255,.48);background:rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:8px 11px;font-size:11px;font-weight:750}
 .safety-card{margin-top:12px;padding:16px;display:grid;grid-template-columns:48px 1fr 32px;align-items:center;gap:12px}
 .safe-icon,.gift-mark,.gift-envelope{border:1px solid var(--icon-frame-line);width:48px;height:48px;border-radius:15px;padding:0;line-height:0;overflow:hidden;background:linear-gradient(145deg,var(--icon-frame),#eef5ef);color:var(--green-dark);display:grid;place-items:center;box-shadow:var(--icon-frame-shadow)}
-.safe-icon .custom-category-icon{width:37px;height:37px}
-.safe-icon .safe-custom-icon{transform:translateX(-3px)}
+.safe-icon .safe-icon-art{width:36px;height:36px;display:grid;place-items:center;transform:translateX(-5px);overflow:visible}
+.safe-icon .safe-icon-art .custom-category-icon{width:100%;height:100%;border-radius:8px}
 .safety-card>div{display:grid;gap:3px}
 .safety-card span,.gift-hero span{font-size:11px;color:var(--muted)}
 .safety-card strong{font-size:20px;color:var(--heading)}

@@ -274,9 +274,23 @@ function plannedFreeBalance(state,period){
   const foodVariance=period.foodWeeks.reduce((s,w)=>{const delta=Number(w.plan||0)-Number(w.spent||0);return s+(w.closed?delta:Math.min(0,delta))},0);
   return roundMoney(base+overCategories+foodVariance);
 }
+function periodSpendDeltaSinceSnapshot(state,period){
+  if(period.balanceNow==null)return 0;
+  const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period),payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key);
+  const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
+  const newMandatorySpend=(Number(period.mandatory.housingSpent||0)-Number(snapshot.housingSpent||0))+(sections.includes('reserve')?(Number(period.mandatory.reserveAllocated||0)-Number(snapshot.reserveAllocated||0)):0)+(sections.includes('payment')?(Number(payment.paid||0)-Number(snapshot.paymentPaid||0)):0)+(saved-Number(snapshot.savingsDepositedByn??snapshot.savingsDepositedUsd??0));
+  const newCategorySpend=state.categories.filter(c=>c.visible).reduce((sum,c)=>{
+    if(c.kind==='food')return sum+period.foodWeeks.reduce((s,w,i)=>s+Number(w.spent||0)-Number(snapshot.food?.[i]||0),0);
+    const b=categoryBudget(period,c);return sum+Number(b.spent||0)-Number(snapshot.categories?.[c.id]||0);
+  },0);
+  return roundMoney(newMandatorySpend+newCategorySpend);
+}
+function accountBalanceAfterSpending(state,period){
+  return period.balanceNow==null?null:roundMoney(Number(period.balanceNow||0)-periodSpendDeltaSinceSnapshot(state,period));
+}
 function liveFreeBalance(state,period){
   if(period.balanceNow==null)return plannedFreeBalance(state,period);
-  const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period),payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key),savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
+  const payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key),savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
   const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
   const remainingPayment=sections.includes('payment')?Math.max(0,Number(payment.planned||0)-Number(payment.paid||0)):0;
   const remainingReserve=sections.includes('reserve')?Math.max(0,Number(period.mandatory.reservePlan||0)-Number(period.mandatory.reserveAllocated||0)):0;
@@ -285,12 +299,7 @@ function liveFreeBalance(state,period){
     if(c.kind==='food') return sum+period.foodWeeks.reduce((s,w)=>s+(w.closed?0:Math.max(0,Number(w.plan||0)-Number(w.spent||0))),0);
     const b=categoryBudget(period,c);return sum+Math.max(0,Number(b.plan||0)-Number(b.spent||0));
   },0);
-  const newMandatorySpend=(Number(period.mandatory.housingSpent||0)-Number(snapshot.housingSpent||0))+(sections.includes('reserve')?(Number(period.mandatory.reserveAllocated||0)-Number(snapshot.reserveAllocated||0)):0)+(sections.includes('payment')?(Number(payment.paid||0)-Number(snapshot.paymentPaid||0)):0)+(saved-Number(snapshot.savingsDepositedByn??snapshot.savingsDepositedUsd??0));
-  const newCategorySpend=state.categories.filter(c=>c.visible).reduce((sum,c)=>{
-    if(c.kind==='food')return sum+period.foodWeeks.reduce((s,w,i)=>s+Number(w.spent||0)-Number(snapshot.food?.[i]||0),0);
-    const b=categoryBudget(period,c);return sum+Number(b.spent||0)-Number(snapshot.categories?.[c.id]||0);
-  },0);
-  return roundMoney(Number(period.balanceNow||0)-remainingMandatory-remainingCategories-newMandatorySpend-newCategorySpend);
+  return roundMoney(Number(period.balanceNow||0)-remainingMandatory-remainingCategories-periodSpendDeltaSinceSnapshot(state,period));
 }
 function purchaseAvailable(state,cost){return savingsBalanceUsd(state)>=Number(cost||0)}
 function monthlySavingsRows(state){const map=new Map();for(const t of state.savings){const key=t.date.slice(0,7),row=map.get(key)||{period:key,deposited:0,withdrawn:0,depositedByn:0,withdrawnByn:0,notes:[]};if(t.type==='deposit'){row.deposited+=savingUsdAmount(t);row.depositedByn+=savingAmountByn(state,t)}else{row.withdrawn+=savingUsdAmount(t);row.withdrawnByn+=savingAmountByn(state,t)}if(t.note)row.notes.push(t.note);map.set(key,row)}return[...map.values()].sort((a,b)=>b.period.localeCompare(a.period))}
@@ -548,7 +557,7 @@ function savingTxByn(t){return txSavingCurrency(t)==='byn'?num(t.amountByn):0;}
 function formatSavingsTotal(usd,byn){return num(byn)!==0?`${formatUsd(usd)} + ${formatByn(byn)}`:formatUsd(usd);}
 function formatSavingTx(t){return txSavingCurrency(t)==='byn'?formatByn(savingTxByn(t)):formatUsd(savingTxUsd(t));}
 function purchaseCostUsd(item){return num(item?.costUsd ?? item?.costByn);}
-function safetyIconHtml(size=25){return state.safety.iconImage?`<img class="custom-category-icon safe-custom-icon" src="${esc(state.safety.iconImage)}" alt="">`:icon(state.safety.icon||'shield',size);}
+function safetyIconHtml(size=25){return state.safety.iconImage?`<span class="safe-icon-art"><img class="custom-category-icon" src="${esc(state.safety.iconImage)}" alt=""></span>`:icon(state.safety.icon||'shield',size);}
 function safetyProgressText(){return num(state.safety.amountUsd)>=num(state.safety.goalUsd)?formatUsd(state.safety.amountUsd):`${formatUsd(state.safety.amountUsd)} / ${formatUsd(state.safety.goalUsd)}`;}
 function giftBalanceByn(){return roundMoney(state.gifts.transactions.reduce((sum,t)=>sum+(t.type==='topup'?1:-1)*num(t.amountByn),num(state.gifts.balanceByn||0)));}
 function giftPinnedRank(item){return item.recipient==='Паше'?0:item.recipient==='Маме'?1:2;}
@@ -682,7 +691,7 @@ function renderHome(){
   const available=weekAvailable(week);
   $('#periodPill').textContent=`${periodTitle(p.key)} · ${formatPeriodRange(p.key,state.settings.salaryDay)}`;
   $('#freeValue').textContent=formatByn(free);
-  $('#freeMeta').textContent=p.balanceNow==null ? `План месяца: ${formatByn(plannedFreeBalance(state,p))}` : `На счету ${formatByn(p.balanceNow)}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
+  $('#freeMeta').textContent=p.balanceNow==null ? `План месяца: ${formatByn(plannedFreeBalance(state,p))}` : `На счету ${formatByn(accountBalanceAfterSpending(state,p))}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
   $('#freeCard').className=`hero-card ${dashboardStatus(free)}`;
   $('#weekAvailable').textContent=formatByn(available);
   $('#weekCard span').textContent=`${sectionLabel('food')} · эта неделя`;
@@ -740,7 +749,7 @@ function renderMonth(){
   $('#categoryList').innerHTML=optionalCategories(p).map(c=>renderCategoryCard(c,p)).join('')||'<div class="empty-state">Все видимые категории уже в обязательном для этого месяца</div>';
   const free=p.balanceNow==null?plannedFreeBalance(state,p):liveFreeBalance(state,p);
   $('#monthFreeValue').textContent=formatByn(free);
-  $('#monthLimitMeta').textContent=`Лимиты категорий: ${formatByn(plannedCategoryTotal(state,p))}`;
+  $('#monthLimitMeta').textContent=p.balanceNow==null?`Лимиты категорий: ${formatByn(plannedCategoryTotal(state,p))}`:`На счету после трат: ${formatByn(accountBalanceAfterSpending(state,p))} · лимиты ${formatByn(plannedCategoryTotal(state,p))}`;
   $('#monthFreeCard').classList.toggle('negative',free<0);
 }
 

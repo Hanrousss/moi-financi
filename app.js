@@ -366,6 +366,7 @@ function closeOverlay(){setScreen('home');}
 function statusClass(value){return value<0?'negative':value===0?'neutral':'positive';}
 function budgetToneClass(plan,available){return available<0?'card-negative':num(plan)>0&&available<=num(plan)*0.2?'card-warning':'';}
 function budgetValueClass(plan,available){return available<0?'negative-number':num(plan)>0&&available<=num(plan)*0.2?'warning-number':'';}
+function editableAccountBalance(period){return period.balanceNow==null?'':accountBalanceAfterSpending(state,period);}
 function renderHome(){
   const p=currentPeriod();
   const free=liveFreeBalance(state,p);
@@ -564,7 +565,7 @@ async function updateCropPreview(root,name){
 function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0]||{amount:120};openModal(`Параметры · ${periodTitle(p.key)}`,[
   {name:'salary',label:'Зарплата, BYN',type:'number',step:'1',value:p.salary},
   {name:'extra',label:'Дополнительный доход, BYN',type:'number',step:'1',value:p.extraIncome},
-  {name:'balance',label:'Текущий баланс на счету, BYN',type:'number',step:'1',value:p.balanceNow??'',help:'Оставь пустым для планового месяца.'},
+  {name:'balance',label:'Осталось на счету, BYN',type:'number',step:'1',value:editableAccountBalance(p),help:'Это фактический остаток после уже внесенных трат. После сохранения он станет новой точкой отсчета.'},
   {name:'cash',label:'Отдельно отложено / наличные, BYN',type:'number',step:'1',value:p.cashNow},
   {name:'housingPlan',label:`${mandatoryLabel('housing')} — план, BYN`,type:'number',step:'1',value:p.mandatory.housingPlan},
   {name:'housingSpent',label:`${mandatoryLabel('housing')} — оплачено, BYN`,type:'number',step:'1',value:p.mandatory.housingSpent},
@@ -576,7 +577,7 @@ function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0
   {name:'utilitiesPaid',label:'Коммунальные оплачены',type:'checkbox',value:!!utility.paid},
   {name:'note',label:'Комментарий',type:'textarea',value:p.note}
 ],async v=>{p.salary=num(v.salary);p.extraIncome=num(v.extra);p.balanceNow=v.balance===''?null:num(v.balance);p.cashNow=num(v.cash);p.mandatory.housingPlan=num(v.housingPlan);p.mandatory.housingSpent=num(v.housingSpent);p.mandatory.reservePlan=num(v.reservePlan);p.mandatory.reserveAllocated=num(v.reserveAllocated);p.mandatory.savingsPlanUsd=num(v.savingsUsd);p.mandatory.savingsPlanByn=num(v.savingsByn);p.passThroughs=[{...(p.passThroughs?.[0]||{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25}),amount:num(v.utilities),paid:v.utilitiesPaid,note:'Аванс приходит и сразу уходит'}];p.note=v.note;if(p.balanceNow==null)p.balanceSnapshot=null;else captureBalanceSnapshot(state,p);await commit();closeModal();});}
-function openBalanceEditor(){const p=currentPeriod();openModal('Текущий баланс',[{name:'balance',label:'На счету, BYN',type:'number',step:'1',value:p.balanceNow??''},{name:'cash',label:'Отдельно отложено / наличные, BYN',type:'number',step:'1',value:p.cashNow}],async v=>{p.balanceNow=v.balance===''?null:num(v.balance);p.cashNow=num(v.cash);if(p.balanceNow==null)p.balanceSnapshot=null;else captureBalanceSnapshot(state,p);await commit();closeModal();});}
+function openBalanceEditor(){const p=currentPeriod();openModal('Осталось на счету',[{name:'balance',label:'Осталось на счету, BYN',type:'number',step:'1',value:editableAccountBalance(p),help:'Если сумма в приложении отличается от банка, внеси фактический остаток. Новые траты будут вычитаться уже от него.'},{name:'cash',label:'Отдельно отложено / наличные, BYN',type:'number',step:'1',value:p.cashNow}],async v=>{p.balanceNow=v.balance===''?null:num(v.balance);p.cashNow=num(v.cash);if(p.balanceNow==null)p.balanceSnapshot=null;else captureBalanceSnapshot(state,p);await commit();closeModal();});}
 function openMandatoryEditor(kind){const p=selectedPeriod(), pay=periodPayment(state,p.key);const config={housing:{title:mandatoryLabel('housing'),plan:p.mandatory.housingPlan,spent:p.mandatory.housingSpent},payment:{title:sectionLabel('payments'),plan:pay.planned,spent:pay.paid},reserve:{title:mandatoryLabel('reserve'),plan:p.mandatory.reservePlan,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'name',label:'Название',value:config.title},{name:'plan',label:'План, BYN',type:'number',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'number',value:config.spent}],async v=>{if(kind==='payment')setSectionLabel('payments',v.name);else setMandatoryLabel(kind,v.name);if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}await commit();closeModal();});}
 
 const iconOptions=['wallet','home','calendar','piggy','paw','bag','money','utensils','dumbbell','sparkles','heart','shirt','gift','ticket','palette','shield'].map(i=>({label:i,value:i}));

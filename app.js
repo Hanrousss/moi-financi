@@ -13,6 +13,49 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
+const ICON_CENTER_VERSION=1;
+function alphaBounds(img){
+  const canvas=document.createElement('canvas');
+  canvas.width=img.width;canvas.height=img.height;
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  ctx.drawImage(img,0,0);
+  const data=ctx.getImageData(0,0,img.width,img.height).data;
+  let minX=img.width,minY=img.height,maxX=-1,maxY=-1;
+  for(let y=0;y<img.height;y++)for(let x=0;x<img.width;x++){
+    if(data[(y*img.width+x)*4+3]>12){
+      if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
+    }
+  }
+  return maxX>=0?{minX,minY,maxX,maxY}:null;
+}
+const loadImage = src => new Promise((resolve,reject)=>{
+  const img=new Image();
+  img.onload=()=>resolve(img);
+  img.onerror=()=>reject(new Error('image'));
+  img.src=src;
+});
+function centeredIconCanvas(img,maxSize=256){
+  const bounds=alphaBounds(img);
+  if(!bounds)return null;
+  const squareLimit=Math.min(img.width,img.height);
+  const cropSize=Math.min(Math.max(bounds.maxX-bounds.minX+1,bounds.maxY-bounds.minY+1)*1.16,squareLimit);
+  const centerX=(bounds.minX+bounds.maxX+1)/2,centerY=(bounds.minY+bounds.maxY+1)/2;
+  const sx=Math.max(0,Math.min(img.width-cropSize,centerX-cropSize/2));
+  const sy=Math.max(0,Math.min(img.height-cropSize,centerY-cropSize/2));
+  const scale=Math.min(1,maxSize/cropSize);
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(cropSize*scale));
+  canvas.height=Math.max(1,Math.round(cropSize*scale));
+  canvas.getContext('2d').drawImage(img,sx,sy,cropSize,cropSize,0,0,canvas.width,canvas.height);
+  return canvas;
+}
+async function centeredIconDataUrl(src,maxSize=256){
+  if(!String(src||'').startsWith('data:image/'))return src;
+  try{
+    const canvas=centeredIconCanvas(await loadImage(src),maxSize);
+    return canvas?canvas.toDataURL('image/png'):src;
+  }catch{return src;}
+}
 const imageToDataUrl = (file,maxSize=900,{cropSquare=false,zoom=1,offsetX=0,offsetY=0}={}) => new Promise((resolve,reject)=>{
   if(!file){resolve('');return;}
   const reader=new FileReader();
@@ -21,21 +64,25 @@ const imageToDataUrl = (file,maxSize=900,{cropSquare=false,zoom=1,offsetX=0,offs
     const img=new Image();
     img.onerror=()=>reject(new Error('image'));
     img.onload=()=>{
-      const sourceSize=Math.min(img.width,img.height);
+      const transparentSource=file.type==='image/png'||file.type==='image/webp'||file.name?.toLowerCase().endsWith('.png');
+      const bounds=cropSquare&&transparentSource?alphaBounds(img):null;
+      const squareLimit=Math.min(img.width,img.height);
+      const baseSize=bounds?Math.min(Math.max(bounds.maxX-bounds.minX+1,bounds.maxY-bounds.minY+1)*1.16,squareLimit):squareLimit;
       const zoomValue=cropSquare?Math.max(1,Math.min(4,num(zoom)||1)):1;
-      const cropSize=sourceSize/zoomValue;
+      const cropSize=baseSize/zoomValue;
       const scale=Math.min(1,maxSize/(cropSquare?cropSize:Math.max(img.width,img.height)));
       const canvas=document.createElement('canvas');
       canvas.width=Math.max(1,Math.round((cropSquare?cropSize:img.width)*scale));
       canvas.height=Math.max(1,Math.round((cropSquare?cropSize:img.height)*scale));
       const ctx=canvas.getContext('2d');
       if(cropSquare){
-        const maxShiftX=(img.width-cropSize)/2,maxShiftY=(img.height-cropSize)/2;
-        const sx=Math.max(0,Math.min(img.width-cropSize,(img.width-cropSize)/2+(num(offsetX)||0)/100*maxShiftX));
-        const sy=Math.max(0,Math.min(img.height-cropSize,(img.height-cropSize)/2+(num(offsetY)||0)/100*maxShiftY));
+        const centerX=bounds?(bounds.minX+bounds.maxX+1)/2:img.width/2;
+        const centerY=bounds?(bounds.minY+bounds.maxY+1)/2:img.height/2;
+        const maxShiftX=Math.max(0,(img.width-cropSize)/2),maxShiftY=Math.max(0,(img.height-cropSize)/2);
+        const sx=Math.max(0,Math.min(img.width-cropSize,centerX-cropSize/2+(num(offsetX)||0)/100*maxShiftX));
+        const sy=Math.max(0,Math.min(img.height-cropSize,centerY-cropSize/2+(num(offsetY)||0)/100*maxShiftY));
         ctx.drawImage(img,sx,sy,cropSize,cropSize,0,0,canvas.width,canvas.height);
       }else ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      const transparentSource=file.type==='image/png'||file.type==='image/webp'||file.name?.toLowerCase().endsWith('.png');
       const format=transparentSource?(file.type==='image/webp'?'image/webp':'image/png'):'image/jpeg';
       resolve(format==='image/png'?canvas.toDataURL(format):canvas.toDataURL(format,.82));
     };
@@ -107,6 +154,23 @@ function normalizeState(){
   state.gifts.recipients=Array.isArray(state.gifts.recipients)&&state.gifts.recipients.length?state.gifts.recipients:['Паше','Маме','Другому'];
   const giftsCategory=state.categories?.find(c=>c.id==='gifts');
   if(giftsCategory)giftsCategory.kind='gift';
+}
+
+async function centerStoredIconImages(){
+  state.settings.iconCenterVersion=num(state.settings.iconCenterVersion);
+  if(state.settings.iconCenterVersion>=ICON_CENTER_VERSION)return false;
+  let changed=false;
+  const updateImage=async(owner,key,maxSize=256)=>{
+    if(!owner?.[key])return;
+    const centered=await centeredIconDataUrl(owner[key],maxSize);
+    if(centered&&centered!==owner[key]){owner[key]=centered;changed=true;}
+  };
+  for(const category of state.categories||[])await updateImage(category,'iconImage',256);
+  const icons=navIconSettings();
+  for(const item of Object.values(icons))await updateImage(item,'image',160);
+  await updateImage(state.safety,'iconImage',256);
+  state.settings.iconCenterVersion=ICON_CENTER_VERSION;
+  return changed;
 }
 
 let state;
@@ -657,7 +721,8 @@ function bindDelegatedEvents(){
 async function init(){
   const saved=await loadState();state=validateState(saved)?saved:seedState(new Date());
   normalizeState();
-  if(syncAllAutoClosedWeeks())await saveState(state);
+  const iconsCentered=await centerStoredIconImages();
+  if(syncAllAutoClosedWeeks()||iconsCentered)await saveState(state);
   selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;ensurePeriod(state,selectedPeriodKey);
   bindStaticEvents();bindDelegatedEvents();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
   scheduleAutoWeekClose();

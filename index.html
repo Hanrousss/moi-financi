@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="./icons/favicon.png">
-  <link rel="stylesheet" href="./styles.css?v=1.0.36">
+  <link rel="stylesheet" href="./styles.css?v=1.0.37">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -40,7 +40,7 @@
 
       <section id="month" class="screen">
         <div class="month-switcher"><button id="prevMonth" aria-label="Предыдущий месяц"></button><div><strong id="monthTitle"></strong><small id="monthRange"></small></div><button id="nextMonth" aria-label="Следующий месяц"></button></div>
-        <article class="income-card"><div><span>Доход</span><strong id="incomeTotal">0 BYN</strong><small id="incomeDetails"></small></div><button id="editPeriodBtn" class="small-button">Изменить</button></article>
+        <article class="income-card"><div><span>Баланс</span><strong id="incomeTotal">0 BYN</strong><small id="incomeDetails"></small></div><button id="editPeriodBtn" class="small-button">Изменить</button></article>
         <div class="section-row"><h2>Обязательное</h2></div>
         <div id="mandatoryGrid" class="mandatory-grid"></div>
         <div class="section-row"><h2>Категории</h2><button id="addCategoryBtn" class="text-button"></button></div>
@@ -102,6 +102,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.0.36"></script>
+  <script src="./app.bundle.js?v=1.0.37"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.0.38';
+const APP_BUILD='1.0.39';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -401,8 +401,10 @@ function renderHome(){
   $('#weekCard').classList.toggle('card-negative',available<0);
   $('#weekCard').classList.toggle('card-warning',num(week.plan)>0&&available>=0&&available<=num(week.plan)*0.2);
   $('#daysToSalary').textContent=pluralDays(daysToNextSalary(new Date(),state.settings.salaryDay));
-  $('#spendDigest').innerHTML='<span></span>';
-  $('#spendDigest span').textContent=periodSpentDigest(p);
+  const digestText=periodSpentDigest(p), digestTrack=$('#spendDigest');
+  digestTrack.innerHTML='<span></span>';
+  digestTrack.querySelector('span').textContent=digestText;
+  digestTrack.querySelector('span').dataset.repeat=digestText;
 
   const savings=savingsBalanceUsd(state), pet=petBalanceByn(state), debt=Math.max(0,roundMoney((num(state.settings.debtInitial)||state.payments.reduce((s,p)=>s+num(p.planned),0))-paymentsPaidTotal(state)));
   const openPurchases=state.purchases.filter(pu=>!pu.completed);

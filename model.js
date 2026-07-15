@@ -275,7 +275,7 @@ export function periodSpendDeltaSinceSnapshot(state,period){
   const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period),payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key);
   const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
   const newMandatorySpend=(Number(period.mandatory.housingSpent||0)-Number(snapshot.housingSpent||0))+(sections.includes('reserve')?(Number(period.mandatory.reserveAllocated||0)-Number(snapshot.reserveAllocated||0)):0)+(sections.includes('payment')?(Number(payment.paid||0)-Number(snapshot.paymentPaid||0)):0)+(saved-Number(snapshot.savingsDepositedByn??snapshot.savingsDepositedUsd??0));
-  const newCategorySpend=state.categories.filter(c=>c.visible).reduce((sum,c)=>{
+  const newCategorySpend=state.categories.reduce((sum,c)=>{
     if(c.kind==='food')return sum+period.foodWeeks.reduce((s,w,i)=>s+Number(w.spent||0)-Number(snapshot.food?.[i]||0),0);
     const b=categoryBudget(period,c);return sum+Number(b.spent||0)-Number(snapshot.categories?.[c.id]||0);
   },0);

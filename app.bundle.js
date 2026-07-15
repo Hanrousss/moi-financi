@@ -279,7 +279,7 @@ function periodSpendDeltaSinceSnapshot(state,period){
   const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period),payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key);
   const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
   const newMandatorySpend=(Number(period.mandatory.housingSpent||0)-Number(snapshot.housingSpent||0))+(sections.includes('reserve')?(Number(period.mandatory.reserveAllocated||0)-Number(snapshot.reserveAllocated||0)):0)+(sections.includes('payment')?(Number(payment.paid||0)-Number(snapshot.paymentPaid||0)):0)+(saved-Number(snapshot.savingsDepositedByn??snapshot.savingsDepositedUsd??0));
-  const newCategorySpend=state.categories.filter(c=>c.visible).reduce((sum,c)=>{
+  const newCategorySpend=state.categories.reduce((sum,c)=>{
     if(c.kind==='food')return sum+period.foodWeeks.reduce((s,w,i)=>s+Number(w.spent||0)-Number(snapshot.food?.[i]||0),0);
     const b=categoryBudget(period,c);return sum+Number(b.spent||0)-Number(snapshot.categories?.[c.id]||0);
   },0);
@@ -333,7 +333,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.0.37';
+const APP_BUILD='1.0.38';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -688,6 +688,22 @@ function statusClass(value){return value<0?'negative':value===0?'neutral':'posit
 function budgetToneClass(plan,available){return available<0?'card-negative':num(plan)>0&&available<=num(plan)*0.2?'card-warning':'';}
 function budgetValueClass(plan,available){return available<0?'negative-number':num(plan)>0&&available<=num(plan)*0.2?'warning-number':'';}
 function editableAccountBalance(period){return period.balanceNow==null?'':accountBalanceAfterSpending(state,period);}
+function periodSpentDigest(period){
+  const rows=[];
+  const add=(name,spent)=>{const value=roundMoney(num(spent));if(value>0)rows.push({name,spent:value});};
+  const payment=periodPayment(state,period.key);
+  add(mandatoryLabel('housing'),period.mandatory.housingSpent);
+  add(sectionLabel('payments'),payment.paid);
+  add(mandatoryLabel('reserve'),period.mandatory.reserveAllocated);
+  add(sectionLabel('savings'),periodSavingsDepositedByn(state,period.key));
+  state.categories.forEach(category=>{
+    const budget=categoryBudget(period,category);
+    add(category.name,budget.spent);
+  });
+  rows.sort((a,b)=>b.spent-a.spent);
+  const total=roundMoney(rows.reduce((sum,row)=>sum+row.spent,0));
+  return rows.length?`Потрачено сейчас: ${formatByn(total)} · ${rows.map(row=>`${row.name} ${formatByn(row.spent)}`).join(' · ')}`:'Потрачено сейчас: 0 BYN · пока без расходов по категориям';
+}
 function renderHome(){
   const p=currentPeriod();
   const free=liveFreeBalance(state,p);
@@ -705,6 +721,8 @@ function renderHome(){
   $('#weekCard').classList.toggle('card-negative',available<0);
   $('#weekCard').classList.toggle('card-warning',num(week.plan)>0&&available>=0&&available<=num(week.plan)*0.2);
   $('#daysToSalary').textContent=pluralDays(daysToNextSalary(new Date(),state.settings.salaryDay));
+  $('#spendDigest').innerHTML='<span></span>';
+  $('#spendDigest span').textContent=periodSpentDigest(p);
 
   const savings=savingsBalanceUsd(state), pet=petBalanceByn(state), debt=Math.max(0,roundMoney((num(state.settings.debtInitial)||state.payments.reduce((s,p)=>s+num(p.planned),0))-paymentsPaidTotal(state)));
   const openPurchases=state.purchases.filter(pu=>!pu.completed);

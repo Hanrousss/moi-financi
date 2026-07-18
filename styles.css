@@ -100,6 +100,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .hero-card.status-bad{background:linear-gradient(145deg,var(--red-soft),#fff 78%);border-color:var(--red-line)}
 .hero-card.status-bad strong{color:var(--red)}
 .hero-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);font-size:13px}
+.hero-card-actions{display:flex;align-items:center;gap:2px}
 .hero-card>strong{display:block;font-size:38px;line-height:1.05;letter-spacing:0;margin:9px 0 7px;color:var(--heading);font-weight:800}
 .hero-card small{color:var(--muted);font-size:12px}
 
@@ -168,22 +169,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .dashboard-row>strong{font-size:14px;white-space:nowrap;color:var(--heading)}
 
 #home{padding-bottom:74px}
-.home-quick-actions{
-  position:fixed;z-index:45;left:50%;bottom:calc(66px + var(--safe-bottom));transform:translateX(-50%);
-  width:164px;display:grid;grid-template-columns:44px 60px 44px;align-items:center;justify-content:space-between;
-  pointer-events:none;
-}
-.home-quick-actions button{pointer-events:auto;display:grid;place-items:center;border:1px solid var(--line)}
 .quick-expense-button{
-  width:60px;height:60px;border-radius:50%;background:linear-gradient(145deg,var(--green),var(--green-dark));
-  color:#fff;box-shadow:0 12px 28px rgba(35,145,46,.32),0 3px 9px rgba(17,24,39,.16);
+  position:fixed;z-index:45;left:50%;bottom:calc(66px + var(--safe-bottom));transform:translateX(-50%);
+  width:54px;height:54px;border-radius:50%;display:grid;place-items:center;
+  border:3px solid rgba(255,255,255,.96);background:linear-gradient(145deg,var(--green),var(--green-dark));
+  color:#fff;box-shadow:0 11px 25px rgba(35,145,46,.31),0 3px 9px rgba(17,24,39,.15);
 }
-.quick-expense-button:active{transform:scale(.96)}
-.undo-action-button{
-  width:42px;height:42px;border-radius:14px;background:rgba(255,255,255,.96);color:#4b5563;
-  box-shadow:var(--shadow-soft);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-}
-.undo-action-button:disabled{opacity:.36;box-shadow:none;cursor:default}
+.quick-expense-button:active{transform:translateX(-50%) scale(.95)}
+.undo-action-button:disabled{opacity:.3;cursor:default}
 
 .bottom-nav{
   position:fixed;z-index:30;bottom:6px;left:50%;transform:translateX(-50%);

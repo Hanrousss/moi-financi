@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="./icons/favicon.png">
-  <link rel="stylesheet" href="./styles.css?v=1.0.40">
+  <link rel="stylesheet" href="./styles.css?v=1.0.41">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -28,7 +28,7 @@
       <section id="home" class="screen active">
         <button id="periodPill" class="period-pill"></button>
         <article id="freeCard" class="hero-card status-good">
-          <div class="hero-card-head"><span>Свободный остаток</span><button id="editBalanceBtn" class="mini-icon" aria-label="Изменить текущий баланс"></button></div>
+          <div class="hero-card-head"><span>Свободный остаток</span><span class="hero-card-actions"><button id="undoLastBtn" class="mini-icon undo-action-button" type="button" aria-label="Отменить последнее действие" title="Отменить последнее действие"></button><button id="editBalanceBtn" class="mini-icon" aria-label="Изменить текущий баланс"></button></span></div>
           <strong id="freeValue">0 BYN</strong><small id="freeMeta"></small>
         </article>
         <div class="two-col">
@@ -37,11 +37,7 @@
         </div>
         <div id="spendDigest" class="spend-digest" aria-live="polite"></div>
         <div id="dashboardList" class="dashboard-list"></div>
-        <div class="home-quick-actions" aria-label="Быстрые действия">
-          <button id="undoLastBtn" class="undo-action-button" type="button" aria-label="Отменить последнее действие" title="Отменить последнее действие"></button>
-          <button id="quickExpenseBtn" class="quick-expense-button" type="button" aria-label="Добавить расход" title="Добавить расход"></button>
-          <span aria-hidden="true"></span>
-        </div>
+        <button id="quickExpenseBtn" class="quick-expense-button" type="button" aria-label="Добавить расход" title="Добавить расход"></button>
       </section>
 
       <section id="month" class="screen">
@@ -108,6 +104,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.0.40"></script>
+  <script src="./app.bundle.js?v=1.0.41"></script>
 </body>
 </html>

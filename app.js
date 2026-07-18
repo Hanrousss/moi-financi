@@ -13,7 +13,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.0.39';
+const APP_BUILD='1.0.40';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -125,6 +125,7 @@ const iconPaths = {
   download:'<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>', upload:'<path d="M12 21V9M7 14l5-5 5 5M5 3h14"/>',
   trash:'<path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/>',
   check:'<path d="m5 12 4 4L19 6"/>',
+  undo:'<path d="M3 7v6h6"/><path d="M5.5 17.5A8 8 0 1 0 5 8l-2 5"/>',
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'
 };
 function icon(name,size=22){return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name]||iconPaths.wallet}</svg>`}
@@ -181,6 +182,10 @@ let foodPeriodKey=selectedPeriodKey;
 let purchaseTab='required';
 let saving=false;
 let autoCloseTimer=null;
+let committedState=null;
+let undoState=null;
+
+const cloneState = value => JSON.parse(JSON.stringify(value));
 
 function currentPeriod(){const p=ensurePeriod(state,periodKeyForDate(new Date(),state.settings.salaryDay));syncPeriodAutoClosedWeeks(p);return p;}
 function selectedPeriod(){const p=ensurePeriod(state,selectedPeriodKey);syncPeriodAutoClosedWeeks(p);return p;}
@@ -209,7 +214,7 @@ function syncAllAutoClosedWeeks(){
 function scheduleAutoWeekClose(){
   clearTimeout(autoCloseTimer);
   const now=new Date(), nextMidnight=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,1);
-  autoCloseTimer=setTimeout(async()=>{if(syncAllAutoClosedWeeks())await commit();else renderAll();scheduleAutoWeekClose();},Math.max(1000,nextMidnight-now));
+  autoCloseTimer=setTimeout(async()=>{if(syncAllAutoClosedWeeks())await commit(true,{undoable:false});else renderAll();scheduleAutoWeekClose();},Math.max(1000,nextMidnight-now));
 }
 function categoryAvailable(period,category){const b=categoryBudget(period,category);return roundMoney(num(b.plan)-num(b.spent));}
 function visibleCategories(){return [...state.categories].filter(c=>c.visible).sort((a,b)=>a.order-b.order);}
@@ -340,11 +345,25 @@ function sharedSectionIconHtml(id,size=22){
   return item?navItemIconHtml(item,size):icon(id,size);
 }
 
-async function commit(render=true){
+async function commit(render=true,{undoable=true}={}){
   if(saving)return;
+  if(undoable&&committedState)undoState=cloneState(committedState);
   saving=true;
   try{await saveState(state);}finally{saving=false;}
+  committedState=cloneState(state);
   if(render)renderAll();
+}
+async function undoLastAction(){
+  if(!undoState){toast('Пока нечего отменять');return;}
+  state=cloneState(undoState);
+  undoState=null;
+  normalizeState();
+  ensurePeriod(state,periodKeyForDate(new Date(),state.settings.salaryDay));
+  saving=true;
+  try{await saveState(state);}finally{saving=false;}
+  committedState=cloneState(state);
+  renderAll();
+  toast('Последнее действие отменено');
 }
 function toast(message){const el=$('#toast');el.textContent=message;el.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>{el.hidden=true},2600);}
 
@@ -405,6 +424,7 @@ function renderHome(){
   digestTrack.innerHTML='<span></span>';
   digestTrack.querySelector('span').textContent=digestText;
   digestTrack.querySelector('span').dataset.repeat=digestText;
+  $('#undoLastBtn').disabled=!undoState;
 
   const savings=savingsBalanceUsd(state), pet=petBalanceByn(state), debt=Math.max(0,roundMoney((num(state.settings.debtInitial)||state.payments.reduce((s,p)=>s+num(p.planned),0))-paymentsPaidTotal(state)));
   const openPurchases=state.purchases.filter(pu=>!pu.completed);
@@ -541,6 +561,7 @@ function renderNav(){
   $$('.bottom-nav button').forEach((button,index)=>{const item=navDefaults[index],shown=visible.includes(item.id);button.hidden=!shown;button.innerHTML=`${navItemIconHtml(item,labels?21:31)}${labels?`<small>${sectionLabel(item.id)}</small>`:''}`;button.classList.toggle('active',activeScreen===item.id);});
   $('#settingsBtn').innerHTML=navItemIconHtml(settingsControlDefault,21);$('#closeOverlayBtn').innerHTML=icon('close',21);
   $('#prevMonth').innerHTML=icon('chevronLeft');$('#nextMonth').innerHTML=icon('chevronRight');$('#foodPrevMonth').innerHTML=icon('chevronLeft');$('#foodNextMonth').innerHTML=icon('chevronRight');
+  $('#quickExpenseBtn').innerHTML=icon('minus',29);$('#undoLastBtn').innerHTML=icon('undo',20);
   $('#editBalanceBtn').innerHTML=icon('edit',17);$('#addCategoryBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#depositSavings').innerHTML=`${icon('plus',18)} Отложить`;$('#withdrawSavings').innerHTML=`${icon('minus',18)} Взять`;$('#topupPet').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendPet').innerHTML=`${icon('minus',18)} Вычесть`;$('#topupGifts').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendGifts').innerHTML=`${icon('minus',18)} Вычесть`;$('#addPetNeed').innerHTML=`${icon('plus',17)} Добавить`;$('#addGiftPlan').innerHTML=`${icon('plus',17)} Добавить`;$('#addPurchaseBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#addPaymentBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#settingsAddCategory').innerHTML=`${icon('plus',17)} Добавить`;$('#modalClose').innerHTML=icon('close',19);
 }
 function renderAll(){applyAppearance();renderNav();renderHome();renderMonth();renderSavings();renderPet();renderGifts();renderPurchases();renderFood();renderPayments();renderSettings();}
@@ -599,6 +620,32 @@ function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0
   {name:'note',label:'Комментарий',type:'textarea',value:p.note}
 ],async v=>{p.salary=num(v.salary);p.extraIncome=num(v.extra);p.balanceNow=v.balance===''?null:num(v.balance);p.cashNow=num(v.cash);p.mandatory.housingPlan=num(v.housingPlan);p.mandatory.housingSpent=num(v.housingSpent);p.mandatory.reservePlan=num(v.reservePlan);p.mandatory.reserveAllocated=num(v.reserveAllocated);p.mandatory.savingsPlanUsd=num(v.savingsUsd);p.mandatory.savingsPlanByn=num(v.savingsByn);p.passThroughs=[{...(p.passThroughs?.[0]||{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25}),amount:num(v.utilities),paid:v.utilitiesPaid,note:'Аванс приходит и сразу уходит'}];p.note=v.note;if(p.balanceNow==null)p.balanceSnapshot=null;else captureBalanceSnapshot(state,p);await commit();closeModal();});}
 function openBalanceEditor(){const p=currentPeriod();openModal('Осталось на счету',[{name:'balance',label:'Осталось на счету, BYN',type:'number',step:'1',value:editableAccountBalance(p),help:'Если сумма в приложении отличается от банка, внеси фактический остаток. Новые траты будут вычитаться уже от него.'},{name:'cash',label:'Отдельно отложено / наличные, BYN',type:'number',step:'1',value:p.cashNow}],async v=>{p.balanceNow=v.balance===''?null:num(v.balance);p.cashNow=num(v.cash);if(p.balanceNow==null)p.balanceSnapshot=null;else captureBalanceSnapshot(state,p);await commit();closeModal();});}
+function quickExpenseModal(){
+  const categories=[...state.categories].sort((a,b)=>a.order-b.order);
+  if(!categories.length){toast('Сначала добавь категорию');return;}
+  openModal('Новый расход',[
+    {name:'amount',label:'Сумма, BYN',type:'number',min:0.01,step:'0.01',inputmode:'decimal',required:true},
+    {name:'category',label:'Категория',type:'select',value:categories[0].id,options:categories.map(category=>({value:category.id,label:category.name}))}
+  ],async values=>{
+    const amount=roundMoney(num(values.amount));
+    const category=categoryById(values.category);
+    if(amount<=0){toast('Введи сумму расхода');return;}
+    if(!category){toast('Выбери категорию');return;}
+    const period=currentPeriod();
+    if(category.kind==='food'){
+      const weekIndex=currentWeekIndex(period.key,new Date(),state.settings.salaryDay);
+      const week=period.foodWeeks[weekIndex]||period.foodWeeks[0];
+      if(!week){toast('Не удалось определить неделю');return;}
+      week.spent=roundMoney(num(week.spent)+amount);
+    }else{
+      period.categoryBudgets[category.id]=period.categoryBudgets[category.id]||{plan:0,spent:0};
+      period.categoryBudgets[category.id].spent=roundMoney(num(period.categoryBudgets[category.id].spent)+amount);
+    }
+    await commit();
+    closeModal();
+    toast(`${formatByn(amount)} · ${category.name}`);
+  },{submitLabel:'Учесть расход'});
+}
 function openMandatoryEditor(kind){const p=selectedPeriod(), pay=periodPayment(state,p.key);const config={housing:{title:mandatoryLabel('housing'),plan:p.mandatory.housingPlan,spent:p.mandatory.housingSpent},payment:{title:sectionLabel('payments'),plan:pay.planned,spent:pay.paid},reserve:{title:mandatoryLabel('reserve'),plan:p.mandatory.reservePlan,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'name',label:'Название',value:config.title},{name:'plan',label:'План, BYN',type:'number',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'number',value:config.spent}],async v=>{if(kind==='payment')setSectionLabel('payments',v.name);else setMandatoryLabel(kind,v.name);if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}await commit();closeModal();});}
 
 const iconOptions=['wallet','home','calendar','piggy','paw','bag','money','utensils','dumbbell','sparkles','heart','shirt','gift','ticket','palette','shield'].map(i=>({label:i,value:i}));
@@ -772,6 +819,7 @@ async function importBackup(file){
 function bindStaticEvents(){
   $$('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>setScreen(b.dataset.nav)));
   $('#settingsBtn').addEventListener('click',()=>openOverlay('settings'));$('#closeOverlayBtn').addEventListener('click',closeOverlay);
+  $('#quickExpenseBtn').addEventListener('click',quickExpenseModal);$('#undoLastBtn').addEventListener('click',undoLastAction);
   $('#periodPill').addEventListener('click',()=>setScreen('month'));$('#editBalanceBtn').addEventListener('click',openBalanceEditor);$('#weekCard').addEventListener('click',()=>{foodPeriodKey=currentPeriod().key;openOverlay('food')});
   $('#prevMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,-1);ensurePeriod(state,selectedPeriodKey);renderAll()});$('#nextMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,1);ensurePeriod(state,selectedPeriodKey);renderAll()});
   $('#foodPrevMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,-1);ensurePeriod(state,foodPeriodKey);renderFood()});$('#foodNextMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,1);ensurePeriod(state,foodPeriodKey);renderFood()});
@@ -838,6 +886,7 @@ async function init(){
   const iconsCentered=await centerStoredIconImages();
   if(syncAllAutoClosedWeeks()||iconsCentered)await saveState(state);
   selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;ensurePeriod(state,selectedPeriodKey);
+  committedState=cloneState(state);
   bindStaticEvents();bindDelegatedEvents();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
   scheduleAutoWeekClose();
   registerServiceWorker();

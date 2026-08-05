@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="./icons/favicon.png">
-  <link rel="stylesheet" href="./styles.css?v=1.0.44">
+  <link rel="stylesheet" href="./styles.css?v=1.0.45">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -47,6 +47,8 @@
         <div id="mandatoryGrid" class="mandatory-grid"></div>
         <div class="section-row"><h2>Категории</h2><button id="addCategoryBtn" class="text-button"></button></div>
         <div id="categoryList" class="category-list"></div>
+        <div class="section-row"><h2>Операции по счету</h2></div>
+        <div id="accountHistory" class="history-list"></div>
         <article id="monthFreeCard" class="bottom-total"><span>Свободный остаток</span><strong id="monthFreeValue">0 BYN</strong><small id="monthLimitMeta"></small></article>
       </section>
 
@@ -104,6 +106,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.0.44"></script>
+  <script src="./app.bundle.js?v=1.0.45"></script>
 </body>
 </html>

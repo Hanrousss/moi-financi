@@ -373,7 +373,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.0.46';
+const APP_BUILD='1.0.47';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -920,13 +920,16 @@ function renderMonth(){
 function renderFood(){
   const p=ensurePeriod(state,foodPeriodKey), total=foodBudget(p);
   syncPeriodAutoClosedWeeks(p);
+  const currentKey=periodKeyForDate(new Date(),state.settings.salaryDay), currentIndex=currentWeekIndex(p.key,new Date(),state.settings.salaryDay);
+  const totalAvailable=roundMoney(num(total.plan)-num(total.spent));
   $('#foodMonthTitle').textContent=periodTitle(p.key);$('#foodMonthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
   const planInput=`<label class="inline-money-input"><input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-food-total-plan value="${num(total.plan)}" aria-label="Общий план на еду"><span>BYN</span></label>`;
-  $('#foodTotal').innerHTML=`<div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на месяц</small></span>${planInput}</div>`;
+  $('#foodTotal').innerHTML=`<div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на месяц</small></span>${planInput}</div><div class="food-spend-summary"><span>Потрачено <b>${formatByn(total.spent)}</b></span><span>Осталось <b class="${totalAvailable<0?'negative-number':''}">${formatByn(totalAvailable)}</b></span></div>`;
   $('#foodTotal').classList.remove('card-negative','card-warning');
   $('#foodWeeks').innerHTML=p.foodWeeks.map((w,index)=>{
+    const available=roundMoney(num(w.plan)-num(w.spent)), isCurrent=p.key===currentKey&&index===currentIndex;
     const weekInput=`<span class="inline-money-input"><input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-plan="${index}" value="${num(w.plan)}" aria-label="Сумма на неделю ${index+1}"><span>BYN</span></span>`;
-    return `<article class="food-week"><header><div><b>Неделя ${index+1}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}${w.partial?' · неполная неделя':''}</small></div><label class="check-label"><input type="checkbox" ${w.closed?'checked':''} disabled><span>${w.closed?'Закрыта':'Закроется автоматически'}</span></label></header><div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на неделю</small></span>${weekInput}</div></article>`;
+    return `<article class="food-week ${isCurrent?'current-week':''}"><header><div><b>Неделя ${index+1}${isCurrent?'<span class="current-week-badge">Сейчас</span>':''}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}${w.partial?' · неполная неделя':''}</small></div><label class="check-label"><input type="checkbox" ${w.closed?'checked':''} disabled><span>${w.closed?'Закрыта':'Закроется автоматически'}</span></label></header><div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на неделю</small></span>${weekInput}</div><div class="food-spend-summary"><span>Потрачено <b>${formatByn(w.spent)}</b></span><span>Осталось <b class="${available<0?'negative-number':''}">${formatByn(available)}</b></span></div></article>`;
   }).join('');
 }
 
@@ -1078,6 +1081,11 @@ function quickExpenseModal(){
     if(amount<=0){toast('Введи сумму расхода');return;}
     if(!category){toast('Выбери категорию');return;}
     const period=currentPeriod();
+    if(category.kind==='pet'){
+      state.pet.balanceByn=roundMoney(petBalanceByn(state)-amount);
+      state.pet.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),note:'Быстрый расход'});
+      await commit();closeModal();toast(`${formatByn(amount)} · ${category.name}`);return;
+    }
     if(category.kind==='food'){
       const weekIndex=currentWeekIndex(period.key,new Date(),state.settings.salaryDay);
       const week=period.foodWeeks[weekIndex]||period.foodWeeks[0];

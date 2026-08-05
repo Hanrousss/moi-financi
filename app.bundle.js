@@ -245,6 +245,7 @@ const savingAmountByn=(state,t)=>savingBynAmount(t);
 function savingsBalanceByn(state){return roundMoney(state.savings.reduce((s,t)=>s+savingSign(t)*savingAmountByn(state,t),0))}
 function petBalanceByn(state){return Number.isFinite(Number(state.pet?.balanceByn))?roundMoney(state.pet.balanceByn):roundMoney(state.pet.transactions.reduce((s,t)=>s+(t.type==='topup'?1:-1)*Number(t.amountByn||0),0))}
 function paymentsPaidTotal(state){return roundMoney(state.payments.reduce((s,p)=>s+Number(p.paid||0),0))}
+function periodPaymentsPaid(state,key){return roundMoney(state.payments.filter(payment=>payment.periodKey===key).reduce((sum,payment)=>sum+Number(payment.paid||0),0))}
 function debtRemaining(state){return Math.max(0,roundMoney(Number(state.settings.debtInitial||0)-paymentsPaidTotal(state)))}
 function plannedCategoryTotal(state,period){return roundMoney(state.categories.filter(c=>c.visible).reduce((s,c)=>s+categoryBudget(period,c).plan,0))}
 function periodCarryover(state,period){
@@ -256,13 +257,30 @@ function periodCarryover(state,period){
 function periodSavingsDepositedUsd(state,key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(parseISODate(t.date),state.settings.salaryDay)===key).reduce((s,t)=>s+Number(t.amountUsd||0),0))}
 function periodSavingsDepositedByn(state,key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(parseISODate(t.date),state.settings.salaryDay)===key).reduce((s,t)=>s+savingAmountByn(state,t),0))}
 function captureBalanceSnapshot(state,period){
-  const payment=periodPayment(state,period.key);
+  periodPayment(state,period.key);
   period.balanceSnapshot={
-    housingSpent:Number(period.mandatory.housingSpent||0),reserveAllocated:Number(period.mandatory.reserveAllocated||0),paymentPaid:Number(payment.paid||0),savingsDepositedUsd:periodSavingsDepositedUsd(state,period.key),savingsDepositedByn:periodSavingsDepositedByn(state,period.key),
+    housingSpent:Number(period.mandatory.housingSpent||0),reserveAllocated:Number(period.mandatory.reserveAllocated||0),paymentPaid:periodPaymentsPaid(state,period.key),savingsDepositedUsd:periodSavingsDepositedUsd(state,period.key),savingsDepositedByn:periodSavingsDepositedByn(state,period.key),
     categories:Object.fromEntries(Object.entries(period.categoryBudgets).map(([id,b])=>[id,Number(b.spent||0)])),
     food:period.foodWeeks.map(w=>Number(w.spent||0))
   };
   return period.balanceSnapshot;
+}
+function balanceSnapshotSpentTotal(snapshot){
+  return roundMoney(
+    Number(snapshot?.housingSpent||0)+Number(snapshot?.reserveAllocated||0)+Number(snapshot?.paymentPaid||0)+
+    Number(snapshot?.savingsDepositedByn??snapshot?.savingsDepositedUsd??0)+
+    Object.values(snapshot?.categories||{}).reduce((sum,value)=>sum+Number(value||0),0)+
+    (snapshot?.food||[]).reduce((sum,value)=>sum+Number(value||0),0)
+  );
+}
+function periodSpentTotal(state,period){
+  periodPayment(state,period.key);
+  const mandatorySpend=Number(period.mandatory.housingSpent||0)+Number(period.mandatory.reserveAllocated||0)+periodPaymentsPaid(state,period.key)+periodSavingsDepositedByn(state,period.key);
+  const categorySpend=state.categories.reduce((sum,category)=>{
+    if(category.kind==='food')return sum+period.foodWeeks.reduce((weekSum,week)=>weekSum+Number(week.spent||0),0);
+    return sum+Number(categoryBudget(period,category).spent||0);
+  },0);
+  return roundMoney(mandatorySpend+categorySpend);
 }
 function plannedFreeBalance(state,period){
   const savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
@@ -276,17 +294,12 @@ function plannedFreeBalance(state,period){
 }
 function periodSpendDeltaSinceSnapshot(state,period){
   if(period.balanceNow==null)return 0;
-  const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period),payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key);
-  const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
-  const newMandatorySpend=(Number(period.mandatory.housingSpent||0)-Number(snapshot.housingSpent||0))+(sections.includes('reserve')?(Number(period.mandatory.reserveAllocated||0)-Number(snapshot.reserveAllocated||0)):0)+(sections.includes('payment')?(Number(payment.paid||0)-Number(snapshot.paymentPaid||0)):0)+(saved-Number(snapshot.savingsDepositedByn??snapshot.savingsDepositedUsd??0));
-  const newCategorySpend=state.categories.reduce((sum,c)=>{
-    if(c.kind==='food')return sum+period.foodWeeks.reduce((s,w,i)=>s+Number(w.spent||0)-Number(snapshot.food?.[i]||0),0);
-    const b=categoryBudget(period,c);return sum+Number(b.spent||0)-Number(snapshot.categories?.[c.id]||0);
-  },0);
-  return roundMoney(newMandatorySpend+newCategorySpend);
+  const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period);
+  return roundMoney(periodSpentTotal(state,period)-balanceSnapshotSpentTotal(snapshot));
 }
 function accountBalanceAfterSpending(state,period){
-  return period.balanceNow==null?null:roundMoney(Number(period.balanceNow||0)-periodSpendDeltaSinceSnapshot(state,period));
+  if(period.balanceNow!=null)return roundMoney(Number(period.balanceNow||0)-periodSpendDeltaSinceSnapshot(state,period));
+  return roundMoney(periodIncome(period)+periodCarryover(state,period)-periodSpentTotal(state,period));
 }
 function remainingPlannedOutflows(state,period){
   const payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key),savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
@@ -333,7 +346,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.0.42';
+const APP_BUILD='1.0.43';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -710,9 +723,9 @@ function editableAccountBalance(period){return period.balanceNow==null?'':accoun
 function periodSpentDigest(period){
   const rows=[];
   const add=(name,spent)=>{const value=roundMoney(num(spent));if(value>0)rows.push({name,spent:value});};
-  const payment=periodPayment(state,period.key);
+  periodPayment(state,period.key);
   add(mandatoryLabel('housing'),period.mandatory.housingSpent);
-  add(sectionLabel('payments'),payment.paid);
+  add(sectionLabel('payments'),periodPaymentsPaid(state,period.key));
   add(mandatoryLabel('reserve'),period.mandatory.reserveAllocated);
   add(sectionLabel('savings'),periodSavingsDepositedByn(state,period.key));
   state.categories.forEach(category=>{
@@ -731,7 +744,7 @@ function renderHome(){
   const available=weekAvailable(week);
   $('#periodPill').textContent=`${periodTitle(p.key)} · ${formatPeriodRange(p.key,state.settings.salaryDay)}`;
   $('#freeValue').textContent=formatByn(free);
-  $('#freeMeta').textContent=p.balanceNow==null ? `План месяца: ${formatByn(plannedFreeBalance(state,p))}` : `Осталось на счету ${formatByn(accountBalanceAfterSpending(state,p))}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
+  $('#freeMeta').textContent=`Осталось на счету ${formatByn(accountBalanceAfterSpending(state,p))}${p.balanceNow!=null?' · ручной остаток приоритетный':''}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
   $('#freeCard').className=`hero-card ${dashboardStatus(free)}`;
   $('#weekAvailable').textContent=formatByn(available);
   $('#weekCard span').textContent=`${sectionLabel('food')} · эта неделя`;
@@ -782,9 +795,9 @@ function renderMonth(){
   const sections=mandatorySections(p);
   const addableSections=[!sections.includes('payment')?`<button class="text-button" data-add-mandatory-section="payment">+ ${esc(sectionLabel('payments'))}</button>`:'',!sections.includes('reserve')?`<button class="text-button" data-add-mandatory-section="reserve">+ ${esc(mandatoryLabel('reserve'))}</button>`:''].filter(Boolean).join('');
   $('#monthTitle').textContent=periodTitle(p.key);$('#monthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
-  const carryover=periodCarryover(state,p), totalIncome=roundMoney(periodIncome(p)+carryover);
-  $('#incomeTotal').textContent=formatByn(totalIncome);
-  $('#incomeDetails').textContent=`Зарплата ${formatByn(p.salary)}${p.extraIncome?` · Доп. доход ${formatByn(p.extraIncome)}`:''}${carryover?` · Остаток прошлого месяца ${formatByn(carryover)}`:''}`;
+  const carryover=periodCarryover(state,p), spent=periodSpentTotal(state,p), accountBalance=accountBalanceAfterSpending(state,p);
+  $('#incomeTotal').textContent=formatByn(accountBalance);
+  $('#incomeDetails').textContent=p.balanceNow!=null?`Вручную указано ${formatByn(p.balanceNow)} · новые траты вычитаются автоматически`:`Зарплата ${formatByn(p.salary)}${p.extraIncome?` · Доп. доход ${formatByn(p.extraIncome)}`:''}${carryover?` · Остаток прошлого месяца ${formatByn(carryover)}`:''} · Потрачено ${formatByn(spent)}`;
   $('#mandatoryGrid').innerHTML=[
     renderMandatoryCard(mandatoryLabel('housing'),num(p.mandatory.housingPlan),num(p.mandatory.housingSpent),'housing',{locked:true}),
     sections.includes('payment')?renderMandatoryCard(sectionLabel('payments'),num(payment.planned),num(payment.paid),'payment'):null,
@@ -794,7 +807,7 @@ function renderMonth(){
   $('#categoryList').innerHTML=optionalCategories(p).map(c=>renderCategoryCard(c,p)).join('')||'<div class="empty-state">Все видимые категории уже в обязательном для этого месяца</div>';
   const free=p.balanceNow==null?plannedFreeBalance(state,p):liveFreeBalance(state,p);
   $('#monthFreeValue').textContent=formatByn(free);
-  $('#monthLimitMeta').textContent=p.balanceNow==null?`Лимиты категорий: ${formatByn(plannedCategoryTotal(state,p))}`:`Осталось на счету: ${formatByn(accountBalanceAfterSpending(state,p))}`;
+  $('#monthLimitMeta').textContent=`Осталось на счету: ${formatByn(accountBalance)}`;
   $('#monthFreeCard').classList.toggle('negative',free<0);
 }
 

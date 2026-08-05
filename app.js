@@ -3,9 +3,9 @@ import {
   periodKeyForDate, shiftPeriodKey, periodTitle, formatPeriodRange,
   periodStart, periodEnd, currentWeekIndex, daysToNextSalary,
   seedState, ensurePeriod, foodBudget, distributeFoodPlan, categoryBudget, periodIncome,
-  periodPayment, savingsBalanceUsd, savingsBalanceByn, petBalanceByn, paymentsPaidTotal,
+  periodPayment, savingsBalanceUsd, savingsBalanceByn, petBalanceByn, paymentsPaidTotal, periodPaymentsPaid,
   debtRemaining, plannedCategoryTotal, periodCarryover, plannedFreeBalance, liveFreeBalance,
-  accountBalanceAfterSpending, periodSavingsDepositedByn, purchaseAvailable, monthlySavingsRows, validateState, toISODate, captureBalanceSnapshot
+  accountBalanceAfterSpending, periodSavingsDepositedByn, periodSpentTotal, purchaseAvailable, monthlySavingsRows, validateState, toISODate, captureBalanceSnapshot
 } from './model.js';
 import { loadState, saveState, clearState } from './storage.js';
 
@@ -13,7 +13,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.0.42';
+const APP_BUILD='1.0.43';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -390,9 +390,9 @@ function editableAccountBalance(period){return period.balanceNow==null?'':accoun
 function periodSpentDigest(period){
   const rows=[];
   const add=(name,spent)=>{const value=roundMoney(num(spent));if(value>0)rows.push({name,spent:value});};
-  const payment=periodPayment(state,period.key);
+  periodPayment(state,period.key);
   add(mandatoryLabel('housing'),period.mandatory.housingSpent);
-  add(sectionLabel('payments'),payment.paid);
+  add(sectionLabel('payments'),periodPaymentsPaid(state,period.key));
   add(mandatoryLabel('reserve'),period.mandatory.reserveAllocated);
   add(sectionLabel('savings'),periodSavingsDepositedByn(state,period.key));
   state.categories.forEach(category=>{
@@ -411,7 +411,7 @@ function renderHome(){
   const available=weekAvailable(week);
   $('#periodPill').textContent=`${periodTitle(p.key)} · ${formatPeriodRange(p.key,state.settings.salaryDay)}`;
   $('#freeValue').textContent=formatByn(free);
-  $('#freeMeta').textContent=p.balanceNow==null ? `План месяца: ${formatByn(plannedFreeBalance(state,p))}` : `Осталось на счету ${formatByn(accountBalanceAfterSpending(state,p))}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
+  $('#freeMeta').textContent=`Осталось на счету ${formatByn(accountBalanceAfterSpending(state,p))}${p.balanceNow!=null?' · ручной остаток приоритетный':''}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
   $('#freeCard').className=`hero-card ${dashboardStatus(free)}`;
   $('#weekAvailable').textContent=formatByn(available);
   $('#weekCard span').textContent=`${sectionLabel('food')} · эта неделя`;
@@ -462,9 +462,9 @@ function renderMonth(){
   const sections=mandatorySections(p);
   const addableSections=[!sections.includes('payment')?`<button class="text-button" data-add-mandatory-section="payment">+ ${esc(sectionLabel('payments'))}</button>`:'',!sections.includes('reserve')?`<button class="text-button" data-add-mandatory-section="reserve">+ ${esc(mandatoryLabel('reserve'))}</button>`:''].filter(Boolean).join('');
   $('#monthTitle').textContent=periodTitle(p.key);$('#monthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
-  const carryover=periodCarryover(state,p), totalIncome=roundMoney(periodIncome(p)+carryover);
-  $('#incomeTotal').textContent=formatByn(totalIncome);
-  $('#incomeDetails').textContent=`Зарплата ${formatByn(p.salary)}${p.extraIncome?` · Доп. доход ${formatByn(p.extraIncome)}`:''}${carryover?` · Остаток прошлого месяца ${formatByn(carryover)}`:''}`;
+  const carryover=periodCarryover(state,p), spent=periodSpentTotal(state,p), accountBalance=accountBalanceAfterSpending(state,p);
+  $('#incomeTotal').textContent=formatByn(accountBalance);
+  $('#incomeDetails').textContent=p.balanceNow!=null?`Вручную указано ${formatByn(p.balanceNow)} · новые траты вычитаются автоматически`:`Зарплата ${formatByn(p.salary)}${p.extraIncome?` · Доп. доход ${formatByn(p.extraIncome)}`:''}${carryover?` · Остаток прошлого месяца ${formatByn(carryover)}`:''} · Потрачено ${formatByn(spent)}`;
   $('#mandatoryGrid').innerHTML=[
     renderMandatoryCard(mandatoryLabel('housing'),num(p.mandatory.housingPlan),num(p.mandatory.housingSpent),'housing',{locked:true}),
     sections.includes('payment')?renderMandatoryCard(sectionLabel('payments'),num(payment.planned),num(payment.paid),'payment'):null,
@@ -474,7 +474,7 @@ function renderMonth(){
   $('#categoryList').innerHTML=optionalCategories(p).map(c=>renderCategoryCard(c,p)).join('')||'<div class="empty-state">Все видимые категории уже в обязательном для этого месяца</div>';
   const free=p.balanceNow==null?plannedFreeBalance(state,p):liveFreeBalance(state,p);
   $('#monthFreeValue').textContent=formatByn(free);
-  $('#monthLimitMeta').textContent=p.balanceNow==null?`Лимиты категорий: ${formatByn(plannedCategoryTotal(state,p))}`:`Осталось на счету: ${formatByn(accountBalanceAfterSpending(state,p))}`;
+  $('#monthLimitMeta').textContent=`Осталось на счету: ${formatByn(accountBalance)}`;
   $('#monthFreeCard').classList.toggle('negative',free<0);
 }
 

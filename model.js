@@ -241,6 +241,7 @@ const savingAmountByn=(state,t)=>savingBynAmount(t);
 export function savingsBalanceByn(state){return roundMoney(state.savings.reduce((s,t)=>s+savingSign(t)*savingAmountByn(state,t),0))}
 export function petBalanceByn(state){return Number.isFinite(Number(state.pet?.balanceByn))?roundMoney(state.pet.balanceByn):roundMoney(state.pet.transactions.reduce((s,t)=>s+(t.type==='topup'?1:-1)*Number(t.amountByn||0),0))}
 export function paymentsPaidTotal(state){return roundMoney(state.payments.reduce((s,p)=>s+Number(p.paid||0),0))}
+export function periodPaymentsPaid(state,key){return roundMoney(state.payments.filter(payment=>payment.periodKey===key).reduce((sum,payment)=>sum+Number(payment.paid||0),0))}
 export function debtRemaining(state){return Math.max(0,roundMoney(Number(state.settings.debtInitial||0)-paymentsPaidTotal(state)))}
 export function plannedCategoryTotal(state,period){return roundMoney(state.categories.filter(c=>c.visible).reduce((s,c)=>s+categoryBudget(period,c).plan,0))}
 export function periodCarryover(state,period){
@@ -252,13 +253,30 @@ export function periodCarryover(state,period){
 export function periodSavingsDepositedUsd(state,key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(parseISODate(t.date),state.settings.salaryDay)===key).reduce((s,t)=>s+Number(t.amountUsd||0),0))}
 export function periodSavingsDepositedByn(state,key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(parseISODate(t.date),state.settings.salaryDay)===key).reduce((s,t)=>s+savingAmountByn(state,t),0))}
 export function captureBalanceSnapshot(state,period){
-  const payment=periodPayment(state,period.key);
+  periodPayment(state,period.key);
   period.balanceSnapshot={
-    housingSpent:Number(period.mandatory.housingSpent||0),reserveAllocated:Number(period.mandatory.reserveAllocated||0),paymentPaid:Number(payment.paid||0),savingsDepositedUsd:periodSavingsDepositedUsd(state,period.key),savingsDepositedByn:periodSavingsDepositedByn(state,period.key),
+    housingSpent:Number(period.mandatory.housingSpent||0),reserveAllocated:Number(period.mandatory.reserveAllocated||0),paymentPaid:periodPaymentsPaid(state,period.key),savingsDepositedUsd:periodSavingsDepositedUsd(state,period.key),savingsDepositedByn:periodSavingsDepositedByn(state,period.key),
     categories:Object.fromEntries(Object.entries(period.categoryBudgets).map(([id,b])=>[id,Number(b.spent||0)])),
     food:period.foodWeeks.map(w=>Number(w.spent||0))
   };
   return period.balanceSnapshot;
+}
+function balanceSnapshotSpentTotal(snapshot){
+  return roundMoney(
+    Number(snapshot?.housingSpent||0)+Number(snapshot?.reserveAllocated||0)+Number(snapshot?.paymentPaid||0)+
+    Number(snapshot?.savingsDepositedByn??snapshot?.savingsDepositedUsd??0)+
+    Object.values(snapshot?.categories||{}).reduce((sum,value)=>sum+Number(value||0),0)+
+    (snapshot?.food||[]).reduce((sum,value)=>sum+Number(value||0),0)
+  );
+}
+export function periodSpentTotal(state,period){
+  periodPayment(state,period.key);
+  const mandatorySpend=Number(period.mandatory.housingSpent||0)+Number(period.mandatory.reserveAllocated||0)+periodPaymentsPaid(state,period.key)+periodSavingsDepositedByn(state,period.key);
+  const categorySpend=state.categories.reduce((sum,category)=>{
+    if(category.kind==='food')return sum+period.foodWeeks.reduce((weekSum,week)=>weekSum+Number(week.spent||0),0);
+    return sum+Number(categoryBudget(period,category).spent||0);
+  },0);
+  return roundMoney(mandatorySpend+categorySpend);
 }
 export function plannedFreeBalance(state,period){
   const savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
@@ -272,17 +290,12 @@ export function plannedFreeBalance(state,period){
 }
 export function periodSpendDeltaSinceSnapshot(state,period){
   if(period.balanceNow==null)return 0;
-  const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period),payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key);
-  const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
-  const newMandatorySpend=(Number(period.mandatory.housingSpent||0)-Number(snapshot.housingSpent||0))+(sections.includes('reserve')?(Number(period.mandatory.reserveAllocated||0)-Number(snapshot.reserveAllocated||0)):0)+(sections.includes('payment')?(Number(payment.paid||0)-Number(snapshot.paymentPaid||0)):0)+(saved-Number(snapshot.savingsDepositedByn??snapshot.savingsDepositedUsd??0));
-  const newCategorySpend=state.categories.reduce((sum,c)=>{
-    if(c.kind==='food')return sum+period.foodWeeks.reduce((s,w,i)=>s+Number(w.spent||0)-Number(snapshot.food?.[i]||0),0);
-    const b=categoryBudget(period,c);return sum+Number(b.spent||0)-Number(snapshot.categories?.[c.id]||0);
-  },0);
-  return roundMoney(newMandatorySpend+newCategorySpend);
+  const snapshot=period.balanceSnapshot||captureBalanceSnapshot(state,period);
+  return roundMoney(periodSpentTotal(state,period)-balanceSnapshotSpentTotal(snapshot));
 }
 export function accountBalanceAfterSpending(state,period){
-  return period.balanceNow==null?null:roundMoney(Number(period.balanceNow||0)-periodSpendDeltaSinceSnapshot(state,period));
+  if(period.balanceNow!=null)return roundMoney(Number(period.balanceNow||0)-periodSpendDeltaSinceSnapshot(state,period));
+  return roundMoney(periodIncome(period)+periodCarryover(state,period)-periodSpentTotal(state,period));
 }
 export function remainingPlannedOutflows(state,period){
   const payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key),savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);

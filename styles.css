@@ -226,6 +226,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .dashboard-icon .custom-category-icon,
 .category-icon .custom-category-icon{width:34px;height:34px;border-radius:9px}
 .metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.single-budget-field{display:grid;grid-template-columns:minmax(0,1fr) minmax(118px,158px);align-items:center;gap:14px}
+.single-budget-label{display:grid;gap:2px;color:var(--heading)}
+.single-budget-label b{font-size:14px}
+.single-budget-label small{font-size:10px;color:var(--muted)}
 .metric{min-width:0;padding:0 10px;border-right:1px solid var(--line)}
 .metric:first-child{padding-left:0}
 .metric:last-child{border-right:0;padding-right:0}
@@ -250,7 +254,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .bottom-total.negative strong{color:var(--red)}
 
 .food-total{padding:17px;margin-bottom:12px}
-.food-total>div{display:grid;grid-template-columns:repeat(3,1fr)}
+.food-total>div{display:grid}
 .food-week{padding:15px}
 .food-week header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
 .food-week header b{font-size:15px;color:var(--heading)}

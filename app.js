@@ -13,7 +13,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.0.43';
+const APP_BUILD='1.0.44';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -191,7 +191,6 @@ function currentPeriod(){const p=ensurePeriod(state,periodKeyForDate(new Date(),
 function selectedPeriod(){const p=ensurePeriod(state,selectedPeriodKey);syncPeriodAutoClosedWeeks(p);return p;}
 function categoryById(id){return state.categories.find(c=>c.id===id);}
 function periodSavingsDeposited(key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(new Date(`${t.date}T12:00:00`),state.settings.salaryDay)===key).reduce((s,t)=>s+num(t.amountUsd),0));}
-function weekAvailable(week){return roundMoney(num(week.plan)-num(week.spent));}
 function foodWeekAutoClosed(week,now=new Date()){
   const [y,m,d]=String(week.end).split('-').map(Number);
   return Number.isFinite(y)&&now>=new Date(y,m-1,d+1);
@@ -408,17 +407,14 @@ function renderHome(){
   const free=liveFreeBalance(state,p);
   const wi=currentWeekIndex(p.key,new Date(),state.settings.salaryDay);
   const week=p.foodWeeks[wi]||p.foodWeeks[0];
-  const available=weekAvailable(week);
+  const weekPlan=num(week.plan);
   $('#periodPill').textContent=`${periodTitle(p.key)} · ${formatPeriodRange(p.key,state.settings.salaryDay)}`;
   $('#freeValue').textContent=formatByn(free);
-  $('#freeMeta').textContent=`Осталось на счету ${formatByn(accountBalanceAfterSpending(state,p))}${p.balanceNow!=null?' · ручной остаток приоритетный':''}${p.cashNow?` · отдельно ${formatByn(p.cashNow)} не считается`:''}`;
+  $('#freeMeta').textContent=`Зарплата ${formatByn(p.salary)}${weekPlan>0?` · На эту неделю запланировано ${formatByn(weekPlan)}`:''}`;
   $('#freeCard').className=`hero-card ${dashboardStatus(free)}`;
-  $('#weekAvailable').textContent=formatByn(available);
+  $('#weekPlan').textContent=formatByn(weekPlan);
   $('#weekCard span').textContent=`${sectionLabel('food')} · эта неделя`;
-  $('#weekAvailable').className=budgetValueClass(week.plan,available);
-  $('#weekSpent').textContent=formatByn(week.spent);
-  $('#weekCard').classList.toggle('card-negative',available<0);
-  $('#weekCard').classList.toggle('card-warning',num(week.plan)>0&&available>=0&&available<=num(week.plan)*0.2);
+  $('#weekCard').classList.remove('card-negative','card-warning');
   $('#daysToSalary').textContent=pluralDays(daysToNextSalary(new Date(),state.settings.salaryDay));
   const digestText=periodSpentDigest(p), digestTrack=$('#spendDigest');
   digestTrack.innerHTML='<span></span>';
@@ -435,7 +431,7 @@ function renderHome(){
     pet:{id:'pet',icon:'paw',tone:'peach',title:sectionLabel('pet'),value:formatByn(pet),meta:`нужно запланировано ${formatByn(totalOpenNeeds())}`},
     purchases:{id:'purchases',icon:'bag',tone:'lavender',title:sectionLabel('purchases'),value:`${openPurchases.length}`,meta:affordable?`${affordable} уже доступны`:'пока накоплений не хватает'}
   };
-  const categoryRow=id=>{const c=categoryById(dashboardCategoryId(id));if(!c||!c.visible)return null;const b=categoryBudget(p,c), left=roundMoney(num(b.plan)-num(b.spent));return {id,category:c,title:c.name,value:formatByn(left),meta:`план ${formatByn(b.plan)} · потрачено ${formatByn(b.spent)}`};};
+  const categoryRow=id=>{const c=categoryById(dashboardCategoryId(id));if(!c||!c.visible)return null;const b=categoryBudget(p,c);return {id,category:c,title:c.name,value:formatByn(b.plan),meta:'сумма на месяц'};};
   const rows=dashboardCards().map(id=>rowMap[id]||categoryRow(id)).filter(Boolean);
   $('#dashboardList').innerHTML=rows.map(r=>`<button class="dashboard-row" data-dashboard="${r.id}"><span class="dashboard-icon ${r.tone||''}" ${r.category?`style="background:${esc(r.category.color)}"`:''}>${r.category?categoryIconHtml(r.category):sharedSectionIconHtml(r.id)}</span><span class="dashboard-copy"><b>${esc(r.title)}</b><small>${esc(r.meta)}</small></span><strong>${esc(r.value)}</strong>${icon('chevronRight',18)}</button>`).join('');
 }
@@ -447,14 +443,14 @@ function renderMandatoryCard(name,plan,spent,kind,{locked=false}={}){
   return `<article class="mandatory-card ${budgetToneClass(plan,available)}"><div class="mandatory-title"><b>${esc(name)}</b><span class="settings-actions"><button class="mini-icon" data-edit-mandatory="${kind}" aria-label="Изменить">${icon('edit',17)}</button>${locked?'':`<button class="mini-icon" data-remove-mandatory-section="${kind}" aria-label="Убрать из обязательного">${icon('close',16)}</button>`}</span></div><div class="metrics-row">${metric('План',formatByn(plan))}${metric('Потрачено',formatByn(spent))}${metric('Доступно',`<span class="${budgetValueClass(plan,available)}">${formatByn(available)}</span>`)}</div></article>`;
 }
 function renderCategoryCard(category,period,{mandatory=false}={}){
-  const b=categoryBudget(period,category), available=roundMoney(b.plan-b.spent);
+  const b=categoryBudget(period,category);
   const food=category.kind==='food', pet=category.kind==='pet', gift=category.kind==='gift';
-  const input=food ? `<button class="inline-link" data-open-food="1">${formatByn(b.spent)}</button>` : pet ? `<button class="inline-link" data-nav-to="pet">${formatByn(b.spent)}</button>` : `<input class="number-field compact" data-category-spent="${category.id}" inputmode="decimal" type="number" min="0" step="1" value="${num(b.spent)}" aria-label="Потрачено: ${esc(category.name)}">`;
+  const input=`<label class="inline-money-input"><input class="number-field compact" data-category-plan="${category.id}" inputmode="decimal" type="number" min="0" step="1" value="${num(b.plan)}" aria-label="Сумма: ${esc(category.name)}"><span>BYN</span></label>`;
   const actions=`<span class="settings-actions"><button class="mini-icon" data-edit-category="${category.id}" aria-label="Изменить категорию">${icon('edit',17)}</button>${mandatory&&category.id!=='food'?`<button class="mini-icon" data-remove-mandatory-category="${category.id}" aria-label="Убрать из обязательного">${icon('close',16)}</button>`:!mandatory?`<button class="mini-icon" data-add-mandatory-category="${category.id}" aria-label="В обязательное">${icon('plus',16)}</button>`:''}</span>`;
   const detailAttr=food||pet||gift?` data-open-category-detail="${category.id}"`:'';
-  return `<article class="category-card ${budgetToneClass(b.plan,available)}" data-category="${category.id}"${detailAttr}>
-    <div class="category-head"><span class="category-icon" style="background:${esc(category.color)}">${categoryIconHtml(category)}</span><div><b>${esc(category.name)}</b><small>${mandatory?'обязательное этого месяца':category.kind==='food'?'по неделям':category.kind==='pet'?'пополнение внутреннего баланса':category.kind==='gift'?'конверт подарков':'месячный лимит'}</small></div>${actions}</div>
-    <div class="metrics-row">${metric('План',formatByn(b.plan))}${metric('Потрачено','',input)}${metric('Доступно',`<span class="${budgetValueClass(b.plan,available)}">${formatByn(available)}</span>`)}</div>
+  return `<article class="category-card" data-category="${category.id}"${detailAttr}>
+    <div class="category-head"><span class="category-icon" style="background:${esc(category.color)}">${categoryIconHtml(category)}</span><div><b>${esc(category.name)}</b><small>${mandatory?'обязательное этого месяца':category.kind==='food'?'по неделям':category.kind==='pet'?'пополнение внутреннего баланса':category.kind==='gift'?'конверт подарков':'месячная сумма'}</small></div>${actions}</div>
+    <div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на месяц</small></span>${input}</div>
   </article>`;
 }
 function renderMonth(){
@@ -482,14 +478,12 @@ function renderFood(){
   const p=ensurePeriod(state,foodPeriodKey), total=foodBudget(p);
   syncPeriodAutoClosedWeeks(p);
   $('#foodMonthTitle').textContent=periodTitle(p.key);$('#foodMonthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
-  const available=roundMoney(total.plan-total.spent);
   const planInput=`<label class="inline-money-input"><input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-food-total-plan value="${num(total.plan)}" aria-label="Общий план на еду"><span>BYN</span></label>`;
-  $('#foodTotal').innerHTML=`<div>${metric('План','',planInput)}${metric('Потрачено',formatByn(total.spent))}${metric('Доступно',`<span class="${budgetValueClass(total.plan,available)}">${formatByn(available)}</span>`)}</div>`;
-  $('#foodTotal').classList.toggle('card-negative',available<0);
-  $('#foodTotal').classList.toggle('card-warning',num(total.plan)>0&&available>=0&&available<=num(total.plan)*0.2);
+  $('#foodTotal').innerHTML=`<div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на месяц</small></span>${planInput}</div>`;
+  $('#foodTotal').classList.remove('card-negative','card-warning');
   $('#foodWeeks').innerHTML=p.foodWeeks.map((w,index)=>{
-    const av=weekAvailable(w);
-    return `<article class="food-week ${budgetToneClass(w.plan,av)}"><header><div><b>Неделя ${index+1}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}${w.partial?' · неполная неделя':''}</small></div><label class="check-label"><input type="checkbox" ${w.closed?'checked':''} disabled><span>${w.closed?'Закрыта':'Закроется автоматически'}</span></label></header><div class="metrics-row">${metric('План','',`<input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-plan="${index}" value="${num(w.plan)}">`)}${metric('Потрачено','',`<input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-spent="${index}" value="${num(w.spent)}">`)}${metric('Доступно',`<span class="${budgetValueClass(w.plan,av)}">${formatByn(av)}</span>`)}</div></article>`;
+    const weekInput=`<span class="inline-money-input"><input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-plan="${index}" value="${num(w.plan)}" aria-label="Сумма на неделю ${index+1}"><span>BYN</span></span>`;
+    return `<article class="food-week"><header><div><b>Неделя ${index+1}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}${w.partial?' · неполная неделя':''}</small></div><label class="check-label"><input type="checkbox" ${w.closed?'checked':''} disabled><span>${w.closed?'Закрыта':'Закроется автоматически'}</span></label></header><div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на неделю</small></span>${weekInput}</div></article>`;
   }).join('');
 }
 
@@ -869,10 +863,9 @@ function bindDelegatedEvents(){
     if(e.target.closest('[data-exchange-savings-byn]')){exchangeSavingsBynModal();return;}
   });
   document.addEventListener('change',async e=>{
-    if(e.target.matches('[data-category-spent]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categorySpent);if(c){p.categoryBudgets[c.id].spent=Math.max(0,num(e.target.value));await commit()}return;}
+    if(e.target.matches('[data-category-plan]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categoryPlan);if(c){const amount=Math.max(0,num(e.target.value));if(c.kind==='food')distributeFoodPlan(p,amount);else{p.categoryBudgets[c.id]=p.categoryBudgets[c.id]||{plan:0,spent:0};p.categoryBudgets[c.id].plan=amount}await commit()}return;}
     if(e.target.matches('[data-food-total-plan]')){const p=ensurePeriod(state,foodPeriodKey);distributeFoodPlan(p,Math.max(0,num(e.target.value)));await commit();return;}
     if(e.target.matches('[data-week-plan]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekPlan)].plan=Math.max(0,num(e.target.value));await commit();return;}
-    if(e.target.matches('[data-week-spent]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekSpent)].spent=Math.max(0,num(e.target.value));await commit();return;}
     if(e.target.matches('[data-utility-paid]')){const p=ensurePeriod(state,e.target.dataset.utilityPaid);p.passThroughs=p.passThroughs?.length?p.passThroughs:[{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25,amount:120}];p.passThroughs[0].paid=e.target.checked;await commit();return;}
     if(e.target.matches('[data-nav-labels]')){state.settings.navLabels=e.target.checked;await commit();return;}
     if(e.target.matches('[data-nav-item]')){const id=e.target.dataset.navItem;if(['home','month'].includes(id))return;const list=navItems().filter(x=>!['home','month'].includes(x));state.settings.navItems=['home','month',...(e.target.checked?[...list,id]:list.filter(x=>x!==id))];await commit();return;}

@@ -14,7 +14,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.0.45';
+const APP_BUILD='1.0.46';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -225,6 +225,30 @@ function categoryAvailable(period,category){const b=categoryBudget(period,catego
 function accountPeriodKey(date=todayISO()){return periodKeyForDate(new Date(`${date}T12:00:00`),state.settings.salaryDay);}
 function recordAccountDelta(deltaByn,{type='adjustment',date=todayISO(),periodKey='',categoryId='',note='',linkedId=''}={}){
   return addAccountTransaction(state,{deltaByn,type,date,periodKey:periodKey||accountPeriodKey(date),categoryId,note,linkedId});
+}
+function periodOperationDate(period){
+  return accountPeriodKey()===period.key?todayISO():toISODate(periodStart(period.key,state.settings.salaryDay));
+}
+function setCategorySpent(period,category,targetSpent){
+  const target=Math.max(0,roundMoney(targetSpent)), current=num(categoryBudget(period,category).spent), difference=roundMoney(target-current);
+  if(!difference)return null;
+  const date=periodOperationDate(period);
+  if(category.kind==='food'){
+    if(difference>0){
+      const index=currentWeekIndex(period.key,new Date(`${date}T12:00:00`),state.settings.salaryDay),week=period.foodWeeks[index]||period.foodWeeks[0];
+      if(week)week.spent=roundMoney(num(week.spent)+difference);
+    }else{
+      let amountToRemove=-difference;
+      for(let index=period.foodWeeks.length-1;index>=0&&amountToRemove>0;index--){
+        const week=period.foodWeeks[index], removed=Math.min(num(week.spent),amountToRemove);
+        week.spent=roundMoney(num(week.spent)-removed);amountToRemove=roundMoney(amountToRemove-removed);
+      }
+    }
+  }else{
+    period.categoryBudgets[category.id]=period.categoryBudgets[category.id]||{plan:0,spent:0};
+    period.categoryBudgets[category.id].spent=target;
+  }
+  return recordAccountDelta(-difference,{type:'expense',date,periodKey:period.key,categoryId:category.id,note:`Корректировка расходов · ${category.name}`});
 }
 function rollbackAccountCategory(transaction){
   const period=state.periods?.[transaction.periodKey];
@@ -502,12 +526,13 @@ function renderMandatoryCard(name,plan,spent,kind,{locked=false}={}){
 function renderCategoryCard(category,period,{mandatory=false}={}){
   const b=categoryBudget(period,category);
   const food=category.kind==='food', pet=category.kind==='pet', gift=category.kind==='gift';
-  const input=`<label class="inline-money-input"><input class="number-field compact" data-category-plan="${category.id}" inputmode="decimal" type="number" min="0" step="1" value="${num(b.plan)}" aria-label="Сумма: ${esc(category.name)}"><span>BYN</span></label>`;
+  const planInput=`<label class="inline-money-input"><input class="number-field compact" data-category-plan="${category.id}" inputmode="decimal" type="number" min="0" step="1" value="${num(b.plan)}" aria-label="План: ${esc(category.name)}"><span>BYN</span></label>`;
+  const spentInput=`<label class="inline-money-input"><input class="number-field compact" data-category-spent="${category.id}" inputmode="decimal" type="number" min="0" step="1" value="${num(b.spent)}" aria-label="Потрачено: ${esc(category.name)}"><span>BYN</span></label>`;
   const actions=`<span class="settings-actions"><button class="mini-icon" data-edit-category="${category.id}" aria-label="Изменить категорию">${icon('edit',17)}</button>${mandatory&&category.id!=='food'?`<button class="mini-icon" data-remove-mandatory-category="${category.id}" aria-label="Убрать из обязательного">${icon('close',16)}</button>`:!mandatory?`<button class="mini-icon" data-add-mandatory-category="${category.id}" aria-label="В обязательное">${icon('plus',16)}</button>`:''}</span>`;
   const detailAttr=food||pet||gift?` data-open-category-detail="${category.id}"`:'';
   return `<article class="category-card" data-category="${category.id}"${detailAttr}>
     <div class="category-head"><span class="category-icon" style="background:${esc(category.color)}">${categoryIconHtml(category)}</span><div><b>${esc(category.name)}</b><small>${mandatory?'обязательное этого месяца':category.kind==='food'?'по неделям':category.kind==='pet'?'пополнение внутреннего баланса':category.kind==='gift'?'конверт подарков':'месячная сумма'}</small></div>${actions}</div>
-    <div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на месяц</small></span>${input}</div>
+    <div class="category-budget-fields"><div class="category-budget-field"><span>План</span>${planInput}</div><div class="category-budget-field"><span>Потрачено</span>${spentInput}</div></div>
   </article>`;
 }
 function renderMonth(){
@@ -1002,6 +1027,7 @@ function bindDelegatedEvents(){
   });
   document.addEventListener('change',async e=>{
     if(e.target.matches('[data-category-plan]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categoryPlan);if(c){const amount=Math.max(0,num(e.target.value));if(c.kind==='food')distributeFoodPlan(p,amount);else{p.categoryBudgets[c.id]=p.categoryBudgets[c.id]||{plan:0,spent:0};p.categoryBudgets[c.id].plan=amount}await commit()}return;}
+    if(e.target.matches('[data-category-spent]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categorySpent);if(c){setCategorySpent(p,c,num(e.target.value));await commit()}return;}
     if(e.target.matches('[data-food-total-plan]')){const p=ensurePeriod(state,foodPeriodKey);distributeFoodPlan(p,Math.max(0,num(e.target.value)));await commit();return;}
     if(e.target.matches('[data-week-plan]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekPlan)].plan=Math.max(0,num(e.target.value));await commit();return;}
     if(e.target.matches('[data-utility-paid]')){const p=ensurePeriod(state,e.target.dataset.utilityPaid);p.passThroughs=p.passThroughs?.length?p.passThroughs:[{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25,amount:120}];p.passThroughs[0].paid=e.target.checked;await commit();return;}

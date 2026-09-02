@@ -1,6 +1,8 @@
 {
+  "type": "module",
   "scripts": {
     "build": "node build-bundle.cjs",
-    "start": "node server.cjs"
+    "start": "node server.cjs",
+    "test": "node --test"
   }
 }

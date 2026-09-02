@@ -1,11 +1,11 @@
 import {
-  VERSION, MONTHS_RU, uid, roundMoney, formatByn, formatUsd,
+  VERSION, MONTHS_RU, uid, roundMoney, parseMoney, formatByn, formatUsd,
   periodKeyForDate, shiftPeriodKey, periodTitle, formatPeriodRange,
   periodStart, periodEnd, currentWeekIndex, daysToNextSalary,
   seedState, ensurePeriod, foodBudget, distributeFoodPlan, categoryBudget, periodIncome,
   periodPayment, savingsBalanceUsd, savingsBalanceByn, petBalanceByn, paymentsPaidTotal, periodPaymentsPaid,
   debtRemaining, liveFreeBalance,
-  accountBalanceByn, accountBalanceAfterSpending, addAccountTransaction, deleteAccountTransaction, migrateLegacyAccount, remainingPlannedOutflows,
+  accountBalanceAfterSpending, accountTransactionPeriodKey, addAccountTransaction, deleteAccountTransaction, migrateLegacyAccount, migrateMonthlyBalances, remainingPlannedOutflows,
   periodSavingsDepositedByn, periodSpentTotal, purchaseAvailable, monthlySavingsRows, validateState, toISODate
 } from './model.js';
 import { loadState, saveState, clearState } from './storage.js';
@@ -14,7 +14,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.0.47';
+const APP_BUILD='1.0.48';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -144,6 +144,7 @@ function normalizeState(){
   if(foodCategory)foodCategory.visible=true;
   const activePeriod=ensurePeriod(state,periodKeyForDate(new Date(),state.settings.salaryDay));
   migrateLegacyAccount(state,activePeriod);
+  const monthlyBalancesMigrated=migrateMonthlyBalances(state);
   state.account.transactions=Array.isArray(state.account.transactions)?state.account.transactions:[];
   Object.values(state.periods||{}).forEach(period=>{delete period.balanceNow;delete period.balanceSnapshot;});
   state.pet=state.pet||{transactions:[],needs:[]};
@@ -162,6 +163,7 @@ function normalizeState(){
   state.gifts.recipients=Array.isArray(state.gifts.recipients)&&state.gifts.recipients.length?state.gifts.recipients:['Паше','Маме','Другому'];
   const giftsCategory=state.categories?.find(c=>c.id==='gifts');
   if(giftsCategory)giftsCategory.kind='gift';
+  return monthlyBalancesMigrated;
 }
 
 async function centerStoredIconImages(){
@@ -465,7 +467,7 @@ function closeOverlay(){setScreen('home');}
 function statusClass(value){return value<0?'negative':value===0?'neutral':'positive';}
 function budgetToneClass(plan,available){return available<0?'card-negative':num(plan)>0&&available<=num(plan)*0.2?'card-warning':'';}
 function budgetValueClass(plan,available){return available<0?'negative-number':num(plan)>0&&available<=num(plan)*0.2?'warning-number':'';}
-function editableAccountBalance(){return accountBalanceByn(state);}
+function editableAccountBalance(){return accountBalanceAfterSpending(state,currentPeriod());}
 function periodSpentDigest(period){
   const rows=[];
   const add=(name,spent)=>{const value=roundMoney(num(spent));if(value>0)rows.push({name,spent:value});};
@@ -488,7 +490,7 @@ function renderHome(){
   const wi=currentWeekIndex(p.key,new Date(),state.settings.salaryDay);
   const week=p.foodWeeks[wi]||p.foodWeeks[0];
   const weekPlan=num(week.plan);
-  const account=accountBalanceByn(state), reserved=remainingPlannedOutflows(state,p);
+  const account=accountBalanceAfterSpending(state,p), reserved=remainingPlannedOutflows(state,p);
   $('#periodPill').textContent=`${periodTitle(p.key)} · ${formatPeriodRange(p.key,state.settings.salaryDay)}`;
   $('#freeValue').textContent=formatByn(free);
   $('#freeMeta').textContent=`На счете ${formatByn(account)}${reserved>0?` · Запланировано ${formatByn(reserved)}`:''}`;
@@ -526,8 +528,8 @@ function renderMandatoryCard(name,plan,spent,kind,{locked=false}={}){
 function renderCategoryCard(category,period,{mandatory=false}={}){
   const b=categoryBudget(period,category);
   const food=category.kind==='food', pet=category.kind==='pet', gift=category.kind==='gift';
-  const planInput=`<label class="inline-money-input"><input class="number-field compact" data-category-plan="${category.id}" inputmode="decimal" type="number" min="0" step="1" value="${num(b.plan)}" aria-label="План: ${esc(category.name)}"><span>BYN</span></label>`;
-  const spentInput=`<label class="inline-money-input"><input class="number-field compact" data-category-spent="${category.id}" inputmode="decimal" type="number" min="0" step="1" value="${num(b.spent)}" aria-label="Потрачено: ${esc(category.name)}"><span>BYN</span></label>`;
+  const planInput=`<label class="inline-money-input"><input class="number-field compact" data-category-plan="${category.id}" ${moneyInputAttributes(0)} value="${num(b.plan)}" aria-label="План: ${esc(category.name)}"><span>BYN</span></label>`;
+  const spentInput=`<label class="inline-money-input"><input class="number-field compact" data-category-spent="${category.id}" ${moneyInputAttributes(0)} value="${num(b.spent)}" aria-label="Потрачено: ${esc(category.name)}"><span>BYN</span></label>`;
   const actions=`<span class="settings-actions"><button class="mini-icon" data-edit-category="${category.id}" aria-label="Изменить категорию">${icon('edit',17)}</button>${mandatory&&category.id!=='food'?`<button class="mini-icon" data-remove-mandatory-category="${category.id}" aria-label="Убрать из обязательного">${icon('close',16)}</button>`:!mandatory?`<button class="mini-icon" data-add-mandatory-category="${category.id}" aria-label="В обязательное">${icon('plus',16)}</button>`:''}</span>`;
   const detailAttr=food||pet||gift?` data-open-category-detail="${category.id}"`:'';
   return `<article class="category-card" data-category="${category.id}"${detailAttr}>
@@ -541,7 +543,8 @@ function renderMonth(){
   const addableSections=[!sections.includes('payment')?`<button class="text-button" data-add-mandatory-section="payment">+ ${esc(sectionLabel('payments'))}</button>`:'',!sections.includes('reserve')?`<button class="text-button" data-add-mandatory-section="reserve">+ ${esc(mandatoryLabel('reserve'))}</button>`:''].filter(Boolean).join('');
   $('#monthTitle').textContent=periodTitle(p.key);$('#monthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
   const spent=periodSpentTotal(state,p), accountBalance=accountBalanceAfterSpending(state,p), reserved=remainingPlannedOutflows(state,p);
-  $('#incomeTotal').textContent=formatByn(accountBalance);
+  const free=liveFreeBalance(state,p);
+  $('#incomeTotal').textContent=formatByn(free);
   $('#incomeDetails').textContent=`Зарплата ${formatByn(p.salary)}${p.extraIncome?` · Доп. доход ${formatByn(p.extraIncome)}`:''} · Списано и отложено ${formatByn(spent)}`;
   $('#mandatoryGrid').innerHTML=[
     renderMandatoryCard(mandatoryLabel('housing'),num(p.mandatory.housingPlan),num(p.mandatory.housingSpent),'housing',{locked:true}),
@@ -550,11 +553,10 @@ function renderMonth(){
     ...mandatoryCategories(p).map(c=>renderCategoryCard(c,p,{mandatory:true}))
   ].filter(Boolean).join('')+(addableSections?`<article class="pass-through"><div><b>Добавить в обязательное</b><small>Для ${periodTitle(p.key)} можно вернуть скрытые обязательные пункты.</small></div><div class="settings-actions">${addableSections}</div></article>`:'')+`<article class="pass-through"><label class="check-label"><input type="checkbox" data-utility-paid="${p.key}" ${p.passThroughs?.[0]?.paid?'checked':''}><span>${p.passThroughs?.[0]?.paid?'Оплачено':'Не оплачено'}</span></label><div><b>Коммунальные ${formatByn(p.passThroughs?.[0]?.amount||120)}</b><small>Аванс 25 числа приходит и сразу уходит. Основной доход не уменьшается.</small></div></article>`;
   $('#categoryList').innerHTML=optionalCategories(p).map(c=>renderCategoryCard(c,p)).join('')||'<div class="empty-state">Все видимые категории уже в обязательном для этого месяца</div>';
-  const free=liveFreeBalance(state,p);
   $('#monthFreeValue').textContent=formatByn(free);
-  $('#monthLimitMeta').textContent=`На счете ${formatByn(accountBalance)}${reserved>0?` · Запланировано ${formatByn(reserved)}`:''}`;
+  $('#monthLimitMeta').textContent=`После операций ${formatByn(accountBalance)}${reserved>0?` · Запланировано ${formatByn(reserved)}`:''}`;
   $('#monthFreeCard').classList.toggle('negative',free<0);
-  const accountRows=[...(state.account.transactions||[])].filter(transaction=>(transaction.periodKey||accountPeriodKey(transaction.date))===p.key).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const accountRows=[...(state.account.transactions||[])].filter(transaction=>accountTransactionPeriodKey(state,transaction)===p.key).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
   $('#accountHistory').innerHTML=accountRows.length?accountRows.map(transaction=>`<article class="history-row"><span class="history-icon ${num(transaction.deltaByn)>=0?'green':'red'}">${icon(num(transaction.deltaByn)>=0?'arrowDown':'arrowUp',18)}</span><div><b class="${num(transaction.deltaByn)<0?'negative-number':''}">${num(transaction.deltaByn)>=0?'+':'−'} ${formatByn(Math.abs(num(transaction.deltaByn)))}</b><small>${esc(accountTransactionTitle(transaction))} · ${dateLabel(transaction.date)}</small></div><button class="mini-icon" data-delete-account-tx="${transaction.id}" aria-label="Удалить операцию">${icon('trash',17)}</button></article>`).join(''):'<div class="empty-state">В этом периоде пока нет новых операций по счету</div>';
 }
 
@@ -564,12 +566,12 @@ function renderFood(){
   const currentKey=periodKeyForDate(new Date(),state.settings.salaryDay), currentIndex=currentWeekIndex(p.key,new Date(),state.settings.salaryDay);
   const totalAvailable=roundMoney(num(total.plan)-num(total.spent));
   $('#foodMonthTitle').textContent=periodTitle(p.key);$('#foodMonthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
-  const planInput=`<label class="inline-money-input"><input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-food-total-plan value="${num(total.plan)}" aria-label="Общий план на еду"><span>BYN</span></label>`;
+  const planInput=`<label class="inline-money-input"><input class="number-field compact" ${moneyInputAttributes(0)} data-food-total-plan value="${num(total.plan)}" aria-label="Общий план на еду"><span>BYN</span></label>`;
   $('#foodTotal').innerHTML=`<div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на месяц</small></span>${planInput}</div><div class="food-spend-summary"><span>Потрачено <b>${formatByn(total.spent)}</b></span><span>Осталось <b class="${totalAvailable<0?'negative-number':''}">${formatByn(totalAvailable)}</b></span></div>`;
   $('#foodTotal').classList.remove('card-negative','card-warning');
   $('#foodWeeks').innerHTML=p.foodWeeks.map((w,index)=>{
     const available=roundMoney(num(w.plan)-num(w.spent)), isCurrent=p.key===currentKey&&index===currentIndex;
-    const weekInput=`<span class="inline-money-input"><input class="number-field compact" type="number" min="0" step="1" inputmode="decimal" data-week-plan="${index}" value="${num(w.plan)}" aria-label="Сумма на неделю ${index+1}"><span>BYN</span></span>`;
+    const weekInput=`<span class="inline-money-input"><input class="number-field compact" ${moneyInputAttributes(0)} data-week-plan="${index}" value="${num(w.plan)}" aria-label="Сумма на неделю ${index+1}"><span>BYN</span></span>`;
     return `<article class="food-week ${isCurrent?'current-week':''}"><header><div><b>Неделя ${index+1}${isCurrent?'<span class="current-week-badge">Сейчас</span>':''}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}${w.partial?' · неполная неделя':''}</small></div><label class="check-label"><input type="checkbox" ${w.closed?'checked':''} disabled><span>${w.closed?'Закрыта':'Закроется автоматически'}</span></label></header><div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на неделю</small></span>${weekInput}</div><div class="food-spend-summary"><span>Потрачено <b>${formatByn(w.spent)}</b></span><span>Осталось <b class="${available<0?'negative-number':''}">${formatByn(available)}</b></span></div></article>`;
   }).join('');
 }
@@ -648,8 +650,18 @@ function renderNav(){
 }
 function renderAll(){applyAppearance();renderNav();renderHome();renderMonth();renderSavings();renderPet();renderGifts();renderPurchases();renderFood();renderPayments();renderSettings();}
 
+function moneyInputAttributes(min){
+  return `type="text" inputmode="decimal" data-money ${min!=null?`data-money-min="${min}"`:''}`;
+}
+function validateMoneyInput(input){
+  const amount=parseMoney(input.value), min=input.dataset.moneyMin;
+  const message=!Number.isFinite(amount)?'Введи сумму с точностью до двух знаков: 37,56 или 37.56':min!=null&&amount<Number(min)?`Минимальная сумма: ${min}`:'';
+  input.setCustomValidity(message);
+  return input.checkValidity();
+}
 function fieldHtml(field){
   const id=`field-${field.name}`;const value=field.value??'';const common=`id="${id}" name="${field.name}" ${field.required?'required':''}`;
+  if(field.type==='money')return `<label class="form-field"><span>${esc(field.label)}</span><input ${common} ${moneyInputAttributes(field.min)} value="${esc(value)}" placeholder="${esc(field.placeholder||'')}">${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
   if(field.type==='palette'){
     const hasMatch=field.options.some(o=>String(o.value).toLowerCase()===String(value).toLowerCase());
     return `<fieldset class="form-field palette-field"><legend>${esc(field.label)}</legend><div class="color-palette">${field.options.map((o,i)=>`<label class="color-dot" title="${esc(o.label)}"><input type="radio" name="${esc(field.name)}" value="${esc(o.value)}" ${String(o.value).toLowerCase()===String(value).toLowerCase()||(!hasMatch&&i===0)?'checked':''}><span style="background:${esc(o.value)}"></span></label>`).join('')}</div>${field.help?`<small>${esc(field.help)}</small>`:''}</fieldset>`;
@@ -667,7 +679,7 @@ let modalSubmitHandler=null, modalExtraHandler=null;
 function openModal(title,fields,onSubmit,{submitLabel='Сохранить',extraAction=null}={}){
   $('#modalTitle').textContent=title;$('#modalBody').innerHTML=fields.map(fieldHtml).join('')+(extraAction?`<button type="button" id="modalExtra" class="danger-button">${esc(extraAction.label)}</button>`:'');$('#modalSubmit').textContent=submitLabel;$('#modalBackdrop').hidden=false;document.body.classList.add('modal-open');modalSubmitHandler=onSubmit;modalExtraHandler=extraAction?.handler||null;setTimeout(()=>$('#modalBody input:not([type="checkbox"]), #modalBody select')?.focus(),40);}
 function closeModal(){$('#modalBackdrop').hidden=true;document.body.classList.remove('modal-open');modalSubmitHandler=null;modalExtraHandler=null;}
-function formValues(form){const result={};form.querySelectorAll('[name]').forEach(el=>{if(el.type==='radio'){if(el.checked)result[el.name]=el.value;return;}result[el.name]=el.type==='checkbox'?el.checked:el.type==='file'?el.files?.[0]||null:el.value;});return result;}
+function formValues(form){const result={};form.querySelectorAll('[name]').forEach(el=>{if(el.type==='radio'){if(el.checked)result[el.name]=el.value;return;}result[el.name]=el.hasAttribute('data-money')?parseMoney(el.value):el.type==='checkbox'?el.checked:el.type==='file'?el.files?.[0]||null:el.value;});return result;}
 async function updateCropPreview(root,name){
   const preview=root.querySelector(`[data-crop-preview="${name}"]`);
   const input=root.querySelector(`[data-crop-input="${name}"]`);
@@ -687,16 +699,16 @@ async function updateCropPreview(root,name){
 }
 
 function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0]||{amount:120};openModal(`Параметры · ${periodTitle(p.key)}`,[
-  {name:'salary',label:'Зарплата, BYN',type:'number',step:'1',value:p.salary},
-  {name:'extra',label:'Дополнительный доход, BYN',type:'number',step:'1',value:p.extraIncome},
-  {name:'cash',label:'Отдельно отложено / наличные, BYN',type:'number',step:'1',value:p.cashNow},
-  {name:'housingPlan',label:`${mandatoryLabel('housing')} — план, BYN`,type:'number',step:'1',value:p.mandatory.housingPlan},
-  {name:'housingSpent',label:`${mandatoryLabel('housing')} — оплачено, BYN`,type:'number',step:'1',value:p.mandatory.housingSpent},
-  {name:'reservePlan',label:`${mandatoryLabel('reserve')} — план, BYN`,type:'number',step:'1',value:p.mandatory.reservePlan},
-  {name:'reserveAllocated',label:`${mandatoryLabel('reserve')} — уже отложено, BYN`,type:'number',step:'1',value:p.mandatory.reserveAllocated},
-  {name:'savingsUsd',label:`${sectionLabel('savings')} — план, $`,type:'number',step:'1',value:p.mandatory.savingsPlanUsd},
-  {name:'savingsByn',label:`${sectionLabel('savings')} — план, BYN`,type:'number',step:'1',value:p.mandatory.savingsPlanByn??p.mandatory.savingsPlanUsd??0},
-  {name:'utilities',label:'Коммунальные из аванса, BYN',type:'number',step:'1',value:utility.amount},
+  {name:'salary',label:'Зарплата, BYN',type:'money',value:p.salary},
+  {name:'extra',label:'Дополнительный доход, BYN',type:'money',value:p.extraIncome},
+  {name:'cash',label:'Отдельно отложено / наличные, BYN',type:'money',value:p.cashNow},
+  {name:'housingPlan',label:`${mandatoryLabel('housing')} — план, BYN`,type:'money',value:p.mandatory.housingPlan},
+  {name:'housingSpent',label:`${mandatoryLabel('housing')} — оплачено, BYN`,type:'money',value:p.mandatory.housingSpent},
+  {name:'reservePlan',label:`${mandatoryLabel('reserve')} — план, BYN`,type:'money',value:p.mandatory.reservePlan},
+  {name:'reserveAllocated',label:`${mandatoryLabel('reserve')} — уже отложено, BYN`,type:'money',value:p.mandatory.reserveAllocated},
+  {name:'savingsUsd',label:`${sectionLabel('savings')} — план, $`,type:'money',value:p.mandatory.savingsPlanUsd},
+  {name:'savingsByn',label:`${sectionLabel('savings')} — план, BYN`,type:'money',value:p.mandatory.savingsPlanByn??p.mandatory.savingsPlanUsd??0},
+  {name:'utilities',label:'Коммунальные из аванса, BYN',type:'money',value:utility.amount},
   {name:'utilitiesPaid',label:'Коммунальные оплачены',type:'checkbox',value:!!utility.paid},
   {name:'note',label:'Комментарий',type:'textarea',value:p.note}
 ],async v=>{
@@ -709,12 +721,12 @@ function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0
   recordAccountDelta(-(num(p.mandatory.reserveAllocated)-oldReserve),{type:'transfer_out',date:todayISO(),periodKey:p.key,categoryId:'mandatory:reserve',note:mandatoryLabel('reserve')});
   await commit();closeModal();
 });}
-function openBalanceEditor(){const p=currentPeriod();openModal('Осталось на счету',[{name:'balance',label:'Осталось на счету, BYN',type:'number',step:'1',required:true,value:editableAccountBalance(),help:'Приложение создаст видимую корректировку на разницу с текущим счетом.'},{name:'cash',label:'Отдельно отложено / наличные, BYN',type:'number',step:'1',value:p.cashNow},{name:'note',label:'Комментарий',value:'Сверка с банковским счетом'}],async v=>{const target=num(v.balance),delta=roundMoney(target-accountBalanceByn(state));p.cashNow=num(v.cash);recordAccountDelta(delta,{type:'adjustment',date:todayISO(),periodKey:p.key,note:v.note.trim()||'Корректировка счета'});await commit();closeModal();});}
+function openBalanceEditor(){const p=currentPeriod();openModal('Осталось на счету',[{name:'balance',label:'Осталось на счету, BYN',type:'money',required:true,value:editableAccountBalance(),help:'Приложение создаст видимую корректировку на разницу с текущим счетом.'},{name:'cash',label:'Отдельно отложено / наличные, BYN',type:'money',value:p.cashNow},{name:'note',label:'Комментарий',value:'Сверка с банковским счетом'}],async v=>{const target=num(v.balance),delta=roundMoney(target-editableAccountBalance());p.cashNow=num(v.cash);recordAccountDelta(delta,{type:'adjustment',date:todayISO(),periodKey:p.key,note:v.note.trim()||'Корректировка счета'});await commit();closeModal();});}
 function quickExpenseModal(){
   const categories=[...state.categories].sort((a,b)=>a.order-b.order);
   if(!categories.length){toast('Сначала добавь категорию');return;}
   openModal('Новый расход',[
-    {name:'amount',label:'Сумма, BYN',type:'number',min:0.01,step:'0.01',inputmode:'decimal',required:true},
+    {name:'amount',label:'Сумма, BYN',type:'money',min:0.01,required:true},
     {name:'category',label:'Категория',type:'select',value:categories[0].id,options:categories.map(category=>({value:category.id,label:category.name}))}
   ],async values=>{
     const amount=roundMoney(num(values.amount));
@@ -742,7 +754,7 @@ function quickExpenseModal(){
     toast(`${formatByn(amount)} · ${category.name}`);
   },{submitLabel:'Учесть расход'});
 }
-function openMandatoryEditor(kind){const p=selectedPeriod(), pay=periodPayment(state,p.key);const config={housing:{title:mandatoryLabel('housing'),plan:p.mandatory.housingPlan,spent:p.mandatory.housingSpent},payment:{title:sectionLabel('payments'),plan:pay.planned,spent:pay.paid},reserve:{title:mandatoryLabel('reserve'),plan:p.mandatory.reservePlan,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'name',label:'Название',value:config.title},{name:'plan',label:'План, BYN',type:'number',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'number',value:config.spent}],async v=>{const oldSpent=num(config.spent);if(kind==='payment')setSectionLabel('payments',v.name);else setMandatoryLabel(kind,v.name);if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}const newSpent=kind==='housing'?num(p.mandatory.housingSpent):kind==='payment'?num(pay.paid):num(p.mandatory.reserveAllocated);recordAccountDelta(-(newSpent-oldSpent),{type:kind==='reserve'?'transfer_out':'expense',date:todayISO(),periodKey:p.key,categoryId:`mandatory:${kind}`,note:v.name.trim()||config.title});await commit();closeModal();});}
+function openMandatoryEditor(kind){const p=selectedPeriod(), pay=periodPayment(state,p.key);const config={housing:{title:mandatoryLabel('housing'),plan:p.mandatory.housingPlan,spent:p.mandatory.housingSpent},payment:{title:sectionLabel('payments'),plan:pay.planned,spent:pay.paid},reserve:{title:mandatoryLabel('reserve'),plan:p.mandatory.reservePlan,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'name',label:'Название',value:config.title},{name:'plan',label:'План, BYN',type:'money',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'money',value:config.spent}],async v=>{const oldSpent=num(config.spent);if(kind==='payment')setSectionLabel('payments',v.name);else setMandatoryLabel(kind,v.name);if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}const newSpent=kind==='housing'?num(p.mandatory.housingSpent):kind==='payment'?num(pay.paid):num(p.mandatory.reserveAllocated);recordAccountDelta(-(newSpent-oldSpent),{type:kind==='reserve'?'transfer_out':'expense',date:todayISO(),periodKey:p.key,categoryId:`mandatory:${kind}`,note:v.name.trim()||config.title});await commit();closeModal();});}
 
 const iconOptions=['wallet','home','calendar','piggy','paw','bag','money','utensils','dumbbell','sparkles','heart','shirt','gift','ticket','palette','shield'].map(i=>({label:i,value:i}));
 const colorOptions=[
@@ -771,7 +783,7 @@ function petAvatarModal(){
 }
 function openCategoryEditor(id){
   const c=categoryById(id), p=selectedPeriod(), b=categoryBudget(p,c);const deletable=!['food','pet'].includes(c.kind);
-  const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:b.plan,help:c.kind==='food'?'Для еды лимит распределится по неделям пропорционально количеству дней.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,preview:c.iconImage||'',help:'Загруженная картинка заменит выбранную иконку. После выбора файла можно вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
+  const fields=[{name:'name',label:'Название',value:c.name},{name:'plan',label:'Лимит текущего месяца, BYN',type:'money',value:b.plan,help:c.kind==='food'?'Для еды лимит распределится по неделям пропорционально количеству дней.':''},{name:'icon',label:'Иконка',type:'select',value:c.icon,options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,preview:c.iconImage||'',help:'Загруженная картинка заменит выбранную иконку. После выбора файла можно вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:c.color,options:colorOptions},{name:'visible',label:'Показывать категорию',type:'checkbox',value:c.visible}];
   openModal('Категория',fields,async v=>{
     c.name=v.name.trim()||c.name;
     if(['food','pet'].includes(c.kind))setSectionLabel(c.id,c.name);
@@ -793,14 +805,14 @@ function openCategoryEditor(id){
     await commit();closeModal();
   }}:null});
 }
-function openNewCategory(){openModal('Новая категория',[{name:'name',label:'Название',required:true},{name:'plan',label:'Лимит текущего месяца, BYN',type:'number',value:0},{name:'icon',label:'Иконка',type:'select',value:'wallet',options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,help:'Можно загрузить свою картинку и вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:'#C8E4E8',options:colorOptions}],async v=>{const id=`category-${uid()}`;const order=Math.max(0,...state.categories.map(c=>c.order))+1;state.categories.push({id,name:v.name.trim()||'Новая категория',icon:v.icon,iconImage:v.iconImage?await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage')):'',color:v.color,kind:'monthly',order,visible:true});Object.values(state.periods).forEach(period=>{period.categoryBudgets[id]={plan:period.key===selectedPeriodKey?num(v.plan):0,spent:0}});await commit();closeModal();});}
+function openNewCategory(){openModal('Новая категория',[{name:'name',label:'Название',required:true},{name:'plan',label:'Лимит текущего месяца, BYN',type:'money',value:0},{name:'icon',label:'Иконка',type:'select',value:'wallet',options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,help:'Можно загрузить свою картинку и вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:'#C8E4E8',options:colorOptions}],async v=>{const id=`category-${uid()}`;const order=Math.max(0,...state.categories.map(c=>c.order))+1;state.categories.push({id,name:v.name.trim()||'Новая категория',icon:v.icon,iconImage:v.iconImage?await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage')):'',color:v.color,kind:'monthly',order,visible:true});Object.values(state.periods).forEach(period=>{period.categoryBudgets[id]={plan:period.key===selectedPeriodKey?num(v.plan):0,spent:0}});await commit();closeModal();});}
 
-function savingsModal(type){openModal(type==='deposit'?'Перевести в накопления':'Вернуть из накоплений',[{name:'currency',label:'Валюта накоплений',type:'select',value:'usd',options:[{value:'usd',label:'USD'},{value:'byn',label:'BYN'}]},{name:'amount',label:'Сумма в выбранной валюте',type:'number',min:0,step:'0.01',required:true},{name:'accountByn',label:type==='deposit'?'Списать с обычного счета, BYN':'Вернуть на обычный счет, BYN',type:'number',min:0,step:'0.01',help:'Для BYN приложение возьмет ту же сумму. Для USD укажи реальную сумму обмена в BYN.'},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const currency=v.currency==='byn'?'byn':'usd', amount=num(v.amount), accountAmount=currency==='byn'?amount:num(v.accountByn);if(amount<=0){toast('Введи сумму');return;}if(accountAmount<=0){toast('Введи изменение обычного счета в BYN');return;}const date=v.date||todayISO(), note=v.note.trim()||`${type==='deposit'?'В накопления':'Из накоплений'} ${currency.toUpperCase()}`;const transaction={id:uid(),type,currency,amountUsd:currency==='usd'?amount:0,amountByn:currency==='byn'?amount:0,accountAmountByn:accountAmount,exchangeRate:currency==='usd'?roundMoney(accountAmount/amount):1,date,note};const accountTransaction=recordAccountDelta(type==='deposit'?-accountAmount:accountAmount,{type:type==='deposit'?'transfer_out':'transfer_in',date,note,linkedId:`savings:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';state.savings.push(transaction);await commit();closeModal();});}
-function safetyModal(){openModal('Подушка безопасности',[{name:'amount',label:'Сумма в сейфе, USD',type:'number',min:0,step:'1',value:state.safety.amountUsd},{name:'accountByn',label:'Изменение обычного счета, BYN',type:'number',min:0,step:'0.01',help:'Если сумма сейфа меняется, укажи сколько BYN реально ушло со счета или вернулось на него.'},{name:'goal',label:'Цель, USD',type:'number',min:1,step:'1',value:state.safety.goalUsd||2000},{name:'icon',label:'Иконка',type:'select',value:state.safety.icon||'shield',options:iconOptions},{name:'iconImage',label:'Своя иконка сейфа',type:'file',crop:true,preview:state.safety.iconImage||'',help:'Картинка будет обрезана в квадрат без потери прозрачности, кроп можно настроить вручную.'}],async v=>{const oldAmount=num(state.safety.amountUsd),newAmount=num(v.amount),difference=roundMoney(newAmount-oldAmount),accountAmount=num(v.accountByn);if(difference!==0&&accountAmount<=0){toast('Введи изменение обычного счета в BYN');return;}state.safety.amountUsd=newAmount;state.safety.goalUsd=num(v.goal)||2000;state.safety.icon=v.icon||'shield';if(v.iconImage)state.safety.iconImage=await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage'));if(difference!==0){const transaction={id:uid(),type:difference>0?'topup':'spend',amountUsd:Math.abs(difference),accountAmountByn:accountAmount,date:todayISO(),note:'Подушка безопасности'};const accountTransaction=recordAccountDelta(difference>0?-accountAmount:accountAmount,{type:difference>0?'transfer_out':'transfer_in',date:transaction.date,note:transaction.note,linkedId:`safety:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';state.safety.transactions.push(transaction)}await commit();closeModal();},{extraAction:state.safety.iconImage?{label:'Сбросить свою иконку',handler:async()=>{state.safety.iconImage='';await commit();closeModal();}}:null});}
+function savingsModal(type){openModal(type==='deposit'?'Перевести в накопления':'Вернуть из накоплений',[{name:'currency',label:'Валюта накоплений',type:'select',value:'usd',options:[{value:'usd',label:'USD'},{value:'byn',label:'BYN'}]},{name:'amount',label:'Сумма в выбранной валюте',type:'money',min:0,required:true},{name:'accountByn',label:type==='deposit'?'Списать с обычного счета, BYN':'Вернуть на обычный счет, BYN',type:'money',min:0,help:'Для BYN приложение возьмет ту же сумму. Для USD укажи реальную сумму обмена в BYN.'},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const currency=v.currency==='byn'?'byn':'usd', amount=num(v.amount), accountAmount=currency==='byn'?amount:num(v.accountByn);if(amount<=0){toast('Введи сумму');return;}if(accountAmount<=0){toast('Введи изменение обычного счета в BYN');return;}const date=v.date||todayISO(), note=v.note.trim()||`${type==='deposit'?'В накопления':'Из накоплений'} ${currency.toUpperCase()}`;const transaction={id:uid(),type,currency,amountUsd:currency==='usd'?amount:0,amountByn:currency==='byn'?amount:0,accountAmountByn:accountAmount,exchangeRate:currency==='usd'?roundMoney(accountAmount/amount):1,date,note};const accountTransaction=recordAccountDelta(type==='deposit'?-accountAmount:accountAmount,{type:type==='deposit'?'transfer_out':'transfer_in',date,note,linkedId:`savings:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';state.savings.push(transaction);await commit();closeModal();});}
+function safetyModal(){openModal('Подушка безопасности',[{name:'amount',label:'Сумма в сейфе, USD',type:'money',min:0,value:state.safety.amountUsd},{name:'accountByn',label:'Изменение обычного счета, BYN',type:'money',min:0,help:'Если сумма сейфа меняется, укажи сколько BYN реально ушло со счета или вернулось на него.'},{name:'goal',label:'Цель, USD',type:'money',min:1,value:state.safety.goalUsd||2000},{name:'icon',label:'Иконка',type:'select',value:state.safety.icon||'shield',options:iconOptions},{name:'iconImage',label:'Своя иконка сейфа',type:'file',crop:true,preview:state.safety.iconImage||'',help:'Картинка будет обрезана в квадрат без потери прозрачности, кроп можно настроить вручную.'}],async v=>{const oldAmount=num(state.safety.amountUsd),newAmount=num(v.amount),difference=roundMoney(newAmount-oldAmount),accountAmount=num(v.accountByn);if(difference!==0&&accountAmount<=0){toast('Введи изменение обычного счета в BYN');return;}state.safety.amountUsd=newAmount;state.safety.goalUsd=num(v.goal)||2000;state.safety.icon=v.icon||'shield';if(v.iconImage)state.safety.iconImage=await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage'));if(difference!==0){const transaction={id:uid(),type:difference>0?'topup':'spend',amountUsd:Math.abs(difference),accountAmountByn:accountAmount,date:todayISO(),note:'Подушка безопасности'};const accountTransaction=recordAccountDelta(difference>0?-accountAmount:accountAmount,{type:difference>0?'transfer_out':'transfer_in',date:transaction.date,note:transaction.note,linkedId:`safety:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';state.safety.transactions.push(transaction)}await commit();closeModal();},{extraAction:state.safety.iconImage?{label:'Сбросить свою иконку',handler:async()=>{state.safety.iconImage='';await commit();closeModal();}}:null});}
 function exchangeSavingsBynModal(){
   const byn=savingsBalanceByn(state);
   if(byn<=0)return;
-  openModal('Обмен BYN в USD',[{name:'usd',label:'Сколько USD куплено',type:'number',min:0,step:'1',required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:'Обмен накоплений BYN в USD'}],async v=>{
+  openModal('Обмен BYN в USD',[{name:'usd',label:'Сколько USD куплено',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:'Обмен накоплений BYN в USD'}],async v=>{
     const usd=num(v.usd), date=v.date||todayISO(), note=v.note.trim()||'Обмен накоплений BYN в USD';
     if(usd<=0){toast('Введи сумму USD');return;}
     const exchangeRate=roundMoney(byn/usd);
@@ -809,10 +821,10 @@ function exchangeSavingsBynModal(){
     await commit();closeModal();toast('BYN обменяны в USD');
   });
 }
-function petTransactionModal(type){openModal(type==='topup'?'Перевести питомцу':'Потратить из баланса питомца',[{name:'amount',label:'Сумма, BYN',type:'number',min:0,step:'1',required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const tx={id:uid(),type,amountByn:amount,date,note:v.note.trim()};state.pet.balanceByn=roundMoney(petBalanceByn(state)+(type==='topup'?amount:-amount));if(type==='topup'){const key=accountPeriodKey(date),p=ensurePeriod(state,key);p.categoryBudgets.pet=p.categoryBudgets.pet||{plan:0,spent:0};p.categoryBudgets.pet.spent=roundMoney(num(p.categoryBudgets.pet.spent)+amount);tx.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'pet',note:tx.note||sectionLabel('pet'),linkedId:`pet:${tx.id}`});tx.accountTransactionId=accountTransaction?.id||'';}state.pet.transactions.push(tx);await commit();closeModal();});}
-function needModal(item=null){openModal(item?'План питомца':'Добавить для питомца',[{name:'name',label:'Что нужно',value:item?.name||'',required:true},{name:'cost',label:'Стоимость, BYN',type:'number',value:item?.costByn||0},{name:'due',label:'Срок',type:'date',value:item?.dueDate||''},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){item.name=v.name;item.costByn=num(v.cost);item.dueDate=v.due;item.note=v.note}else state.pet.needs.push({id:uid(),name:v.name,costByn:num(v.cost),dueDate:v.due,note:v.note,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{state.pet.needs=state.pet.needs.filter(n=>n.id!==item.id);await commit();closeModal();}}:null});}
-function giftTransactionModal(type){openModal(type==='topup'?'Перевести в конверт подарков':'Потратить из конверта подарков',[{name:'amount',label:'Сумма, BYN',type:'number',min:0,step:'1',required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const transaction={id:uid(),type,amountByn:amount,date,note:v.note.trim()};if(type==='topup'){const key=accountPeriodKey(date),period=ensurePeriod(state,key);period.categoryBudgets.gifts=period.categoryBudgets.gifts||{plan:0,spent:0};period.categoryBudgets.gifts.spent=roundMoney(num(period.categoryBudgets.gifts.spent)+amount);transaction.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'gifts',note:transaction.note||'Конверт подарков',linkedId:`gifts:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';}state.gifts.transactions.push(transaction);await commit();closeModal();});}
-function giftModal(item=null){const recipients=[...new Set([...(state.gifts.recipients||[]),'Паше','Маме','Другому'])];openModal(item?'Подарок':'Новый подарок',[{name:'name',label:'Название',value:item?.name||'',required:true},{name:'recipient',label:'Кому',type:'select',value:item?.recipient||recipients[0],options:recipients.map(r=>({value:r,label:r}))},{name:'recipientCustom',label:'Другой получатель',value:'',help:'Заполни, если нужно добавить новый пресет.'},{name:'cost',label:'Стоимость, BYN',type:'number',value:item?.costByn||0},{name:'color',label:'Цвет карточки',type:'palette',value:item?.color||'#FBC9AE',options:colorOptions},{name:'link',label:'Ссылка',value:item?.link||''},{name:'image',label:'Изображение',type:'file',preview:item?.imageDataUrl||'',help:'Можно прикрепить фото или скрин подарка.'},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const recipient=(v.recipientCustom||'').trim()||v.recipient;if(!state.gifts.recipients.includes(recipient))state.gifts.recipients.push(recipient);const imageDataUrl=v.image?await imageToDataUrl(v.image):item?.imageDataUrl||'';if(item){item.name=v.name;item.recipient=recipient;item.costByn=num(v.cost);item.color=v.color;item.link=v.link;item.note=v.note;item.imageDataUrl=imageDataUrl}else state.gifts.plans.push({id:uid(),name:v.name,recipient,costByn:num(v.cost),color:v.color,link:v.link,note:v.note,imageDataUrl,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить подарок',handler:async()=>{state.gifts.plans=state.gifts.plans.filter(g=>g.id!==item.id);await commit();closeModal();}}:null});}
+function petTransactionModal(type){openModal(type==='topup'?'Перевести питомцу':'Потратить из баланса питомца',[{name:'amount',label:'Сумма, BYN',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const tx={id:uid(),type,amountByn:amount,date,note:v.note.trim()};state.pet.balanceByn=roundMoney(petBalanceByn(state)+(type==='topup'?amount:-amount));if(type==='topup'){const key=accountPeriodKey(date),p=ensurePeriod(state,key);p.categoryBudgets.pet=p.categoryBudgets.pet||{plan:0,spent:0};p.categoryBudgets.pet.spent=roundMoney(num(p.categoryBudgets.pet.spent)+amount);tx.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'pet',note:tx.note||sectionLabel('pet'),linkedId:`pet:${tx.id}`});tx.accountTransactionId=accountTransaction?.id||'';}state.pet.transactions.push(tx);await commit();closeModal();});}
+function needModal(item=null){openModal(item?'План питомца':'Добавить для питомца',[{name:'name',label:'Что нужно',value:item?.name||'',required:true},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'due',label:'Срок',type:'date',value:item?.dueDate||''},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){item.name=v.name;item.costByn=num(v.cost);item.dueDate=v.due;item.note=v.note}else state.pet.needs.push({id:uid(),name:v.name,costByn:num(v.cost),dueDate:v.due,note:v.note,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{state.pet.needs=state.pet.needs.filter(n=>n.id!==item.id);await commit();closeModal();}}:null});}
+function giftTransactionModal(type){openModal(type==='topup'?'Перевести в конверт подарков':'Потратить из конверта подарков',[{name:'amount',label:'Сумма, BYN',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const transaction={id:uid(),type,amountByn:amount,date,note:v.note.trim()};if(type==='topup'){const key=accountPeriodKey(date),period=ensurePeriod(state,key);period.categoryBudgets.gifts=period.categoryBudgets.gifts||{plan:0,spent:0};period.categoryBudgets.gifts.spent=roundMoney(num(period.categoryBudgets.gifts.spent)+amount);transaction.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'gifts',note:transaction.note||'Конверт подарков',linkedId:`gifts:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';}state.gifts.transactions.push(transaction);await commit();closeModal();});}
+function giftModal(item=null){const recipients=[...new Set([...(state.gifts.recipients||[]),'Паше','Маме','Другому'])];openModal(item?'Подарок':'Новый подарок',[{name:'name',label:'Название',value:item?.name||'',required:true},{name:'recipient',label:'Кому',type:'select',value:item?.recipient||recipients[0],options:recipients.map(r=>({value:r,label:r}))},{name:'recipientCustom',label:'Другой получатель',value:'',help:'Заполни, если нужно добавить новый пресет.'},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'color',label:'Цвет карточки',type:'palette',value:item?.color||'#FBC9AE',options:colorOptions},{name:'link',label:'Ссылка',value:item?.link||''},{name:'image',label:'Изображение',type:'file',preview:item?.imageDataUrl||'',help:'Можно прикрепить фото или скрин подарка.'},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const recipient=(v.recipientCustom||'').trim()||v.recipient;if(!state.gifts.recipients.includes(recipient))state.gifts.recipients.push(recipient);const imageDataUrl=v.image?await imageToDataUrl(v.image):item?.imageDataUrl||'';if(item){item.name=v.name;item.recipient=recipient;item.costByn=num(v.cost);item.color=v.color;item.link=v.link;item.note=v.note;item.imageDataUrl=imageDataUrl}else state.gifts.plans.push({id:uid(),name:v.name,recipient,costByn:num(v.cost),color:v.color,link:v.link,note:v.note,imageDataUrl,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить подарок',handler:async()=>{state.gifts.plans=state.gifts.plans.filter(g=>g.id!==item.id);await commit();closeModal();}}:null});}
 function rollbackCompletedPurchase(item){
   if(!item?.completed)return;
   if(item.paidFrom==='account'){
@@ -831,7 +843,7 @@ function purchaseModal(item=null){
   openModal(item?'Покупка':'Новая покупка',[
     {name:'name',label:'Название',value:item?.name||'',required:true},
     {name:'priority',label:'Раздел',type:'select',value:item?.priority||purchaseTab,options:Object.entries(purchaseTitles).map(([value,label])=>({value,label}))},
-    {name:'cost',label:'Стоимость, USD',type:'number',value:purchaseCostUsd(item)},
+    {name:'cost',label:'Стоимость, USD',type:'money',value:purchaseCostUsd(item)},
     {name:'image',label:'Изображение',type:'file',preview:item?.imageDataUrl||'',help:'Можно добавить фото товара или скрин.'},
     {name:'note',label:'Комментарий',value:item?.note||''}
   ],async v=>{
@@ -847,7 +859,7 @@ function completePurchaseModal(item){
   const categories=visibleCategories();
   openModal(`Купить · ${item.name}`,[
     {name:'source',label:'Откуда списать',type:'select',value:'savings',options:[{value:'savings',label:'Накопления USD'},{value:'safety',label:'Подушка безопасности USD'},{value:'account',label:'Обычный счет BYN'}]},
-    {name:'accountByn',label:'Сумма с обычного счета, BYN',type:'number',min:0,step:'0.01',help:'Нужно заполнить только при оплате с обычного счета.'},
+    {name:'accountByn',label:'Сумма с обычного счета, BYN',type:'money',min:0,help:'Нужно заполнить только при оплате с обычного счета.'},
     {name:'category',label:'Категория для обычного счета',type:'select',value:categories[0]?.id||'',options:categories.map(category=>({value:category.id,label:category.name}))},
     {name:'date',label:'Дата',type:'date',value:todayISO()}
   ],async v=>{
@@ -876,7 +888,7 @@ function completePurchaseModal(item){
     item.completed=true;item.completedAt=date;item.paidFrom=v.source;await commit();closeModal();
   },{submitLabel:'Подтвердить покупку'});
 }
-function paymentModal(item=null){openModal(item?'Платеж':'Новый платеж',[{name:'title',label:'Название',value:item?.title||''},{name:'period',label:'Месяц',type:'month',value:item?.periodKey||selectedPeriodKey},{name:'planned',label:'План, BYN',type:'number',value:item?.planned||0},{name:'paid',label:'Оплачено, BYN',type:'number',value:item?.paid||0},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const target=item||{id:uid(),title:'',periodKey:v.period,planned:0,paid:0,note:''},oldPaid=num(target.paid);target.title=v.title.trim();target.periodKey=v.period;target.planned=num(v.planned);target.paid=num(v.paid);target.note=v.note;if(!item)state.payments.push(target);recordAccountDelta(-(target.paid-oldPaid),{type:'expense',date:todayISO(),periodKey:target.periodKey,categoryId:'mandatory:payment',note:target.title||sectionLabel('payments'),linkedId:`payment:${target.id}`});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{const accountIds=state.account.transactions.filter(transaction=>transaction.linkedId===`payment:${item.id}`).map(transaction=>transaction.id);for(const id of accountIds)deleteAccountOperation(id);state.payments=state.payments.filter(p=>p.id!==item.id);await commit();closeModal();}}:null});}
+function paymentModal(item=null){openModal(item?'Платеж':'Новый платеж',[{name:'title',label:'Название',value:item?.title||''},{name:'period',label:'Месяц',type:'month',value:item?.periodKey||selectedPeriodKey},{name:'planned',label:'План, BYN',type:'money',value:item?.planned||0},{name:'paid',label:'Оплачено, BYN',type:'money',value:item?.paid||0},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const target=item||{id:uid(),title:'',periodKey:v.period,planned:0,paid:0,note:''},oldPaid=num(target.paid);target.title=v.title.trim();target.periodKey=v.period;target.planned=num(v.planned);target.paid=num(v.paid);target.note=v.note;if(!item)state.payments.push(target);recordAccountDelta(-(target.paid-oldPaid),{type:'expense',date:todayISO(),periodKey:target.periodKey,categoryId:'mandatory:payment',note:target.title||sectionLabel('payments'),linkedId:`payment:${target.id}`});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{const accountIds=state.account.transactions.filter(transaction=>transaction.linkedId===`payment:${item.id}`).map(transaction=>transaction.id);for(const id of accountIds)deleteAccountOperation(id);state.payments=state.payments.filter(p=>p.id!==item.id);await commit();closeModal();}}:null});}
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appearanceModal(){const a=appearanceSettings();openModal('Внешний вид',[{name:'primary',label:'Основной цвет',type:'palette',value:a.primary||'#9FAF64',options:colorOptions},{name:'background',label:'Цвет фона',type:'palette',value:a.background||'#FEE8DD',options:colorOptions},{name:'card',label:'Цвет карточек',type:'palette',value:a.card||'#F9E5CC',options:colorOptions},{name:'heading',label:'Цвет заголовков',type:'palette',value:a.heading||'#6C909E',options:colorOptions},{name:'backgroundImage',label:'Свой фон',type:'file',preview:a.backgroundImage||'',accept:'image/png,image/jpeg,image/webp,image/*'},{name:'appIcon',label:'Иконка приложения',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png',accept:'image/png,image/*',help:'После выбора файла можно настроить кроп и масштаб.'}],async v=>{a.primary=safeHex(v.primary,'#9FAF64');a.background=safeHex(v.background,'#FEE8DD');a.card=safeHex(v.card,'#F9E5CC');a.heading=safeHex(v.heading,'#6C909E');if(v.backgroundImage)a.backgroundImage=await imageToDataUrl(v.backgroundImage,1400);if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));applyAppearance();await commit();closeModal();},{extraAction:a.backgroundImage||a.appIcon?{label:'Сбросить фон и иконку',handler:async()=>{a.backgroundImage='';a.appIcon='';applyAppearance();await commit();closeModal();}}:null});}
 
@@ -994,7 +1006,7 @@ function bindStaticEvents(){
   $('#addPurchaseBtn').addEventListener('click',()=>purchaseModal());$('#addPaymentBtn').addEventListener('click',()=>paymentModal());$('#editGeneralBtn').addEventListener('click',generalModal);$('#editAppearanceBtn').addEventListener('click',appearanceModal);
   $('#exportBtn').addEventListener('click',exportBackup);$('#importInput').addEventListener('change',e=>{const file=e.target.files?.[0];if(file)importBackup(file);e.target.value=''});$('#resetBtn').addEventListener('click',async()=>{if(!confirm('Сбросить все данные приложения?'))return;await clearState();state=seedState(new Date());selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();setScreen('home');toast('Данные сброшены')});
   $('#modalClose').addEventListener('click',closeModal);$('#modalCancel').addEventListener('click',closeModal);$('#modalBackdrop').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal()});
-  $('#modalForm').addEventListener('submit',async e=>{e.preventDefault();if(modalSubmitHandler)await modalSubmitHandler(formValues(e.currentTarget))});
+  $('#modalForm').addEventListener('submit',async e=>{e.preventDefault();const invalid=[...e.currentTarget.querySelectorAll('[data-money]')].find(input=>!validateMoneyInput(input));if(invalid){invalid.reportValidity();return;}if(modalSubmitHandler)await modalSubmitHandler(formValues(e.currentTarget))});
   $('#modalBody').addEventListener('click',async e=>{if(e.target.closest('#modalExtra')&&modalExtraHandler)await modalExtraHandler()});
   $('#modalBody').addEventListener('input',e=>{if(e.target.matches('[data-crop-slider]'))updateCropPreview($('#modalBody'),e.target.dataset.cropSlider)});
   $('#modalBody').addEventListener('change',e=>{if(e.target.matches('[data-crop-input]'))updateCropPreview($('#modalBody'),e.target.dataset.cropInput)});
@@ -1034,24 +1046,26 @@ function bindDelegatedEvents(){
     if(e.target.closest('[data-exchange-savings-byn]')){exchangeSavingsBynModal();return;}
   });
   document.addEventListener('change',async e=>{
-    if(e.target.matches('[data-category-plan]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categoryPlan);if(c){const amount=Math.max(0,num(e.target.value));if(c.kind==='food')distributeFoodPlan(p,amount);else{p.categoryBudgets[c.id]=p.categoryBudgets[c.id]||{plan:0,spent:0};p.categoryBudgets[c.id].plan=amount}await commit()}return;}
-    if(e.target.matches('[data-category-spent]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categorySpent);if(c){setCategorySpent(p,c,num(e.target.value));await commit()}return;}
-    if(e.target.matches('[data-food-total-plan]')){const p=ensurePeriod(state,foodPeriodKey);distributeFoodPlan(p,Math.max(0,num(e.target.value)));await commit();return;}
-    if(e.target.matches('[data-week-plan]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekPlan)].plan=Math.max(0,num(e.target.value));await commit();return;}
+    if(e.target.matches('[data-money]')&&!validateMoneyInput(e.target)){e.target.reportValidity();return;}
+    if(e.target.matches('[data-category-plan]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categoryPlan);if(c){const amount=Math.max(0,parseMoney(e.target.value));if(c.kind==='food')distributeFoodPlan(p,amount);else{p.categoryBudgets[c.id]=p.categoryBudgets[c.id]||{plan:0,spent:0};p.categoryBudgets[c.id].plan=amount}await commit()}return;}
+    if(e.target.matches('[data-category-spent]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categorySpent);if(c){setCategorySpent(p,c,parseMoney(e.target.value));await commit()}return;}
+    if(e.target.matches('[data-food-total-plan]')){const p=ensurePeriod(state,foodPeriodKey);distributeFoodPlan(p,Math.max(0,parseMoney(e.target.value)));await commit();return;}
+    if(e.target.matches('[data-week-plan]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekPlan)].plan=Math.max(0,parseMoney(e.target.value));await commit();return;}
     if(e.target.matches('[data-utility-paid]')){const p=ensurePeriod(state,e.target.dataset.utilityPaid);p.passThroughs=p.passThroughs?.length?p.passThroughs:[{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25,amount:120}];p.passThroughs[0].paid=e.target.checked;await commit();return;}
     if(e.target.matches('[data-nav-labels]')){state.settings.navLabels=e.target.checked;await commit();return;}
     if(e.target.matches('[data-nav-item]')){const id=e.target.dataset.navItem;if(['home','month'].includes(id))return;const list=navItems().filter(x=>!['home','month'].includes(x));state.settings.navItems=['home','month',...(e.target.checked?[...list,id]:list.filter(x=>x!==id))];await commit();return;}
   });
-  document.addEventListener('focusin',e=>{if(e.target.matches('input[type="number"]'))e.target.select()});
+  document.addEventListener('input',e=>{if(e.target.matches('[data-money]'))validateMoneyInput(e.target)});
+  document.addEventListener('focusin',e=>{if(e.target.matches('input[type="number"],input[data-money]'))e.target.select()});
 }
 
 async function init(){
   const saved=await loadState();
   const migrated=!!saved&&Number(saved.version)!==VERSION;
   try{state=saved?migrateBackupState(saved):seedState(new Date())}catch{state=seedState(new Date())}
-  normalizeState();
+  const monthlyBalancesMigrated=normalizeState();
   const iconsCentered=await centerStoredIconImages();
-  if(syncAllAutoClosedWeeks()||iconsCentered||migrated)await saveState(state);
+  if(syncAllAutoClosedWeeks()||iconsCentered||migrated||monthlyBalancesMigrated)await saveState(state);
   selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;ensurePeriod(state,selectedPeriodKey);
   committedState=cloneState(state);
   bindStaticEvents();bindDelegatedEvents();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');

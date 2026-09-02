@@ -2,7 +2,18 @@ export const VERSION = 5;
 export const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
 export const uid = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-export const roundMoney = value => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+export const roundMoney = value => {
+  const amount = Number(value || 0), magnitude = Math.abs(amount);
+  const rounded = Math.round((magnitude + magnitude * Number.EPSILON) * 100) / 100;
+  return rounded === 0 ? 0 : amount < 0 ? -rounded : rounded;
+};
+export function parseMoney(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return 0;
+  if (!/^-?(?:\d+(?:[.,]\d{1,2})?|[.,]\d{1,2})$/.test(text)) return NaN;
+  const amount = roundMoney(Number(text.replace(',', '.')));
+  return Number.isSafeInteger(Math.round(amount * 100)) ? amount : NaN;
+}
 export const toISODate = date => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -64,11 +75,12 @@ function foodWeekDays(week) {
 export function distributeFoodPlan(period,total) {
   const weeks = Array.isArray(period?.foodWeeks) ? period.foodWeeks : [];
   if(!weeks.length)return;
-  const amount = Math.max(0,Number(total||0));
+  const amount = Math.max(0,roundMoney(total));
   const totalDays = weeks.reduce((sum,week)=>sum+foodWeekDays(week),0);
   let allocated = 0;
   weeks.forEach((week,index)=>{
-    const plan = index===weeks.length-1 ? roundMoney(amount-allocated) : roundMoney(amount*foodWeekDays(week)/totalDays);
+    const remaining = roundMoney(amount-allocated);
+    const plan = index===weeks.length-1 ? remaining : Math.min(remaining,roundMoney(amount*foodWeekDays(week)/totalDays));
     week.plan=Math.max(0,plan);
     allocated=roundMoney(allocated+week.plan);
   });
@@ -176,7 +188,7 @@ export function seedState(now=new Date()) {
     payments: [],
     savings: [],
     purchases: [],
-    account: {balanceByn:0,transactions:[],migratedAt:toISODate(now)},
+    account: {balanceByn:0,transactions:[],migratedAt:toISODate(now),monthlyBalancesVersion:1},
     pet: {balanceByn:0,avatarImage:'',transactions:[],needs:[]},
     safety: {amountUsd:0,goalUsd:2000,icon:'shield',iconImage:''},
     gifts: {balanceByn:0,transactions:[],plans:[],recipients:['Паше','Маме','Другому']}
@@ -272,15 +284,25 @@ export function periodSpentTotal(state,period){
   return roundMoney(mandatorySpend+categorySpend);
 }
 export function plannedFreeBalance(state,period){
-  return roundMoney(accountBalanceByn(state)-remainingPlannedOutflows(state,period));
+  return roundMoney(accountBalanceAfterSpending(state,period)-remainingPlannedOutflows(state,period));
 }
 export function accountBalanceAfterSpending(state,period){
-  return accountBalanceByn(state);
+  // Income and spending stored in the period already include their ledger entries.
+  // Only add operations absent from those totals, such as account reconciliation
+  // and returns from envelopes. Never use the shared account as a monthly base.
+  const savingsDeposits=new Set(state.savings.filter(t=>t.type==='deposit').map(t=>`savings:${t.id}`));
+  const budgetCategories=new Set(['mandatory:housing','mandatory:payment','mandatory:reserve',...state.categories.map(c=>c.id)]);
+  const otherOperations=(state.account?.transactions||[]).reduce((sum,transaction)=>{
+    if(accountTransactionPeriodKey(state,transaction)!==period.key)return sum;
+    if(transaction.linkedId===`income:${period.key}`||budgetCategories.has(transaction.categoryId)||savingsDeposits.has(transaction.linkedId))return sum;
+    return sum+Number(transaction.deltaByn||0);
+  },0);
+  return roundMoney(Number(period.accountOpeningAdjustmentByn||0)+periodIncome(period)-periodSpentTotal(state,period)+otherOperations);
 }
 export function remainingPlannedOutflows(state,period){
-  const payment=periodPayment(state,period.key),saved=periodSavingsDepositedByn(state,period.key),savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
+  const saved=periodSavingsDepositedByn(state,period.key),savingsPlanByn=Number(period.mandatory.savingsPlanByn??period.mandatory.savingsPlanUsd??0);
   const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
-  const remainingPayment=sections.includes('payment')?Math.max(0,Number(payment.planned||0)-Number(payment.paid||0)):0;
+  const remainingPayment=sections.includes('payment')?state.payments.filter(payment=>payment.periodKey===period.key).reduce((sum,payment)=>sum+Math.max(0,Number(payment.planned||0)-Number(payment.paid||0)),0):0;
   const remainingReserve=sections.includes('reserve')?Math.max(0,Number(period.mandatory.reservePlan||0)-Number(period.mandatory.reserveAllocated||0)):0;
   const remainingMandatory=Math.max(0,Number(period.mandatory.housingPlan||0)-Number(period.mandatory.housingSpent||0))+remainingPayment+remainingReserve+Math.max(0,savingsPlanByn-saved);
   const remainingCategories=state.categories.filter(c=>c.visible).reduce((sum,c)=>{
@@ -308,6 +330,22 @@ function legacyPreviousFreeBalance(state,period,seen=new Set()){
 }
 
 export function accountBalanceByn(state){return roundMoney(Number(state.account?.balanceByn||0))}
+export function accountTransactionPeriodKey(state,transaction){
+  return transaction.periodKey||periodKeyForDate(parseISODate(transaction.date),state.settings.salaryDay);
+}
+export function migrateMonthlyBalances(state){
+  if(state.account.monthlyBalancesVersion===1)return false;
+  // Preserve any unrecorded opening balance from older backups in its original
+  // period only. Subsequent months must not inherit this starting amount.
+  const key=accountTransactionPeriodKey(state,{date:state.account.migratedAt||toISODate(new Date())});
+  const period=ensurePeriod(state,key),transactions=state.account.transactions||[];
+  const totalDelta=roundMoney(transactions.reduce((sum,t)=>sum+Number(t.deltaByn||0),0));
+  const periodDelta=roundMoney(transactions.filter(t=>accountTransactionPeriodKey(state,t)===key).reduce((sum,t)=>sum+Number(t.deltaByn||0),0));
+  const budgetOpening=roundMoney(accountBalanceAfterSpending(state,period)-periodDelta);
+  period.accountOpeningAdjustmentByn=roundMoney(accountBalanceByn(state)-totalDelta-budgetOpening);
+  state.account.monthlyBalancesVersion=1;
+  return true;
+}
 export function migrateLegacyAccount(state,period){
   if(state.account&&Number.isFinite(Number(state.account.balanceByn))){
     state.account.transactions=Array.isArray(state.account.transactions)?state.account.transactions:[];
@@ -341,5 +379,20 @@ export function deleteAccountTransaction(state,id){
   return transaction;
 }
 export function purchaseAvailable(state,cost){return savingsBalanceUsd(state)>=Number(cost||0)}
-export function monthlySavingsRows(state){const map=new Map();for(const t of state.savings){const key=t.date.slice(0,7),row=map.get(key)||{period:key,deposited:0,withdrawn:0,depositedByn:0,withdrawnByn:0,notes:[]};if(t.type==='deposit'){row.deposited+=savingUsdAmount(t);row.depositedByn+=savingAmountByn(state,t)}else{row.withdrawn+=savingUsdAmount(t);row.withdrawnByn+=savingAmountByn(state,t)}if(t.note)row.notes.push(t.note);map.set(key,row)}return[...map.values()].sort((a,b)=>b.period.localeCompare(a.period))}
+export function monthlySavingsRows(state){
+  const map=new Map();
+  for(const t of state.savings){
+    const key=t.date.slice(0,7),row=map.get(key)||{period:key,deposited:0,withdrawn:0,depositedByn:0,withdrawnByn:0,notes:[]};
+    if(t.type==='deposit'){
+      row.deposited=roundMoney(row.deposited+savingUsdAmount(t));
+      row.depositedByn=roundMoney(row.depositedByn+savingAmountByn(state,t));
+    }else{
+      row.withdrawn=roundMoney(row.withdrawn+savingUsdAmount(t));
+      row.withdrawnByn=roundMoney(row.withdrawnByn+savingAmountByn(state,t));
+    }
+    if(t.note)row.notes.push(t.note);
+    map.set(key,row);
+  }
+  return [...map.values()].sort((a,b)=>b.period.localeCompare(a.period));
+}
 export function validateState(v){return !!v&&typeof v==='object'&&v.version===VERSION&&v.settings&&Array.isArray(v.categories)&&v.periods&&Array.isArray(v.payments)&&Array.isArray(v.savings)&&Array.isArray(v.purchases)&&v.account&&v.pet}

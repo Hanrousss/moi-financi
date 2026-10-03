@@ -3,6 +3,7 @@
   "scripts": {
     "build": "node build-bundle.cjs",
     "start": "node server.cjs",
+    "pretest": "node build-bundle.cjs",
     "test": "node --test"
   }
 }

@@ -1,7 +1,7 @@
-const CACHE='moi-dengi-private-v1.0.48';
-const CORE=['./','./index.html','./styles.css?v=1.0.48','./app.bundle.js?v=1.0.48','./app.js','./model.js','./storage.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png','./icons/pet-face.png'];
+const CACHE='moi-dengi-private-v1.0.49';
+const CORE=['./','./index.html','./styles.css?v=1.0.49','./app.bundle.js?v=1.0.49','./app.js','./model.js','./storage.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png','./icons/pet-face.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()))});
-self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()))});
+self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('moi-dengi-private-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()))});
 self.addEventListener('message',event=>{if(event.data?.type==='SKIP_WAITING')self.skipWaiting()});
 self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET')return;
@@ -11,5 +11,13 @@ self.addEventListener('fetch',event=>{
     event.respondWith(fetch(event.request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put('./index.html',copy));return response}).catch(()=>caches.match('./index.html')));
     return;
   }
-  event.respondWith(fetch(event.request).then(response=>{if(response.ok){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy))}return response}).catch(()=>caches.match(event.request)));
+  // Versioned application assets always come from the same installed build.
+  // Mixing a newer HTML page with an older bundle can change calculations.
+  event.respondWith(caches.open(CACHE).then(async cache=>{
+    const cached=await cache.match(event.request);
+    if(cached)return cached;
+    const response=await fetch(event.request);
+    if(response.ok)await cache.put(event.request,response.clone());
+    return response;
+  }));
 });

@@ -2,9 +2,9 @@ import {
   VERSION, MONTHS_RU, uid, roundMoney, parseMoney, formatByn, formatUsd,
   periodKeyForDate, shiftPeriodKey, periodTitle, formatPeriodRange,
   periodStart, periodEnd, currentWeekIndex, daysToNextSalary,
-  seedState, ensurePeriod, foodBudget, distributeFoodPlan, categoryBudget, periodIncome,
+  seedState, createPeriod, ensurePeriod, foodBudget, distributeFoodPlan, categoryBudget, periodIncome,
   periodPayment, savingsBalanceUsd, savingsBalanceByn, petBalanceByn, paymentsPaidTotal, periodPaymentsPaid,
-  debtRemaining, liveFreeBalance,
+  debtRemaining, liveFreeBalance, reconcileFreeBalance, savingsTransactionPeriodKey,
   accountBalanceAfterSpending, accountTransactionPeriodKey, addAccountTransaction, deleteAccountTransaction, migrateLegacyAccount, migrateMonthlyBalances, remainingPlannedOutflows,
   periodSavingsDepositedByn, periodSpentTotal, purchaseAvailable, monthlySavingsRows, validateState, toISODate
 } from './model.js';
@@ -14,7 +14,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.0.48';
+const APP_BUILD='1.0.49';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -146,6 +146,10 @@ function normalizeState(){
   migrateLegacyAccount(state,activePeriod);
   const monthlyBalancesMigrated=migrateMonthlyBalances(state);
   state.account.transactions=Array.isArray(state.account.transactions)?state.account.transactions:[];
+  let savingsPeriodsPinned=false;
+  for(const transaction of state.savings){
+    if(!transaction.periodKey){transaction.periodKey=savingsTransactionPeriodKey(state,transaction);savingsPeriodsPinned=true;}
+  }
   Object.values(state.periods||{}).forEach(period=>{delete period.balanceNow;delete period.balanceSnapshot;});
   state.pet=state.pet||{transactions:[],needs:[]};
   if(!Number.isFinite(Number(state.pet.balanceByn)))state.pet.balanceByn=petBalanceByn(state);
@@ -163,7 +167,7 @@ function normalizeState(){
   state.gifts.recipients=Array.isArray(state.gifts.recipients)&&state.gifts.recipients.length?state.gifts.recipients:['Паше','Маме','Другому'];
   const giftsCategory=state.categories?.find(c=>c.id==='gifts');
   if(giftsCategory)giftsCategory.kind='gift';
-  return monthlyBalancesMigrated;
+  return monthlyBalancesMigrated||savingsPeriodsPinned;
 }
 
 async function centerStoredIconImages(){
@@ -188,17 +192,18 @@ let activeScreen='home';
 let selectedPeriodKey=periodKeyForDate(new Date(),5);
 let foodPeriodKey=selectedPeriodKey;
 let purchaseTab='required';
-let saving=false;
+let saveQueue=Promise.resolve();
 let autoCloseTimer=null;
 let committedState=null;
 let undoState=null;
+let undoing=false;
 
 const cloneState = value => JSON.parse(JSON.stringify(value));
 
 function currentPeriod(){const p=ensurePeriod(state,periodKeyForDate(new Date(),state.settings.salaryDay));syncPeriodAutoClosedWeeks(p);return p;}
 function selectedPeriod(){const p=ensurePeriod(state,selectedPeriodKey);syncPeriodAutoClosedWeeks(p);return p;}
 function categoryById(id){return state.categories.find(c=>c.id===id);}
-function periodSavingsDeposited(key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&periodKeyForDate(new Date(`${t.date}T12:00:00`),state.settings.salaryDay)===key).reduce((s,t)=>s+num(t.amountUsd),0));}
+function periodSavingsDeposited(key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&savingsTransactionPeriodKey(state,t)===key).reduce((s,t)=>s+num(t.amountUsd),0));}
 function foodWeekAutoClosed(week,now=new Date()){
   const [y,m,d]=String(week.end).split('-').map(Number);
   return Number.isFinite(y)&&now>=new Date(y,m-1,d+1);
@@ -235,6 +240,7 @@ function setCategorySpent(period,category,targetSpent){
   const target=Math.max(0,roundMoney(targetSpent)), current=num(categoryBudget(period,category).spent), difference=roundMoney(target-current);
   if(!difference)return null;
   const date=periodOperationDate(period);
+  const foodBefore=category.kind==='food'?period.foodWeeks.map(week=>num(week.spent)):null;
   if(category.kind==='food'){
     if(difference>0){
       const index=currentWeekIndex(period.key,new Date(`${date}T12:00:00`),state.settings.salaryDay),week=period.foodWeeks[index]||period.foodWeeks[0];
@@ -250,28 +256,52 @@ function setCategorySpent(period,category,targetSpent){
     period.categoryBudgets[category.id]=period.categoryBudgets[category.id]||{plan:0,spent:0};
     period.categoryBudgets[category.id].spent=target;
   }
-  return recordAccountDelta(-difference,{type:'expense',date,periodKey:period.key,categoryId:category.id,note:`Корректировка расходов · ${category.name}`});
+  const transaction=recordAccountDelta(-difference,{type:'expense',date,periodKey:period.key,categoryId:category.id,note:`Корректировка расходов · ${category.name}`});
+  if(transaction&&foodBefore)transaction.foodChanges=period.foodWeeks.map((week,index)=>({weekId:week.id,start:week.start,deltaSpent:roundMoney(num(week.spent)-foodBefore[index])})).filter(change=>change.deltaSpent!==0);
+  return transaction;
 }
 function rollbackAccountCategory(transaction){
-  const period=state.periods?.[transaction.periodKey];
-  if(!period||!transaction.categoryId)return;
+  const period=state.periods?.[accountTransactionPeriodKey(state,transaction)];
+  if(!period||!transaction.categoryId)return true;
   const delta=num(transaction.deltaByn);
-  if(transaction.categoryId==='mandatory:housing')period.mandatory.housingSpent=Math.max(0,roundMoney(num(period.mandatory.housingSpent)+delta));
-  else if(transaction.categoryId==='mandatory:reserve')period.mandatory.reserveAllocated=Math.max(0,roundMoney(num(period.mandatory.reserveAllocated)+delta));
-  else if(transaction.categoryId==='mandatory:payment'){const payment=periodPayment(state,period.key);payment.paid=Math.max(0,roundMoney(num(payment.paid)+delta));}
+  const changes=[];
+  const add=(target,key,amount)=>{if(target)changes.push({target,key,value:roundMoney(num(target[key])+amount)});};
+  if(transaction.categoryId==='mandatory:housing')add(period.mandatory,'housingSpent',delta);
+  else if(transaction.categoryId==='mandatory:reserve')add(period.mandatory,'reserveAllocated',delta);
+  else if(transaction.categoryId==='mandatory:payment'){
+    const paymentId=String(transaction.linkedId||'').startsWith('payment:')?transaction.linkedId.slice(8):'';
+    const payment=paymentId?state.payments.find(item=>item.id===paymentId):periodPayment(state,period.key);
+    add(payment,'paid',delta);
+  }
   else if(categoryById(transaction.categoryId)?.kind==='food'){
-    const index=currentWeekIndex(period.key,new Date(`${transaction.date}T12:00:00`),state.settings.salaryDay),week=period.foodWeeks[index]||period.foodWeeks[0];
-    if(week)week.spent=Math.max(0,roundMoney(num(week.spent)+delta));
+    if(transaction.foodChanges){
+      for(const change of transaction.foodChanges){
+        const week=period.foodWeeks.find(w=>w.id===change.weekId)||period.foodWeeks.find(w=>change.start>=w.start&&change.start<=w.end)||period.foodWeeks[0];
+        add(week,'spent',-num(change.deltaSpent));
+      }
+    }else{
+      const index=currentWeekIndex(period.key,new Date(`${transaction.date}T12:00:00`),state.settings.salaryDay),week=period.foodWeeks[index]||period.foodWeeks[0];
+      add(week,'spent',delta);
+    }
   }else{
     period.categoryBudgets[transaction.categoryId]=period.categoryBudgets[transaction.categoryId]||{plan:0,spent:0};
-    period.categoryBudgets[transaction.categoryId].spent=Math.max(0,roundMoney(num(period.categoryBudgets[transaction.categoryId].spent)+delta));
+    add(period.categoryBudgets[transaction.categoryId],'spent',delta);
   }
+  // An older expense can have a later manual reduction that depends on it.
+  // Silently clamping its inverse to zero would make history and totals disagree.
+  if(changes.some(change=>change.value<0)){toast('Сначала удали более позднюю корректировку расходов этой категории или платежа.');return false;}
+  for(const change of changes)change.target[change.key]=change.value;
+  return true;
 }
 function deleteAccountOperation(id){
   const transaction=state.account.transactions.find(item=>item.id===id);
-  if(!transaction)return;
-  rollbackAccountCategory(transaction);
+  if(!transaction)return false;
   const [owner,linkedId]=String(transaction.linkedId||'').split(':');
+  if(owner==='safety'){
+    const item=state.safety.transactions.find(tx=>tx.id===linkedId);
+    if(item?.type==='topup'&&roundMoney(num(state.safety.amountUsd)-num(item.amountUsd))<0){toast('Сначала отмени более поздние траты или возвраты из подушки безопасности.');return false;}
+  }
+  if(!rollbackAccountCategory(transaction))return false;
   if(owner==='savings')state.savings=state.savings.filter(item=>item.id!==linkedId);
   if(owner==='pet'){
     const item=state.pet.transactions.find(tx=>tx.id===linkedId);
@@ -286,13 +316,24 @@ function deleteAccountOperation(id){
   }
   if(owner==='income'){
     const period=state.periods?.[linkedId];
-    if(period&&Number.isFinite(Number(transaction.previousSalary))){period.salary=num(transaction.previousSalary);period.extraIncome=num(transaction.previousExtraIncome);}
+    if(period&&Number.isFinite(Number(transaction.previousSalary))){
+      // Freeze the deltas of all legacy entries before removing any snapshot.
+      // Otherwise a later deletion would derive its delta from an altered total.
+      const entries=state.account.transactions.filter(t=>t.linkedId===transaction.linkedId&&t.previousSalary!=null);
+      entries.forEach((entry,index)=>{
+        const next=entries[index+1];
+        entry.salaryDelta??=roundMoney(num(next?.previousSalary??period.salary)-num(entry.previousSalary));
+        entry.extraIncomeDelta??=roundMoney(num(next?.previousExtraIncome??period.extraIncome)-num(entry.previousExtraIncome));
+      });
+      period.salary=roundMoney(num(period.salary)-transaction.salaryDelta);period.extraIncome=roundMoney(num(period.extraIncome)-transaction.extraIncomeDelta);
+    }
   }
   if(owner==='purchase'){
     const purchase=state.purchases.find(item=>item.id===linkedId);
     if(purchase){purchase.completed=false;delete purchase.completedAt;delete purchase.paidFrom;}
   }
   deleteAccountTransaction(state,id);
+  return true;
 }
 function accountTransactionTitle(transaction){
   if(transaction.note)return transaction.note;
@@ -427,24 +468,29 @@ function sharedSectionIconHtml(id,size=22){
 }
 
 async function commit(render=true,{undoable=true}={}){
-  if(saving)return;
-  if(undoable&&committedState)undoState=cloneState(committedState);
-  saving=true;
-  try{await saveState(state);}finally{saving=false;}
-  committedState=cloneState(state);
-  if(render)renderAll();
+  const snapshot=cloneState(state);
+  const pending=saveQueue.then(async()=>{
+    await saveState(snapshot);
+    if(undoable&&committedState)undoState=cloneState(committedState);
+    committedState=snapshot;
+    if(render)renderAll();
+  });
+  saveQueue=pending.catch(()=>{});
+  try{await pending;}catch(error){toast('Не удалось сохранить изменения. Скачай резервную копию в настройках.');throw error;}
 }
 async function undoLastAction(){
-  if(!undoState){toast('Пока нечего отменять');return;}
-  state=cloneState(undoState);
-  undoState=null;
-  normalizeState();
-  ensurePeriod(state,periodKeyForDate(new Date(),state.settings.salaryDay));
-  saving=true;
-  try{await saveState(state);}finally{saving=false;}
-  committedState=cloneState(state);
-  renderAll();
-  toast('Последнее действие отменено');
+  if(undoing)return;
+  undoing=true;
+  try{
+    await saveQueue;
+    if(!undoState){toast('Пока нечего отменять');return;}
+    state=cloneState(undoState);
+    normalizeState();
+    ensurePeriod(state,periodKeyForDate(new Date(),state.settings.salaryDay));
+    await commit(true,{undoable:false});
+    undoState=null;
+    renderAll();toast('Последнее действие отменено');
+  }finally{undoing=false;}
 }
 function toast(message){const el=$('#toast');el.textContent=message;el.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>{el.hidden=true},2600);}
 
@@ -467,7 +513,7 @@ function closeOverlay(){setScreen('home');}
 function statusClass(value){return value<0?'negative':value===0?'neutral':'positive';}
 function budgetToneClass(plan,available){return available<0?'card-negative':num(plan)>0&&available<=num(plan)*0.2?'card-warning':'';}
 function budgetValueClass(plan,available){return available<0?'negative-number':num(plan)>0&&available<=num(plan)*0.2?'warning-number':'';}
-function editableAccountBalance(){return accountBalanceAfterSpending(state,currentPeriod());}
+function editableAccountBalance(){return liveFreeBalance(state,currentPeriod());}
 function periodSpentDigest(period){
   const rows=[];
   const add=(name,spent)=>{const value=roundMoney(num(spent));if(value>0)rows.push({name,spent:value});};
@@ -480,6 +526,7 @@ function periodSpentDigest(period){
     const budget=categoryBudget(period,category);
     add(category.name,budget.spent);
   });
+  Object.entries(period.categoryBudgets).filter(([id])=>!categoryById(id)).forEach(([,budget])=>add(budget.archivedName||'Удаленная категория',budget.spent));
   rows.sort((a,b)=>b.spent-a.spent);
   const total=roundMoney(rows.reduce((sum,row)=>sum+row.spent,0));
   return rows.length?`Потрачено сейчас: ${formatByn(total)} · ${rows.map(row=>`${row.name} ${formatByn(row.spent)}`).join(' · ')}`:'Потрачено сейчас: 0 BYN · пока без расходов по категориям';
@@ -493,7 +540,7 @@ function renderHome(){
   const account=accountBalanceAfterSpending(state,p), reserved=remainingPlannedOutflows(state,p);
   $('#periodPill').textContent=`${periodTitle(p.key)} · ${formatPeriodRange(p.key,state.settings.salaryDay)}`;
   $('#freeValue').textContent=formatByn(free);
-  $('#freeMeta').textContent=`На счете ${formatByn(account)}${reserved>0?` · Запланировано ${formatByn(reserved)}`:''}`;
+  $('#freeMeta').textContent=`Баланс месяца ${formatByn(account)}${reserved>0?` · Запланировано ${formatByn(reserved)}`:''}`;
   $('#freeCard').className=`hero-card ${dashboardStatus(free)}`;
   $('#weekPlan').textContent=formatByn(weekPlan);
   $('#weekCard span').textContent=`${sectionLabel('food')} · эта неделя`;
@@ -548,7 +595,7 @@ function renderMonth(){
   $('#incomeDetails').textContent=`Зарплата ${formatByn(p.salary)}${p.extraIncome?` · Доп. доход ${formatByn(p.extraIncome)}`:''} · Списано и отложено ${formatByn(spent)}`;
   $('#mandatoryGrid').innerHTML=[
     renderMandatoryCard(mandatoryLabel('housing'),num(p.mandatory.housingPlan),num(p.mandatory.housingSpent),'housing',{locked:true}),
-    sections.includes('payment')?renderMandatoryCard(sectionLabel('payments'),num(payment.planned),num(payment.paid),'payment'):null,
+    sections.includes('payment')?renderMandatoryCard(sectionLabel('payments'),roundMoney(state.payments.filter(item=>item.periodKey===p.key).reduce((sum,item)=>sum+num(item.planned),0)),periodPaymentsPaid(state,p.key),'payment'):null,
     sections.includes('reserve')?renderMandatoryCard(mandatoryLabel('reserve'),num(p.mandatory.reservePlan),num(p.mandatory.reserveAllocated),'reserve'):null,
     ...mandatoryCategories(p).map(c=>renderCategoryCard(c,p,{mandatory:true}))
   ].filter(Boolean).join('')+(addableSections?`<article class="pass-through"><div><b>Добавить в обязательное</b><small>Для ${periodTitle(p.key)} можно вернуть скрытые обязательные пункты.</small></div><div class="settings-actions">${addableSections}</div></article>`:'')+`<article class="pass-through"><label class="check-label"><input type="checkbox" data-utility-paid="${p.key}" ${p.passThroughs?.[0]?.paid?'checked':''}><span>${p.passThroughs?.[0]?.paid?'Оплачено':'Не оплачено'}</span></label><div><b>Коммунальные ${formatByn(p.passThroughs?.[0]?.amount||120)}</b><small>Аванс 25 числа приходит и сразу уходит. Основной доход не уменьшается.</small></div></article>`;
@@ -650,7 +697,7 @@ function renderNav(){
 }
 function renderAll(){applyAppearance();renderNav();renderHome();renderMonth();renderSavings();renderPet();renderGifts();renderPurchases();renderFood();renderPayments();renderSettings();}
 
-function moneyInputAttributes(min){
+function moneyInputAttributes(min=0){
   return `type="text" inputmode="decimal" data-money ${min!=null?`data-money-min="${min}"`:''}`;
 }
 function validateMoneyInput(input){
@@ -675,7 +722,7 @@ function fieldHtml(field){
   }
   return `<label class="form-field"><span>${esc(field.label)}</span><input ${common} type="${field.type||'text'}" value="${esc(value)}" placeholder="${esc(field.placeholder||'')}" ${field.min!=null?`min="${field.min}"`:''} ${field.step!=null?`step="${field.step}"`:''} ${field.inputmode?`inputmode="${field.inputmode}"`:''}>${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
 }
-let modalSubmitHandler=null, modalExtraHandler=null;
+let modalSubmitHandler=null, modalExtraHandler=null, modalSubmitting=false;
 function openModal(title,fields,onSubmit,{submitLabel='Сохранить',extraAction=null}={}){
   $('#modalTitle').textContent=title;$('#modalBody').innerHTML=fields.map(fieldHtml).join('')+(extraAction?`<button type="button" id="modalExtra" class="danger-button">${esc(extraAction.label)}</button>`:'');$('#modalSubmit').textContent=submitLabel;$('#modalBackdrop').hidden=false;document.body.classList.add('modal-open');modalSubmitHandler=onSubmit;modalExtraHandler=extraAction?.handler||null;setTimeout(()=>$('#modalBody input:not([type="checkbox"]), #modalBody select')?.focus(),40);}
 function closeModal(){$('#modalBackdrop').hidden=true;document.body.classList.remove('modal-open');modalSubmitHandler=null;modalExtraHandler=null;}
@@ -707,7 +754,7 @@ function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0
   {name:'reservePlan',label:`${mandatoryLabel('reserve')} — план, BYN`,type:'money',value:p.mandatory.reservePlan},
   {name:'reserveAllocated',label:`${mandatoryLabel('reserve')} — уже отложено, BYN`,type:'money',value:p.mandatory.reserveAllocated},
   {name:'savingsUsd',label:`${sectionLabel('savings')} — план, $`,type:'money',value:p.mandatory.savingsPlanUsd},
-  {name:'savingsByn',label:`${sectionLabel('savings')} — план, BYN`,type:'money',value:p.mandatory.savingsPlanByn??p.mandatory.savingsPlanUsd??0},
+  {name:'savingsByn',label:`${sectionLabel('savings')} — план, BYN`,type:'money',value:p.mandatory.savingsPlanByn??0,help:'Из свободного остатка резервируется только план в BYN. USD — отдельная цель.'},
   {name:'utilities',label:'Коммунальные из аванса, BYN',type:'money',value:utility.amount},
   {name:'utilitiesPaid',label:'Коммунальные оплачены',type:'checkbox',value:!!utility.paid},
   {name:'note',label:'Комментарий',type:'textarea',value:p.note}
@@ -716,12 +763,19 @@ function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0
   p.salary=num(v.salary);p.extraIncome=num(v.extra);p.cashNow=num(v.cash);p.mandatory.housingPlan=num(v.housingPlan);p.mandatory.housingSpent=num(v.housingSpent);p.mandatory.reservePlan=num(v.reservePlan);p.mandatory.reserveAllocated=num(v.reserveAllocated);p.mandatory.savingsPlanUsd=num(v.savingsUsd);p.mandatory.savingsPlanByn=num(v.savingsByn);p.passThroughs=[{...(p.passThroughs?.[0]||{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25}),amount:num(v.utilities),paid:v.utilitiesPaid,note:'Аванс приходит и сразу уходит'}];p.note=v.note;
   const operationDate=toISODate(periodStart(p.key,state.settings.salaryDay));
   const incomeTransaction=recordAccountDelta(periodIncome(p)-oldIncome,{type:'income',date:operationDate,periodKey:p.key,note:`Доход · ${periodTitle(p.key)}`,linkedId:`income:${p.key}`});
-  if(incomeTransaction){incomeTransaction.previousSalary=oldSalary;incomeTransaction.previousExtraIncome=oldExtraIncome;}
+  if(incomeTransaction){incomeTransaction.previousSalary=oldSalary;incomeTransaction.previousExtraIncome=oldExtraIncome;incomeTransaction.salaryDelta=roundMoney(p.salary-oldSalary);incomeTransaction.extraIncomeDelta=roundMoney(p.extraIncome-oldExtraIncome);}
   recordAccountDelta(-(num(p.mandatory.housingSpent)-oldHousing),{type:'expense',date:todayISO(),periodKey:p.key,categoryId:'mandatory:housing',note:mandatoryLabel('housing')});
   recordAccountDelta(-(num(p.mandatory.reserveAllocated)-oldReserve),{type:'transfer_out',date:todayISO(),periodKey:p.key,categoryId:'mandatory:reserve',note:mandatoryLabel('reserve')});
   await commit();closeModal();
 });}
-function openBalanceEditor(){const p=currentPeriod();openModal('Осталось на счету',[{name:'balance',label:'Осталось на счету, BYN',type:'money',required:true,value:editableAccountBalance(),help:'Приложение создаст видимую корректировку на разницу с текущим счетом.'},{name:'cash',label:'Отдельно отложено / наличные, BYN',type:'money',value:p.cashNow},{name:'note',label:'Комментарий',value:'Сверка с банковским счетом'}],async v=>{const target=num(v.balance),delta=roundMoney(target-editableAccountBalance());p.cashNow=num(v.cash);recordAccountDelta(delta,{type:'adjustment',date:todayISO(),periodKey:p.key,note:v.note.trim()||'Корректировка счета'});await commit();closeModal();});}
+function openBalanceEditor(){
+  const p=currentPeriod();
+  openModal('Свободный остаток',[
+    {name:'balance',label:'Свободный остаток, BYN',type:'money',min:null,required:true,value:editableAccountBalance(),help:'Это сумма после оставшихся планов. На главной появится именно введенное число; приложение запишет корректировку на разницу.'},
+    {name:'cash',label:'Отдельно отложено / наличные, BYN',type:'money',value:p.cashNow},
+    {name:'note',label:'Комментарий',value:'Сверка свободного остатка'}
+  ],async v=>{syncPeriodAutoClosedWeeks(p);p.cashNow=num(v.cash);reconcileFreeBalance(state,p,v.balance,{date:todayISO(),note:v.note.trim()||'Корректировка свободного остатка'});await commit();closeModal();});
+}
 function quickExpenseModal(){
   const categories=[...state.categories].sort((a,b)=>a.order-b.order);
   if(!categories.length){toast('Сначала добавь категорию');return;}
@@ -734,9 +788,12 @@ function quickExpenseModal(){
     if(amount<=0){toast('Введи сумму расхода');return;}
     if(!category){toast('Выбери категорию');return;}
     const period=currentPeriod();
-    if(category.kind==='pet'){
+    if(category.kind==='pet'||category.kind==='gift'){
+      if(category.kind==='gift')state.gifts.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),note:'Быстрый расход'});
+      else{
       state.pet.balanceByn=roundMoney(petBalanceByn(state)-amount);
       state.pet.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),note:'Быстрый расход'});
+      }
       await commit();closeModal();toast(`${formatByn(amount)} · ${category.name}`);return;
     }
     if(category.kind==='food'){
@@ -748,13 +805,14 @@ function quickExpenseModal(){
       period.categoryBudgets[category.id]=period.categoryBudgets[category.id]||{plan:0,spent:0};
       period.categoryBudgets[category.id].spent=roundMoney(num(period.categoryBudgets[category.id].spent)+amount);
     }
-    recordAccountDelta(-amount,{type:'expense',date:todayISO(),periodKey:period.key,categoryId:category.id,note:category.name});
+    const transaction=recordAccountDelta(-amount,{type:'expense',date:todayISO(),periodKey:period.key,categoryId:category.id,note:category.name});
+    if(category.kind==='food'&&transaction){const week=period.foodWeeks[currentWeekIndex(period.key,new Date(),state.settings.salaryDay)]||period.foodWeeks[0];transaction.foodChanges=[{weekId:week.id,start:week.start,deltaSpent:amount}];}
     await commit();
     closeModal();
     toast(`${formatByn(amount)} · ${category.name}`);
   },{submitLabel:'Учесть расход'});
 }
-function openMandatoryEditor(kind){const p=selectedPeriod(), pay=periodPayment(state,p.key);const config={housing:{title:mandatoryLabel('housing'),plan:p.mandatory.housingPlan,spent:p.mandatory.housingSpent},payment:{title:sectionLabel('payments'),plan:pay.planned,spent:pay.paid},reserve:{title:mandatoryLabel('reserve'),plan:p.mandatory.reservePlan,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'name',label:'Название',value:config.title},{name:'plan',label:'План, BYN',type:'money',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'money',value:config.spent}],async v=>{const oldSpent=num(config.spent);if(kind==='payment')setSectionLabel('payments',v.name);else setMandatoryLabel(kind,v.name);if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}const newSpent=kind==='housing'?num(p.mandatory.housingSpent):kind==='payment'?num(pay.paid):num(p.mandatory.reserveAllocated);recordAccountDelta(-(newSpent-oldSpent),{type:kind==='reserve'?'transfer_out':'expense',date:todayISO(),periodKey:p.key,categoryId:`mandatory:${kind}`,note:v.name.trim()||config.title});await commit();closeModal();});}
+function openMandatoryEditor(kind){const p=selectedPeriod();if(kind==='payment'&&state.payments.filter(item=>item.periodKey===p.key).length>1){openOverlay('payments');return;}const pay=periodPayment(state,p.key);const config={housing:{title:mandatoryLabel('housing'),plan:p.mandatory.housingPlan,spent:p.mandatory.housingSpent},payment:{title:sectionLabel('payments'),plan:pay.planned,spent:pay.paid},reserve:{title:mandatoryLabel('reserve'),plan:p.mandatory.reservePlan,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'name',label:'Название',value:config.title},{name:'plan',label:'План, BYN',type:'money',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'money',value:config.spent}],async v=>{const oldSpent=num(config.spent);if(kind==='payment')setSectionLabel('payments',v.name);else setMandatoryLabel(kind,v.name);if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}const newSpent=kind==='housing'?num(p.mandatory.housingSpent):kind==='payment'?num(pay.paid):num(p.mandatory.reserveAllocated);recordAccountDelta(-(newSpent-oldSpent),{type:kind==='reserve'?'transfer_out':'expense',date:todayISO(),periodKey:p.key,categoryId:`mandatory:${kind}`,linkedId:kind==='payment'?`payment:${pay.id}`:'',note:v.name.trim()||config.title});await commit();closeModal();});}
 
 const iconOptions=['wallet','home','calendar','piggy','paw','bag','money','utensils','dumbbell','sparkles','heart','shirt','gift','ticket','palette','shield'].map(i=>({label:i,value:i}));
 const colorOptions=[
@@ -801,35 +859,71 @@ function openCategoryEditor(id){
   },{extraAction:deletable?{label:'Удалить категорию',handler:async()=>{
     if(!confirm(`Удалить «${c.name}»?`))return;
     state.categories=state.categories.filter(x=>x.id!==id);
-    Object.values(state.periods).forEach(period=>{delete period.categoryBudgets[id];if(period.mandatory?.categoryIds)period.mandatory.categoryIds=period.mandatory.categoryIds.filter(x=>x!==id);});
+    Object.values(state.periods).forEach(period=>{if(period.categoryBudgets[id]){period.categoryBudgets[id].plan=0;period.categoryBudgets[id].archivedName=c.name;}if(period.mandatory?.categoryIds)period.mandatory.categoryIds=period.mandatory.categoryIds.filter(x=>x!==id);});
     await commit();closeModal();
   }}:null});
 }
 function openNewCategory(){openModal('Новая категория',[{name:'name',label:'Название',required:true},{name:'plan',label:'Лимит текущего месяца, BYN',type:'money',value:0},{name:'icon',label:'Иконка',type:'select',value:'wallet',options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,help:'Можно загрузить свою картинку и вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:'#C8E4E8',options:colorOptions}],async v=>{const id=`category-${uid()}`;const order=Math.max(0,...state.categories.map(c=>c.order))+1;state.categories.push({id,name:v.name.trim()||'Новая категория',icon:v.icon,iconImage:v.iconImage?await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage')):'',color:v.color,kind:'monthly',order,visible:true});Object.values(state.periods).forEach(period=>{period.categoryBudgets[id]={plan:period.key===selectedPeriodKey?num(v.plan):0,spent:0}});await commit();closeModal();});}
 
-function savingsModal(type){openModal(type==='deposit'?'Перевести в накопления':'Вернуть из накоплений',[{name:'currency',label:'Валюта накоплений',type:'select',value:'usd',options:[{value:'usd',label:'USD'},{value:'byn',label:'BYN'}]},{name:'amount',label:'Сумма в выбранной валюте',type:'money',min:0,required:true},{name:'accountByn',label:type==='deposit'?'Списать с обычного счета, BYN':'Вернуть на обычный счет, BYN',type:'money',min:0,help:'Для BYN приложение возьмет ту же сумму. Для USD укажи реальную сумму обмена в BYN.'},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const currency=v.currency==='byn'?'byn':'usd', amount=num(v.amount), accountAmount=currency==='byn'?amount:num(v.accountByn);if(amount<=0){toast('Введи сумму');return;}if(accountAmount<=0){toast('Введи изменение обычного счета в BYN');return;}const date=v.date||todayISO(), note=v.note.trim()||`${type==='deposit'?'В накопления':'Из накоплений'} ${currency.toUpperCase()}`;const transaction={id:uid(),type,currency,amountUsd:currency==='usd'?amount:0,amountByn:currency==='byn'?amount:0,accountAmountByn:accountAmount,exchangeRate:currency==='usd'?roundMoney(accountAmount/amount):1,date,note};const accountTransaction=recordAccountDelta(type==='deposit'?-accountAmount:accountAmount,{type:type==='deposit'?'transfer_out':'transfer_in',date,note,linkedId:`savings:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';state.savings.push(transaction);await commit();closeModal();});}
-function safetyModal(){openModal('Подушка безопасности',[{name:'amount',label:'Сумма в сейфе, USD',type:'money',min:0,value:state.safety.amountUsd},{name:'accountByn',label:'Изменение обычного счета, BYN',type:'money',min:0,help:'Если сумма сейфа меняется, укажи сколько BYN реально ушло со счета или вернулось на него.'},{name:'goal',label:'Цель, USD',type:'money',min:1,value:state.safety.goalUsd||2000},{name:'icon',label:'Иконка',type:'select',value:state.safety.icon||'shield',options:iconOptions},{name:'iconImage',label:'Своя иконка сейфа',type:'file',crop:true,preview:state.safety.iconImage||'',help:'Картинка будет обрезана в квадрат без потери прозрачности, кроп можно настроить вручную.'}],async v=>{const oldAmount=num(state.safety.amountUsd),newAmount=num(v.amount),difference=roundMoney(newAmount-oldAmount),accountAmount=num(v.accountByn);if(difference!==0&&accountAmount<=0){toast('Введи изменение обычного счета в BYN');return;}state.safety.amountUsd=newAmount;state.safety.goalUsd=num(v.goal)||2000;state.safety.icon=v.icon||'shield';if(v.iconImage)state.safety.iconImage=await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage'));if(difference!==0){const transaction={id:uid(),type:difference>0?'topup':'spend',amountUsd:Math.abs(difference),accountAmountByn:accountAmount,date:todayISO(),note:'Подушка безопасности'};const accountTransaction=recordAccountDelta(difference>0?-accountAmount:accountAmount,{type:difference>0?'transfer_out':'transfer_in',date:transaction.date,note:transaction.note,linkedId:`safety:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';state.safety.transactions.push(transaction)}await commit();closeModal();},{extraAction:state.safety.iconImage?{label:'Сбросить свою иконку',handler:async()=>{state.safety.iconImage='';await commit();closeModal();}}:null});}
+function savingsModal(type){openModal(type==='deposit'?'Перевести в накопления':'Вернуть из накоплений',[{name:'currency',label:'Валюта накоплений',type:'select',value:'usd',options:[{value:'usd',label:'USD'},{value:'byn',label:'BYN'}]},{name:'amount',label:'Сумма в выбранной валюте',type:'money',min:0,required:true},{name:'accountByn',label:type==='deposit'?'Списать с обычного счета, BYN':'Вернуть на обычный счет, BYN',type:'money',min:0,help:'Для BYN приложение возьмет ту же сумму. Для USD укажи реальную сумму обмена в BYN.'},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const currency=v.currency==='byn'?'byn':'usd', amount=num(v.amount), accountAmount=currency==='byn'?amount:num(v.accountByn);if(amount<=0){toast('Введи сумму');return;}if(accountAmount<=0){toast('Введи изменение обычного счета в BYN');return;}const date=v.date||todayISO(), note=v.note.trim()||`${type==='deposit'?'В накопления':'Из накоплений'} ${currency.toUpperCase()}`;const transaction={id:uid(),type,currency,amountUsd:currency==='usd'?amount:0,amountByn:currency==='byn'?amount:0,accountAmountByn:accountAmount,exchangeRate:currency==='usd'?roundMoney(accountAmount/amount):1,date,note,periodKey:accountPeriodKey(date)};const accountTransaction=recordAccountDelta(type==='deposit'?-accountAmount:accountAmount,{type:type==='deposit'?'transfer_out':'transfer_in',date,periodKey:transaction.periodKey,note,linkedId:`savings:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';state.savings.push(transaction);await commit();closeModal();});}
+function safetyModal(){openModal('Подушка безопасности',[
+  {name:'amount',label:'Сумма в сейфе, USD',type:'money',min:0,value:state.safety.amountUsd},
+  {name:'accountByn',label:'Изменение обычного счета, BYN',type:'money',min:0,help:'Укажи реальные BYN перевода. Пополнение автоматически учтется в отложенном резерве этого месяца.'},
+  {name:'goal',label:'Цель, USD',type:'money',min:1,value:state.safety.goalUsd||2000},
+  {name:'icon',label:'Иконка',type:'select',value:state.safety.icon||'shield',options:iconOptions},
+  {name:'iconImage',label:'Своя иконка сейфа',type:'file',crop:true,preview:state.safety.iconImage||'',help:'Картинка будет обрезана в квадрат без потери прозрачности, кроп можно настроить вручную.'}
+],async v=>{
+  const oldAmount=num(state.safety.amountUsd),newAmount=num(v.amount),difference=roundMoney(newAmount-oldAmount),accountAmount=num(v.accountByn);
+  if(difference!==0&&accountAmount<=0){toast('Введи изменение обычного счета в BYN');return;}
+  state.safety.amountUsd=newAmount;state.safety.goalUsd=num(v.goal)||2000;state.safety.icon=v.icon||'shield';
+  if(v.iconImage)state.safety.iconImage=await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage'));
+  if(difference!==0){
+    const transaction={id:uid(),type:difference>0?'topup':'spend',amountUsd:Math.abs(difference),accountAmountByn:accountAmount,date:todayISO(),note:'Подушка безопасности'};
+    const key=accountPeriodKey(transaction.date),period=ensurePeriod(state,key);
+    if(difference>0)period.mandatory.reserveAllocated=roundMoney(num(period.mandatory.reserveAllocated)+accountAmount);
+    const accountTransaction=recordAccountDelta(difference>0?-accountAmount:accountAmount,{type:difference>0?'transfer_out':'transfer_in',date:transaction.date,periodKey:key,categoryId:difference>0?'mandatory:reserve':'',note:transaction.note,linkedId:`safety:${transaction.id}`});
+    transaction.accountTransactionId=accountTransaction?.id||'';state.safety.transactions.push(transaction);
+  }
+  await commit();closeModal();
+},{extraAction:state.safety.iconImage?{label:'Сбросить свою иконку',handler:async()=>{state.safety.iconImage='';await commit();closeModal();}}:null});}
 function exchangeSavingsBynModal(){
   const byn=savingsBalanceByn(state);
   if(byn<=0)return;
   openModal('Обмен BYN в USD',[{name:'usd',label:'Сколько USD куплено',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:'Обмен накоплений BYN в USD'}],async v=>{
     const usd=num(v.usd), date=v.date||todayISO(), note=v.note.trim()||'Обмен накоплений BYN в USD';
     if(usd<=0){toast('Введи сумму USD');return;}
-    const exchangeRate=roundMoney(byn/usd);
-    state.savings.push({id:uid(),type:'withdraw',currency:'byn',amountUsd:0,amountByn:byn,exchangeRate,date,note});
-    state.savings.push({id:uid(),type:'deposit',currency:'usd',amountUsd:usd,amountByn:0,exchangeRate,date,note});
+    const exchangeRate=byn/usd, exchangeId=uid(), periodKey=accountPeriodKey(date);
+    state.savings.push({id:uid(),type:'withdraw',currency:'byn',amountUsd:0,amountByn:byn,accountAmountByn:0,exchangeRate,exchangeId,periodKey,date,note});
+    state.savings.push({id:uid(),type:'deposit',currency:'usd',amountUsd:usd,amountByn:0,accountAmountByn:0,exchangeRate,exchangeId,periodKey,date,note});
     await commit();closeModal();toast('BYN обменяны в USD');
   });
 }
+function deleteSavingsOperation(id){
+  const transaction=state.savings.find(t=>t.id===id);
+  if(!transaction)return;
+  if(transaction.purchaseId){const purchase=state.purchases.find(item=>item.id===transaction.purchaseId);if(purchase){purchase.completed=false;delete purchase.completedAt;delete purchase.paidFrom;}}
+  if(transaction.accountTransactionId)deleteAccountOperation(transaction.accountTransactionId);
+  else state.savings=state.savings.filter(t=>transaction.exchangeId?t.exchangeId!==transaction.exchangeId:t.id!==id);
+}
 function petTransactionModal(type){openModal(type==='topup'?'Перевести питомцу':'Потратить из баланса питомца',[{name:'amount',label:'Сумма, BYN',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const tx={id:uid(),type,amountByn:amount,date,note:v.note.trim()};state.pet.balanceByn=roundMoney(petBalanceByn(state)+(type==='topup'?amount:-amount));if(type==='topup'){const key=accountPeriodKey(date),p=ensurePeriod(state,key);p.categoryBudgets.pet=p.categoryBudgets.pet||{plan:0,spent:0};p.categoryBudgets.pet.spent=roundMoney(num(p.categoryBudgets.pet.spent)+amount);tx.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'pet',note:tx.note||sectionLabel('pet'),linkedId:`pet:${tx.id}`});tx.accountTransactionId=accountTransaction?.id||'';}state.pet.transactions.push(tx);await commit();closeModal();});}
-function needModal(item=null){openModal(item?'План питомца':'Добавить для питомца',[{name:'name',label:'Что нужно',value:item?.name||'',required:true},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'due',label:'Срок',type:'date',value:item?.dueDate||''},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){item.name=v.name;item.costByn=num(v.cost);item.dueDate=v.due;item.note=v.note}else state.pet.needs.push({id:uid(),name:v.name,costByn:num(v.cost),dueDate:v.due,note:v.note,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{state.pet.needs=state.pet.needs.filter(n=>n.id!==item.id);await commit();closeModal();}}:null});}
+function rollbackCompletedNeed(item){
+  const transactions=state.pet.transactions.filter(t=>t.needId===item.id);
+  state.pet.balanceByn=roundMoney(petBalanceByn(state)+transactions.reduce((sum,t)=>sum+num(t.amountByn),0));
+  state.pet.transactions=state.pet.transactions.filter(t=>t.needId!==item.id);
+  item.completed=false;
+}
+function needModal(item=null){openModal(item?'План питомца':'Добавить для питомца',[{name:'name',label:'Что нужно',value:item?.name||'',required:true},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'due',label:'Срок',type:'date',value:item?.dueDate||''},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){if(item.completed&&num(v.cost)!==num(item.costByn))rollbackCompletedNeed(item);item.name=v.name;item.costByn=num(v.cost);item.dueDate=v.due;item.note=v.note}else state.pet.needs.push({id:uid(),name:v.name,costByn:num(v.cost),dueDate:v.due,note:v.note,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{rollbackCompletedNeed(item);state.pet.needs=state.pet.needs.filter(n=>n.id!==item.id);await commit();closeModal();}}:null});}
 function giftTransactionModal(type){openModal(type==='topup'?'Перевести в конверт подарков':'Потратить из конверта подарков',[{name:'amount',label:'Сумма, BYN',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const transaction={id:uid(),type,amountByn:amount,date,note:v.note.trim()};if(type==='topup'){const key=accountPeriodKey(date),period=ensurePeriod(state,key);period.categoryBudgets.gifts=period.categoryBudgets.gifts||{plan:0,spent:0};period.categoryBudgets.gifts.spent=roundMoney(num(period.categoryBudgets.gifts.spent)+amount);transaction.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'gifts',note:transaction.note||'Конверт подарков',linkedId:`gifts:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';}state.gifts.transactions.push(transaction);await commit();closeModal();});}
-function giftModal(item=null){const recipients=[...new Set([...(state.gifts.recipients||[]),'Паше','Маме','Другому'])];openModal(item?'Подарок':'Новый подарок',[{name:'name',label:'Название',value:item?.name||'',required:true},{name:'recipient',label:'Кому',type:'select',value:item?.recipient||recipients[0],options:recipients.map(r=>({value:r,label:r}))},{name:'recipientCustom',label:'Другой получатель',value:'',help:'Заполни, если нужно добавить новый пресет.'},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'color',label:'Цвет карточки',type:'palette',value:item?.color||'#FBC9AE',options:colorOptions},{name:'link',label:'Ссылка',value:item?.link||''},{name:'image',label:'Изображение',type:'file',preview:item?.imageDataUrl||'',help:'Можно прикрепить фото или скрин подарка.'},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const recipient=(v.recipientCustom||'').trim()||v.recipient;if(!state.gifts.recipients.includes(recipient))state.gifts.recipients.push(recipient);const imageDataUrl=v.image?await imageToDataUrl(v.image):item?.imageDataUrl||'';if(item){item.name=v.name;item.recipient=recipient;item.costByn=num(v.cost);item.color=v.color;item.link=v.link;item.note=v.note;item.imageDataUrl=imageDataUrl}else state.gifts.plans.push({id:uid(),name:v.name,recipient,costByn:num(v.cost),color:v.color,link:v.link,note:v.note,imageDataUrl,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить подарок',handler:async()=>{state.gifts.plans=state.gifts.plans.filter(g=>g.id!==item.id);await commit();closeModal();}}:null});}
+function rollbackCompletedGift(item){
+  state.gifts.transactions=state.gifts.transactions.filter(t=>t.giftPlanId!==item.id);
+  item.completed=false;
+}
+function giftModal(item=null){const recipients=[...new Set([...(state.gifts.recipients||[]),'Паше','Маме','Другому'])];openModal(item?'Подарок':'Новый подарок',[{name:'name',label:'Название',value:item?.name||'',required:true},{name:'recipient',label:'Кому',type:'select',value:item?.recipient||recipients[0],options:recipients.map(r=>({value:r,label:r}))},{name:'recipientCustom',label:'Другой получатель',value:'',help:'Заполни, если нужно добавить новый пресет.'},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'color',label:'Цвет карточки',type:'palette',value:item?.color||'#FBC9AE',options:colorOptions},{name:'link',label:'Ссылка',value:item?.link||''},{name:'image',label:'Изображение',type:'file',preview:item?.imageDataUrl||'',help:'Можно прикрепить фото или скрин подарка.'},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const recipient=(v.recipientCustom||'').trim()||v.recipient;if(!state.gifts.recipients.includes(recipient))state.gifts.recipients.push(recipient);const imageDataUrl=v.image?await imageToDataUrl(v.image):item?.imageDataUrl||'';if(item){if(item.completed&&num(v.cost)!==num(item.costByn))rollbackCompletedGift(item);item.name=v.name;item.recipient=recipient;item.costByn=num(v.cost);item.color=v.color;item.link=v.link;item.note=v.note;item.imageDataUrl=imageDataUrl}else state.gifts.plans.push({id:uid(),name:v.name,recipient,costByn:num(v.cost),color:v.color,link:v.link,note:v.note,imageDataUrl,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить подарок',handler:async()=>{rollbackCompletedGift(item);state.gifts.plans=state.gifts.plans.filter(g=>g.id!==item.id);await commit();closeModal();}}:null});}
 function rollbackCompletedPurchase(item){
   if(!item?.completed)return;
   if(item.paidFrom==='account'){
     const accountIds=state.account.transactions.filter(transaction=>transaction.linkedId===`purchase:${item.id}`).map(transaction=>transaction.id);
-    for(const id of accountIds)deleteAccountOperation(id);
+    for(const id of accountIds.reverse())if(!deleteAccountOperation(id))return false;
   }else if(item.paidFrom==='savings'){
     state.savings=state.savings.filter(transaction=>transaction.purchaseId!==item.id);
   }else if(item.paidFrom==='safety'){
@@ -849,11 +943,11 @@ function purchaseModal(item=null){
   ],async v=>{
     const imageDataUrl=v.image?await imageToDataUrl(v.image):item?.imageDataUrl||'';
     if(item){
-      if(item.completed&&num(v.cost)!==purchaseCostUsd(item))rollbackCompletedPurchase(item);
+      if(item.completed&&num(v.cost)!==purchaseCostUsd(item)&&rollbackCompletedPurchase(item)===false)return;
       item.name=v.name;item.priority=v.priority;item.costUsd=num(v.cost);delete item.costByn;item.note=v.note;item.imageDataUrl=imageDataUrl;
     }else state.purchases.push({id:uid(),name:v.name,priority:v.priority,costUsd:num(v.cost),note:v.note,imageDataUrl,completed:false});
     purchaseTab=v.priority;await commit();closeModal();
-  },{extraAction:item?{label:'Удалить',handler:async()=>{rollbackCompletedPurchase(item);state.purchases=state.purchases.filter(p=>p.id!==item.id);await commit();closeModal();}}:null});
+  },{extraAction:item?{label:'Удалить',handler:async()=>{if(rollbackCompletedPurchase(item)===false)return;state.purchases=state.purchases.filter(p=>p.id!==item.id);await commit();closeModal();}}:null});
 }
 function completePurchaseModal(item){
   const categories=visibleCategories();
@@ -883,12 +977,34 @@ function completePurchaseModal(item){
         period.categoryBudgets[category.id]=period.categoryBudgets[category.id]||{plan:0,spent:0};
         period.categoryBudgets[category.id].spent=roundMoney(num(period.categoryBudgets[category.id].spent)+amount);
       }
-      recordAccountDelta(-amount,{type:'expense',date,periodKey:period.key,categoryId:category.id,note:`Покупка: ${item.name}`,linkedId:`purchase:${item.id}`});
+      const transaction=recordAccountDelta(-amount,{type:'expense',date,periodKey:period.key,categoryId:category.id,note:`Покупка: ${item.name}`,linkedId:`purchase:${item.id}`});
+      if(category.kind==='food'&&transaction){const week=period.foodWeeks[currentWeekIndex(period.key,new Date(`${date}T12:00:00`),state.settings.salaryDay)]||period.foodWeeks[0];transaction.foodChanges=[{weekId:week.id,start:week.start,deltaSpent:amount}];}
     }
     item.completed=true;item.completedAt=date;item.paidFrom=v.source;await commit();closeModal();
   },{submitLabel:'Подтвердить покупку'});
 }
-function paymentModal(item=null){openModal(item?'Платеж':'Новый платеж',[{name:'title',label:'Название',value:item?.title||''},{name:'period',label:'Месяц',type:'month',value:item?.periodKey||selectedPeriodKey},{name:'planned',label:'План, BYN',type:'money',value:item?.planned||0},{name:'paid',label:'Оплачено, BYN',type:'money',value:item?.paid||0},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const target=item||{id:uid(),title:'',periodKey:v.period,planned:0,paid:0,note:''},oldPaid=num(target.paid);target.title=v.title.trim();target.periodKey=v.period;target.planned=num(v.planned);target.paid=num(v.paid);target.note=v.note;if(!item)state.payments.push(target);recordAccountDelta(-(target.paid-oldPaid),{type:'expense',date:todayISO(),periodKey:target.periodKey,categoryId:'mandatory:payment',note:target.title||sectionLabel('payments'),linkedId:`payment:${target.id}`});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{const accountIds=state.account.transactions.filter(transaction=>transaction.linkedId===`payment:${item.id}`).map(transaction=>transaction.id);for(const id of accountIds)deleteAccountOperation(id);state.payments=state.payments.filter(p=>p.id!==item.id);await commit();closeModal();}}:null});}
+function paymentModal(item=null){
+  openModal(item?'Платеж':'Новый платеж',[
+    {name:'title',label:'Название',value:item?.title||''},
+    {name:'period',label:'Месяц',type:'month',required:true,value:item?.periodKey||selectedPeriodKey},
+    {name:'planned',label:'План, BYN',type:'money',value:item?.planned||0},
+    {name:'paid',label:'Оплачено, BYN',type:'money',value:item?.paid||0},
+    {name:'note',label:'Комментарий',value:item?.note||''}
+  ],async v=>{
+    const target=item||{id:uid(),title:'',periodKey:v.period,planned:0,paid:0,note:''},oldPaid=num(target.paid);
+    if(target.periodKey!==v.period){
+      state.account.transactions.filter(t=>t.linkedId===`payment:${target.id}`).forEach(t=>{t.periodKey=v.period;});
+    }
+    target.title=v.title.trim();target.periodKey=v.period;target.planned=num(v.planned);target.paid=num(v.paid);target.note=v.note;
+    if(!item)state.payments.push(target);
+    recordAccountDelta(-(target.paid-oldPaid),{type:'expense',date:todayISO(),periodKey:target.periodKey,categoryId:'mandatory:payment',note:target.title||sectionLabel('payments'),linkedId:`payment:${target.id}`});
+    await commit();closeModal();
+  },{extraAction:item?{label:'Удалить',handler:async()=>{
+    const accountIds=state.account.transactions.filter(transaction=>transaction.linkedId===`payment:${item.id}`).map(transaction=>transaction.id);
+    for(const id of accountIds.reverse())if(!deleteAccountOperation(id))return;
+    state.payments=state.payments.filter(p=>p.id!==item.id);await commit();closeModal();
+  }}:null});
+}
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appearanceModal(){const a=appearanceSettings();openModal('Внешний вид',[{name:'primary',label:'Основной цвет',type:'palette',value:a.primary||'#9FAF64',options:colorOptions},{name:'background',label:'Цвет фона',type:'palette',value:a.background||'#FEE8DD',options:colorOptions},{name:'card',label:'Цвет карточек',type:'palette',value:a.card||'#F9E5CC',options:colorOptions},{name:'heading',label:'Цвет заголовков',type:'palette',value:a.heading||'#6C909E',options:colorOptions},{name:'backgroundImage',label:'Свой фон',type:'file',preview:a.backgroundImage||'',accept:'image/png,image/jpeg,image/webp,image/*'},{name:'appIcon',label:'Иконка приложения',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png',accept:'image/png,image/*',help:'После выбора файла можно настроить кроп и масштаб.'}],async v=>{a.primary=safeHex(v.primary,'#9FAF64');a.background=safeHex(v.background,'#FEE8DD');a.card=safeHex(v.card,'#F9E5CC');a.heading=safeHex(v.heading,'#6C909E');if(v.backgroundImage)a.backgroundImage=await imageToDataUrl(v.backgroundImage,1400);if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));applyAppearance();await commit();closeModal();},{extraAction:a.backgroundImage||a.appIcon?{label:'Сбросить фон и иконку',handler:async()=>{a.backgroundImage='';a.appIcon='';applyAppearance();await commit();closeModal();}}:null});}
 
@@ -939,9 +1055,11 @@ async function textChecksum(text){
 function migrateBackupState(input){
   if(!input||typeof input!=='object')throw new Error('format');
   if(Number(input.version)>VERSION)throw new Error('newer-version');
+  if(!Number.isInteger(Number(input.version))||Number(input.version)<1||!input.settings||!input.periods||!Array.isArray(input.categories)||!Array.isArray(input.payments)||!Array.isArray(input.savings)||!Array.isArray(input.purchases))throw new Error('format');
   const restored=structuredClone(input);
   restored.version=VERSION;
   restored.settings=restored.settings&&typeof restored.settings==='object'?restored.settings:{};
+  restored.settings.salaryDay??=5;
   restored.settings.navIcons=restored.settings.navIcons&&typeof restored.settings.navIcons==='object'?restored.settings.navIcons:{};
   restored.settings.sectionLabels=restored.settings.sectionLabels&&typeof restored.settings.sectionLabels==='object'?restored.settings.sectionLabels:{};
   restored.settings.mandatoryLabels=restored.settings.mandatoryLabels&&typeof restored.settings.mandatoryLabels==='object'?restored.settings.mandatoryLabels:{};
@@ -950,6 +1068,11 @@ function migrateBackupState(input){
   restored.payments=Array.isArray(restored.payments)?restored.payments:[];
   restored.savings=Array.isArray(restored.savings)?restored.savings:[];
   restored.purchases=Array.isArray(restored.purchases)?restored.purchases:[];
+  for(const [key,period] of Object.entries(restored.periods)){
+    if(!period||typeof period!=='object'||Array.isArray(period)||!/^\d{4}-(0[1-9]|1[0-2])$/.test(key))throw new Error('format');
+    const defaults=createPeriod(key);
+    restored.periods[key]={...defaults,...period,key,mandatory:{...defaults.mandatory,...period.mandatory},categoryBudgets:period.categoryBudgets||defaults.categoryBudgets,foodWeeks:Array.isArray(period.foodWeeks)?period.foodWeeks:defaults.foodWeeks};
+  }
   const activePeriod=ensurePeriod(restored,periodKeyForDate(new Date(),restored.settings.salaryDay||5));
   migrateLegacyAccount(restored,activePeriod);
   restored.pet=restored.pet&&typeof restored.pet==='object'?restored.pet:{balanceByn:0,avatarImage:'',transactions:[],needs:[]};
@@ -985,6 +1108,7 @@ async function importBackup(file){
     const restored=migrateBackupState(payload), summary=backupSummaryForState(restored);
     const exportedAt=isFullBackup&&parsed.exportedAt?`\nДата копии: ${new Date(parsed.exportedAt).toLocaleString('ru-RU')}`:'';
     if(!confirm(`Восстановить эту резервную копию?${exportedAt}\n\n${backupSummaryText(summary)}\n\nТекущие данные на этом устройстве будут заменены.`))return;
+    await saveQueue;
     state=restored;normalizeState();const iconsCentered=await centerStoredIconImages();if(iconsCentered)await saveState(state);
     await commit();toast('Данные полностью восстановлены');setScreen('home');
   }catch(error){
@@ -1006,7 +1130,15 @@ function bindStaticEvents(){
   $('#addPurchaseBtn').addEventListener('click',()=>purchaseModal());$('#addPaymentBtn').addEventListener('click',()=>paymentModal());$('#editGeneralBtn').addEventListener('click',generalModal);$('#editAppearanceBtn').addEventListener('click',appearanceModal);
   $('#exportBtn').addEventListener('click',exportBackup);$('#importInput').addEventListener('change',e=>{const file=e.target.files?.[0];if(file)importBackup(file);e.target.value=''});$('#resetBtn').addEventListener('click',async()=>{if(!confirm('Сбросить все данные приложения?'))return;await clearState();state=seedState(new Date());selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();setScreen('home');toast('Данные сброшены')});
   $('#modalClose').addEventListener('click',closeModal);$('#modalCancel').addEventListener('click',closeModal);$('#modalBackdrop').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal()});
-  $('#modalForm').addEventListener('submit',async e=>{e.preventDefault();const invalid=[...e.currentTarget.querySelectorAll('[data-money]')].find(input=>!validateMoneyInput(input));if(invalid){invalid.reportValidity();return;}if(modalSubmitHandler)await modalSubmitHandler(formValues(e.currentTarget))});
+  $('#modalForm').addEventListener('submit',async e=>{
+    e.preventDefault();if(modalSubmitting)return;
+    const invalid=[...e.currentTarget.querySelectorAll('[data-money]')].find(input=>!validateMoneyInput(input));
+    if(invalid){invalid.reportValidity();return;}
+    if(!modalSubmitHandler)return;
+    const handler=modalSubmitHandler,values=formValues(e.currentTarget);
+    modalSubmitting=true;$('#modalSubmit').disabled=true;
+    try{await handler(values);}catch{closeModal();}finally{modalSubmitting=false;$('#modalSubmit').disabled=false;}
+  });
   $('#modalBody').addEventListener('click',async e=>{if(e.target.closest('#modalExtra')&&modalExtraHandler)await modalExtraHandler()});
   $('#modalBody').addEventListener('input',e=>{if(e.target.matches('[data-crop-slider]'))updateCropPreview($('#modalBody'),e.target.dataset.cropSlider)});
   $('#modalBody').addEventListener('change',e=>{if(e.target.matches('[data-crop-input]'))updateCropPreview($('#modalBody'),e.target.dataset.cropInput)});
@@ -1031,7 +1163,7 @@ function bindDelegatedEvents(){
     const cardRemove=e.target.closest('[data-card-remove]');if(cardRemove){state.settings.dashboardCards=dashboardCards().filter(id=>id!==cardRemove.dataset.cardRemove);await commit();return;}
     const cardAdd=e.target.closest('[data-card-add]');if(cardAdd){const list=dashboardCards();if(!list.includes(cardAdd.dataset.cardAdd))list.push(cardAdd.dataset.cardAdd);await commit();return;}
     const accountDelete=e.target.closest('[data-delete-account-tx]');if(accountDelete){if(!confirm('Удалить операцию и отменить ее влияние на деньги?'))return;deleteAccountOperation(accountDelete.dataset.deleteAccountTx);await commit();return;}
-    const savingDelete=e.target.closest('[data-delete-saving]');if(savingDelete){if(!confirm('Удалить операцию и отменить перевод?'))return;const transaction=state.savings.find(t=>t.id===savingDelete.dataset.deleteSaving);if(transaction?.purchaseId){const purchase=state.purchases.find(item=>item.id===transaction.purchaseId);if(purchase){purchase.completed=false;delete purchase.completedAt;delete purchase.paidFrom;}}if(transaction?.accountTransactionId)deleteAccountOperation(transaction.accountTransactionId);else state.savings=state.savings.filter(t=>t.id!==savingDelete.dataset.deleteSaving);await commit();return;}
+    const savingDelete=e.target.closest('[data-delete-saving]');if(savingDelete){if(!confirm('Удалить операцию и отменить перевод или обмен?'))return;deleteSavingsOperation(savingDelete.dataset.deleteSaving);await commit();return;}
     const petDelete=e.target.closest('[data-delete-pet-tx]');if(petDelete){if(!confirm('Удалить операцию и отменить ее влияние на баланс?'))return;const transaction=state.pet.transactions.find(t=>t.id===petDelete.dataset.deletePetTx);if(transaction?.needId){const need=state.pet.needs.find(item=>item.id===transaction.needId);if(need)need.completed=false;}if(transaction?.accountTransactionId)deleteAccountOperation(transaction.accountTransactionId);else if(transaction){state.pet.balanceByn=roundMoney(petBalanceByn(state)+(transaction.type==='topup'?-num(transaction.amountByn):num(transaction.amountByn)));state.pet.transactions=state.pet.transactions.filter(t=>t.id!==transaction.id)}await commit();return;}
     if(e.target.closest('[data-edit-safety]')){safetyModal();return;}
     const completeNeed=e.target.closest('[data-complete-need]');if(completeNeed){const n=state.pet.needs.find(x=>x.id===completeNeed.dataset.completeNeed);if(n){n.completed=true;const amount=num(n.costByn);if(amount>0){state.pet.balanceByn=roundMoney(petBalanceByn(state)-amount);state.pet.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),note:`Покупка: ${n.name}`,needId:n.id})}await commit()}return;}
@@ -1062,7 +1194,7 @@ function bindDelegatedEvents(){
 async function init(){
   const saved=await loadState();
   const migrated=!!saved&&Number(saved.version)!==VERSION;
-  try{state=saved?migrateBackupState(saved):seedState(new Date())}catch{state=seedState(new Date())}
+  state=saved?migrateBackupState(saved):seedState(new Date());
   const monthlyBalancesMigrated=normalizeState();
   const iconsCentered=await centerStoredIconImages();
   if(syncAllAutoClosedWeeks()||iconsCentered||migrated||monthlyBalancesMigrated)await saveState(state);
@@ -1092,4 +1224,4 @@ function registerServiceWorker(){
     });
   }).catch(()=>{});
 }
-init();
+init().catch(()=>{$('#loading').textContent='Не удалось открыть сохраненные данные. Они не были заменены. Попробуй перезапустить приложение или восстановить резервную копию в предыдущей версии.';});

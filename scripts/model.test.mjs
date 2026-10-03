@@ -5,7 +5,9 @@ import {
   accountBalanceAfterSpending, addAccountTransaction, deleteAccountTransaction,
   accountTransactionPeriodKey, migrateMonthlyBalances, plannedFreeBalance, liveFreeBalance,
   remainingPlannedOutflows, periodSpentTotal, distributeFoodPlan, foodBudget,
-  savingsBalanceByn, savingsBalanceUsd, petBalanceByn, monthlySavingsRows
+  savingsBalanceByn, savingsBalanceUsd, petBalanceByn, monthlySavingsRows,
+  periodSavingsDepositedByn, reconcileFreeBalance, debtRemaining,
+  periodKeyForDate, periodStart, periodEnd, makeFoodWeeks, toISODate
 } from '../model.js';
 
 const fresh = () => seedState(new Date(2026, 8, 15));
@@ -148,4 +150,88 @@ test('fractional savings, pets and monthly totals retain cents', () => {
   delete state.pet.balanceByn;
   state.pet.transactions.push({type:'topup',amountByn:37.56},{type:'spend',amountByn:0.01});
   assert.equal(petBalanceByn(state),37.55);
+});
+
+test('reconciliation targets the free balance and subsequent spending obeys remaining plans',()=>{
+  const state=fresh(),period=ensurePeriod(state,'2026-10');
+  period.salary=1000;period.categoryBudgets.everyday.plan=700;
+  const correction=reconcileFreeBalance(state,period,'125,56');
+  assert.equal(liveFreeBalance(state,period),125.56);
+  assert.equal(accountBalanceAfterSpending(state,period),825.56);
+  assert.equal(reconcileFreeBalance(state,period,125.56),null);
+  period.categoryBudgets.everyday.spent=100;
+  assert.equal(liveFreeBalance(state,period),125.56);
+  period.categoryBudgets.everyday.spent=700.01;
+  assert.equal(liveFreeBalance(state,period),125.55);
+  period.categoryBudgets.everyday.spent=0;
+  deleteAccountTransaction(state,correction.id);
+  assert.equal(liveFreeBalance(state,period),300);
+  assert.throws(()=>reconcileFreeBalance(state,period,'not money'));
+  reconcileFreeBalance(state,period,-0.01);
+  assert.equal(liveFreeBalance(state,period),-0.01);
+  assert.equal(liveFreeBalance(state,ensurePeriod(state,'2026-09')),0);
+});
+
+test('USD savings goals never reserve a nominally equal amount of BYN',()=>{
+  const state=fresh(),period=ensurePeriod(state,'2026-10');
+  period.salary=1000;period.mandatory.savingsPlanUsd=100;
+  delete period.mandatory.savingsPlanByn;
+  assert.equal(remainingPlannedOutflows(state,period),0);
+  period.mandatory.savingsPlanByn=300;
+  assert.equal(liveFreeBalance(state,period),700);
+  state.savings.push({id:'one',type:'deposit',currency:'usd',amountUsd:50,accountAmountByn:150,date:'2026-10-10',periodKey:period.key});
+  addAccountTransaction(state,{deltaByn:-150,type:'transfer_out',periodKey:period.key,linkedId:'savings:one'});
+  assert.equal(accountBalanceAfterSpending(state,period),850);
+  assert.equal(remainingPlannedOutflows(state,period),150);
+  assert.equal(liveFreeBalance(state,period),700);
+});
+
+test('savings and linked account operations stay in the same month when salary day changes',()=>{
+  const state=fresh();
+  const transaction=addAccountTransaction(state,{deltaByn:-100,periodKey:'2026-09',date:'2026-10-04',linkedId:'savings:one'});
+  state.savings.push({id:'one',type:'deposit',currency:'byn',amountByn:100,date:'2026-10-04',accountTransactionId:transaction.id});
+  state.settings.salaryDay=1;
+  assert.equal(periodSavingsDepositedByn(state,'2026-09'),100);
+  assert.equal(periodSavingsDepositedByn(state,'2026-10'),0);
+  assert.equal(balance(state,'2026-09'),-100);
+  assert.equal(balance(state,'2026-10'),0);
+});
+
+test('hiding a category preserves its reserved funds and its spending',()=>{
+  const state=fresh(),period=ensurePeriod(state,'2026-10');
+  period.salary=1000;period.categoryBudgets.everyday.plan=300;period.categoryBudgets.everyday.spent=100;
+  state.categories.find(c=>c.id==='everyday').visible=false;
+  assert.equal(accountBalanceAfterSpending(state,period),900);
+  assert.equal(remainingPlannedOutflows(state,period),200);
+  assert.equal(liveFreeBalance(state,period),700);
+});
+
+test('debt formula uses the same planned-total fallback as the dashboard',()=>{
+  const state=fresh();state.payments.push({periodKey:'2026-10',planned:300,paid:100});
+  assert.equal(debtRemaining(state),200);
+  state.settings.debtInitial=500;
+  assert.equal(debtRemaining(state),400);
+});
+
+test('salary periods and clipped Monday weeks cover leap February and year boundaries exactly',()=>{
+  for(const key of ['2024-02','2026-02','2026-07','2026-12']){
+    for(const salaryDay of [1,5,28]){
+      const start=periodStart(key,salaryDay),end=periodEnd(key,salaryDay),weeks=makeFoodWeeks(key,[],salaryDay);
+      assert.equal(periodKeyForDate(start,salaryDay),key);
+      assert.equal(periodKeyForDate(end,salaryDay),key);
+      assert.equal(weeks[0].start,toISODate(start));
+      assert.equal(weeks.at(-1).end,toISODate(end));
+      for(let i=1;i<weeks.length;i++){
+        const next=new Date(`${weeks[i-1].end}T12:00:00`);next.setDate(next.getDate()+1);
+        assert.equal(weeks[i].start,toISODate(next));
+      }
+    }
+  }
+});
+
+test('reading monthly totals does not create phantom payment records',()=>{
+  const state=fresh(),period=ensurePeriod(state,'2026-10');
+  assert.equal(state.payments.length,0);
+  periodSpentTotal(state,period);remainingPlannedOutflows(state,period);liveFreeBalance(state,period);
+  assert.equal(state.payments.length,0);
 });

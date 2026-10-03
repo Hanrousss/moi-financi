@@ -294,7 +294,7 @@ test('carryover starts next period, waits for other dialogs and remembers confir
   assert.equal(a.run('typeof modal'),'undefined');
 });
 
-test('home displays remaining food and category budgets and month separates budget from spendable money',()=>{
+test('home displays remaining food and category budgets and month highlights spendable money with a budget breakdown',()=>{
   const a=app();
   a.run(`globalThis.nodes=new Map();document={querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{textContent:'',innerHTML:'',classList:{toggle(){},remove(){}},querySelector(){return {dataset:{}};}});return nodes.get(selector);}};
     const p=currentPeriod();p.salary=1000;p.categoryBudgets.everyday={plan:100,spent:40};
@@ -302,8 +302,9 @@ test('home displays remaining food and category budgets and month separates budg
     state.settings.dashboardCards=[dashboardCategoryKey('everyday')];renderHome();renderMonth();`);
   assert.equal(a.value("nodes.get('#weekPlan').textContent"),a.run('formatByn(70)'));
   assert.match(a.value("nodes.get('#dashboardList').innerHTML"),/60/);
-  assert.equal(a.value("nodes.get('#incomeTotal').textContent"),a.run('formatByn(930)'));
+  assert.equal(a.value("nodes.get('#incomeTotal').textContent"),a.run('formatByn(800)'));
   assert.equal(a.value("nodes.get('#monthFreeValue').textContent"),a.run('formatByn(800)'));
+  assert.equal(a.value("nodes.get('#incomeDetails').textContent"),a.run('`Остаток до планов — ${formatByn(930)}\\nЗапланированные траты — ${formatByn(130)}`'));
   assert.match(a.run("renderCategoryCard(categoryById('pet'),currentPeriod())"),/>Отложено</);
 });
 

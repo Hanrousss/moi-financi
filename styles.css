@@ -185,3 +185,6 @@ button:active:not(:disabled){transform:scale(.97)}
 #settingsBtn{background:transparent;border:0;box-shadow:none;width:48px;height:48px}
 #settingsBtn .custom-nav-icon,#settingsBtn .pack-icon{width:46px;height:46px;border-radius:0}
 #settingsBtn .icon{width:34px;height:34px}
+#incomeDetails{white-space:pre-line;line-height:1.75;margin-top:12px}
+.income-card{flex-wrap:wrap}
+.income-card>div{flex:1 1 200px}

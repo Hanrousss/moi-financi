@@ -504,7 +504,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.2.8';
+const APP_BUILD='1.2.9';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -977,8 +977,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.8');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.8');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.9');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.9');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -1097,8 +1097,7 @@ function renderHome(){
   $('#weekCard span').textContent=`${sectionLabel('food')} · осталось`;
   $('#weekCard small').textContent=`До ${dateLabel(week.end)}`;
   $('#weekCard').classList.toggle('card-negative',weekPlan<0);
-  $('#daysToSalary').textContent=pluralDays(daysToNextSalary(new Date(),state.settings.salaryDay));
-  $('#salaryMeta').textContent=`Новый период с ${state.settings.salaryDay}-го числа`;
+  renderHomeInfo(p);
   const digestText=periodSpentDigest(p), digestTrack=$('#spendDigest');
   digestTrack.innerHTML='<span></span>';
   digestTrack.querySelector('span').textContent=digestText;
@@ -1148,6 +1147,24 @@ function monthCategoryPicker(){
     await commit();closeModal();
   },{submitLabel:'Добавить выбранные'});
   if(!available.length)$('#modalBody').innerHTML='<div class="empty-state">Все категории уже добавлены в этот месяц.</div>';
+}
+const homeInfoOptions=[{value:'salary',label:'Дни до зарплаты'},{value:'free',label:'Можно потратить'},{value:'planned',label:'Запланированные траты'},{value:'spent',label:'Потрачено за месяц'}];
+function renderHomeInfo(period){
+  const mode=state.settings.homeInfo||'salary';
+  const rows={
+    salary:['До зарплаты',pluralDays(daysToNextSalary(new Date(),state.settings.salaryDay)),`Новый период с ${state.settings.salaryDay}-го числа`],
+    free:['Можно потратить',formatByn(liveFreeBalance(state,period)),'После запланированных расходов'],
+    planned:['Запланированные траты',formatByn(remainingPlannedOutflows(state,period)),'Ещё предстоит потратить'],
+    spent:['Потрачено за месяц',formatByn(periodSpentTotal(state,period)),'Включая отложенные деньги']
+  };
+  const [title,value,description]=rows[mode]||rows.salary;
+  $('#homeInfoTitle').textContent=title;$('#daysToSalary').textContent=value;$('#salaryMeta').textContent=description;
+}
+function homeInfoModal(){
+  openModal('Информация на главной',[{name:'mode',label:'Что показывать в карточке',type:'select',value:state.settings.homeInfo||'salary',options:homeInfoOptions}],async values=>{
+    if(!homeInfoOptions.some(option=>option.value===values.mode))return;
+    state.settings.homeInfo=values.mode;await commit();closeModal();
+  });
 }
 function renderHomeCategories(period){
   $('#homeCategoryList').innerHTML=orderedMonthCategories(period).map(c=>{
@@ -1273,7 +1290,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.8')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.9')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1692,7 +1709,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.8',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.9',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -1853,7 +1870,7 @@ function bindStaticEvents(){
   $('#profileAvatarBtn').addEventListener('click',profileAvatarModal);$('#editProfileAvatarBtn').addEventListener('click',profileAvatarModal);
   $$('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>setScreen(b.dataset.nav)));
   $('#settingsBtn').addEventListener('click',()=>openOverlay('settings'));$('#closeOverlayBtn').addEventListener('click',closeOverlay);
-  $('#editQuickActionsBtn').addEventListener('click',quickActionsModal);$('#undoLastBtn').addEventListener('click',undoLastAction);
+  $('#editHomeInfoBtn').addEventListener('click',homeInfoModal);$('#editQuickActionsBtn').addEventListener('click',quickActionsModal);$('#undoLastBtn').addEventListener('click',undoLastAction);
   $('#periodPill').addEventListener('click',()=>setScreen('month'));$('#editBalanceBtn').addEventListener('click',openBalanceEditor);$('#weekCard').addEventListener('click',()=>{foodPeriodKey=currentPeriod().key;openOverlay('food')});
   $('#prevMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,-1);ensurePeriod(state,selectedPeriodKey);renderAll()});$('#nextMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,1);ensurePeriod(state,selectedPeriodKey);renderAll()});
   $('#foodPrevMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,-1);ensurePeriod(state,foodPeriodKey);renderFood()});$('#foodNextMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,1);ensurePeriod(state,foodPeriodKey);renderFood()});

@@ -10,9 +10,9 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.2.8">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.2.8">
-  <link rel="stylesheet" href="./styles.css?v=1.2.8">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.2.9">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.2.9">
+  <link rel="stylesheet" href="./styles.css?v=1.2.9">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -35,9 +35,9 @@
         <div id="homeQuickActions" class="quick-actions" aria-label="Быстрые действия"></div>
         <button id="editQuickActionsBtn" type="button" class="text-button">Настроить кружки</button>
         <div class="section-row home-section-title"><h2>Сейчас</h2><span class="section-hint">Текущий период</span></div>
-        <div class="two-col">
+        <div class="home-summary-list">
           <button id="weekCard" class="summary-card text-left"><span>Еда · эта неделя</span><strong id="weekPlan">0 BYN</strong><small>Осталось на эту неделю</small></button>
-          <article class="summary-card"><span>До зарплаты</span><strong id="daysToSalary">0 дней</strong><small id="salaryMeta">Новый период с 5-го числа</small></article>
+          <article class="summary-card home-info-card"><div><span id="homeInfoTitle">До зарплаты</span><small id="salaryMeta">Новый период с 5-го числа</small></div><strong id="daysToSalary">0 дней</strong><button id="editHomeInfoBtn" type="button" class="mini-icon" aria-label="Настроить информацию карточки">⚙</button></article>
         </div>
         <div id="spendDigest" class="spend-digest" aria-live="polite"></div>
         <div class="section-row"><h2>Категории месяца</h2><span class="section-hint">Перетаскивай за ⠿</span></div><div id="homeCategoryList" class="home-category-list"></div>
@@ -111,6 +111,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.2.8"></script>
+  <script src="./app.bundle.js?v=1.2.9"></script>
 </body>
 </html>

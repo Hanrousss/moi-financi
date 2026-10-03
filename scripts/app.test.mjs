@@ -535,3 +535,13 @@ test('old backups remain compatible and malformed personal data is rejected',()=
  assert.equal(a.value("validLifeData({ideas:'bad'})"),false);
  assert.throws(()=>a.run("migrateBackupState({...state,life:{ideas:'bad'}})"),/format/);
 });
+
+test('diary rich text survives backup migration and does not change finance',()=>{
+ const a=app();
+ a.run(`globalThis.before=cloneState(state);lifeData().diary.push({id:'note',title:'Мой день',date:'2026-10-03',html:'<h2>Мысли</h2><p><b>Текст</b></p><p><input type="checkbox" checked>Готово</p>',updatedAt:'2026-10-03T12:00:00Z'});globalThis.restored=migrateBackupState(state);`);
+ assert.deepEqual(a.value('restored.life.diary'),a.value('state.life.diary'));
+ assert.deepEqual(a.value('restored.payments'),a.value('before.payments'));
+ assert.deepEqual(a.value('state.account'),a.value('before.account'));
+ assert.equal(a.value('backupSummaryForState(state).lifeRecords'),1);
+ assert.equal(a.value("validLifeData({diary:[{id:'bad',title:'Bad',date:'not-a-date',html:5}]})"),false);
+});

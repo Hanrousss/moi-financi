@@ -10,16 +10,16 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.3.0">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.3.0">
-  <link rel="stylesheet" href="./styles.css?v=1.3.0">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.3.1">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.3.1">
+  <link rel="stylesheet" href="./styles.css?v=1.3.1">
   <title>Мои деньги</title>
 </head>
 <body>
   <div id="loading" class="loading-screen"><div class="loading-mark">M</div><p>Загрузка данных</p></div>
   <div id="app" class="app-shell" hidden>
     <header class="topbar">
-      <button id="profileAvatarBtn" class="profile-avatar" aria-label="Изменить аватарку"><img id="profileAvatar" src="./icons/profile-avatar.jpg" alt="Твоя аватарка"></button><div><p id="eyebrow" class="eyebrow"></p><div class="section-selector"><button id="sectionSwitch" type="button" aria-expanded="false" aria-controls="sectionMenu"><span id="screenTitle">Финанси</span><span aria-hidden="true">⌄</span></button><div id="sectionMenu" class="section-menu" hidden></div></div></div>
+      <button id="profileAvatarBtn" class="profile-avatar" aria-label="Изменить аватарку"><img id="profileAvatar" src="./icons/profile-avatar.jpg" alt="Твоя аватарка"></button><div><p id="eyebrow" class="eyebrow"></p><div class="section-selector"><button id="sectionSwitch" type="button" aria-expanded="false" aria-controls="sectionMenu"><span id="screenTitle">Финанси</span><span class="section-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button><div id="sectionMenu" class="section-menu" hidden></div></div></div>
       <button id="settingsBtn" class="icon-button" aria-label="Настройки"></button>
       <button id="closeOverlayBtn" class="icon-button" aria-label="Закрыть" hidden></button>
     </header>
@@ -112,6 +112,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.3.0"></script>
+  <script src="./app.bundle.js?v=1.3.1"></script>
 </body>
 </html>

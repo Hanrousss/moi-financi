@@ -504,7 +504,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.3.0';
+const APP_BUILD='1.3.1';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -977,8 +977,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.3.0');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.3.0');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.3.1');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.3.1');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -1291,7 +1291,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.3.0')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.3.1')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1332,6 +1332,7 @@ function validateMoneyInput(input){
 }
 function fieldHtml(field){
   const id=`field-${field.name}`;const value=field.value??'';const common=`id="${id}" name="${field.name}" ${field.required?'required':''}`;
+  if(field.type==='diary')return diaryEditorField(value);
   if(field.type==='money')return `<label class="form-field"><span>${esc(field.label)}</span><input ${common} ${moneyInputAttributes(field.min)} value="${esc(value)}" placeholder="${esc(field.placeholder||'')}">${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
   if(field.type==='theme')return `<fieldset class="theme-picker"><legend>${esc(field.label)}</legend><div class="theme-grid">${Object.entries(THEME_PRESETS).map(([key,t])=>`<label class="theme-option"><input type="radio" name="${esc(field.name)}" value="${key}" ${value===key?'checked':''}><span class="theme-tile ${t.checker?'theme-checkered':''}" style="--preview-bg:${t.bg};--preview-ink:${t.ink};--preview-muted:${t.muted};--preview-card:${t.card};--preview-accent:${t.accent};--preview-dark:${t.dark}"><span class="theme-miniature" aria-hidden="true"><i></i><i></i><i></i></span><b>${t.label}<span class="theme-check">✓</span></b><small>${t.description}</small></span></label>`).join('')}</div><p class="field-help">${esc(field.help)}</p></fieldset>`;
   if(field.type==='palette'){
@@ -1351,8 +1352,8 @@ function fieldHtml(field){
 let modalSubmitHandler=null, modalExtraHandler=null, modalSubmitting=false;
 function openModal(title,fields,onSubmit,{submitLabel='Сохранить',extraAction=null}={}){
   $('#modalTitle').textContent=title;$('#modalBody').innerHTML=fields.map(fieldHtml).join('')+(extraAction?`<button type="button" id="modalExtra" class="danger-button">${esc(extraAction.label)}</button>`:'');$('#modalSubmit').textContent=submitLabel;$('#modalBackdrop').hidden=false;document.body.classList.add('modal-open');modalSubmitHandler=onSubmit;modalExtraHandler=extraAction?.handler||null;setTimeout(()=>$('#modalBody input:not([type="checkbox"]), #modalBody select')?.focus(),40);}
-function closeModal(){$('#modalBackdrop').hidden=true;document.body.classList.remove('modal-open');modalSubmitHandler=null;modalExtraHandler=null;}
-function formValues(form){const result={};form.querySelectorAll('[name]').forEach(el=>{if(el.type==='radio'){if(el.checked)result[el.name]=el.value;return;}result[el.name]=el.hasAttribute('data-money')?parseMoney(el.value):el.type==='checkbox'?el.checked:el.type==='file'?el.files?.[0]||null:el.value;});return result;}
+function closeModal(){if(diaryDirty&&!confirm('Закрыть запись без сохранения изменений?'))return;diaryDirty=false;$('#modalBackdrop').classList.remove('diary-modal');$('#modalBackdrop').hidden=true;document.body.classList.remove('modal-open');modalSubmitHandler=null;modalExtraHandler=null;}
+function formValues(form){const result={};form.querySelectorAll('[name]').forEach(el=>{if(el.type==='radio'){if(el.checked)result[el.name]=el.value;return;}result[el.name]=el.hasAttribute('data-money')?parseMoney(el.value):el.type==='checkbox'?el.checked:el.type==='file'?el.files?.[0]||null:el.value;});form.querySelectorAll('[data-rich-editor]').forEach(el=>{result[el.dataset.richEditor]=cleanDiaryHtml(el.innerHTML);});return result;}
 async function updateCropPreview(root,name){
   const preview=root.querySelector(`[data-crop-preview="${name}"]`);
   const input=root.querySelector(`[data-crop-input="${name}"]`);
@@ -1710,7 +1711,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.3.0',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.3.1',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -1943,7 +1944,7 @@ function bindDelegatedEvents(){
 }
 
 // Personal sections keep their records together in the existing full backup.
-const LIFE_SECTIONS={home:'Финанси',ideas:'Для дома',activity:'Активность',learning:'Изучение',media:'Книги, кино и игры',places:'Места',blog:'Блог',portfolio:'Портфолио'};
+const LIFE_SECTIONS={home:'Финанси',ideas:'Для дома',activity:'Активность',learning:'Изучение',media:'Книги, кино и игры',places:'Места',blog:'Блог',portfolio:'Портфолио',diary:'Дневник'};
 let lifeSection='home',lifeDetail=null,activityMonth=toISODate(new Date()).slice(0,7);
 function validLifeData(data){
   if(data==null)return true;
@@ -1952,12 +1953,13 @@ function validLifeData(data){
   for(const key of ['ideas','learning','media','places','blog','portfolio','preparation'])if(data[key]!=null&&(!Array.isArray(data[key])||!data[key].every(record)))return false;
   const dated=x=>x&&typeof x.id==='string'&&typeof x.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x.date)&&!Number.isNaN(Date.parse(x.date));
   if(data.activities!=null&&(!Array.isArray(data.activities)||!data.activities.every(x=>dated(x)&&typeof x.title==='string'&&['gym','steps','other'].includes(x.kind))))return false;
+  if(data.diary!=null&&(!Array.isArray(data.diary)||!data.diary.every(x=>dated(x)&&typeof x.title==='string'&&typeof x.html==='string')))return false;
   if(data.weights!=null&&(!Array.isArray(data.weights)||!data.weights.every(x=>dated(x)&&Number.isFinite(x.value)&&x.value>0)))return false;
   return true;
 }
 function lifeData(){
   state.life??={};
-  for(const key of ['ideas','learning','media','places','blog','portfolio','preparation','activities','weights'])if(!Array.isArray(state.life[key]))state.life[key]=[];
+  for(const key of ['ideas','learning','media','places','blog','portfolio','preparation','activities','weights','diary'])if(!Array.isArray(state.life[key]))state.life[key]=[];
   return state.life;
 }
 function lifeUrl(value){try{const u=new URL(value);return ['https:','http:'].includes(u.protocol)?u.href:'';}catch{return '';}}
@@ -1978,6 +1980,7 @@ function renderLife(){
   $('#sectionMenu').innerHTML=Object.entries(LIFE_SECTIONS).map(([id,label])=>`<button type="button" data-life-section="${id}" aria-current="${id===lifeSection?'page':'false'}">${label}<span>${id===lifeSection?'✓':'↗'}</span></button>`).join('');
   if(!isLife)return;
   const data=lifeData();
+  if(lifeSection==='diary'){renderDiary();return;}
   if(lifeSection==='activity'){renderLifeActivity();return;}
   const container=$('#lifeContent'),collection=data[lifeSection];
   const book=lifeDetail&&collection.find(item=>item.id===lifeDetail);
@@ -2086,6 +2089,137 @@ function bindLife(){
   document.addEventListener('change',async e=>{if(e.target.matches('[data-life-check]')){lifeData().preparation.find(x=>x.id===e.target.dataset.lifeCheck).done=e.target.checked;await commit();}});
 }
 
+let diaryQuery='',diaryDirty=false,diarySelection=null;
+function cleanDiaryHtml(html){
+  const doc=new DOMParser().parseFromString(String(html||''),'text/html');
+  const allowed=new Set(['P','DIV','BR','B','STRONG','I','EM','U','S','STRIKE','H1','H2','H3','H4','UL','OL','LI','BLOCKQUOTE','PRE','CODE','A','IMG','TABLE','TBODY','THEAD','TR','TD','TH','HR','SPAN','FONT','INPUT']);
+  const output=document.createElement('div');
+  const copy=(node,parent)=>{
+    if(node.nodeType===3){parent.append(document.createTextNode(node.textContent));return;}
+    if(node.nodeType!==1||['SCRIPT','STYLE','IFRAME','OBJECT','SVG','MATH','FORM','BUTTON','VIDEO','AUDIO'].includes(node.tagName))return;
+    if(!allowed.has(node.tagName)){for(const child of node.childNodes)copy(child,parent);return;}
+    if(node.tagName==='INPUT'&&node.getAttribute('type')!=='checkbox')return;
+    const el=document.createElement(node.tagName.toLowerCase());
+    if(node.tagName==='A'){const href=lifeUrl(node.getAttribute('href'));if(href){el.setAttribute('href',href);el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer');}}
+    if(node.tagName==='IMG'){const src=node.getAttribute('src')||'';if(!/^data:image\/(png|jpeg|webp);base64,/.test(src))return;el.setAttribute('src',src);el.setAttribute('alt',node.getAttribute('alt')||'');}
+    if(node.tagName==='INPUT'){el.setAttribute('type','checkbox');if(node.hasAttribute('checked'))el.setAttribute('checked','');}
+    if(node.tagName==='FONT'){
+      const color=node.getAttribute('color');if(color&&/^#[0-9a-f]{3,8}$/i.test(color))el.setAttribute('color',color);
+      const size=node.getAttribute('size');if(/^[1-7]$/.test(size||''))el.setAttribute('size',size);
+    }
+    const align=node.style.textAlign||node.getAttribute('align');
+    if(['left','center','right','justify'].includes(align))el.style.textAlign=align;
+    for(const prop of ['color','backgroundColor']){const color=node.style[prop];if(color&&/^(#[0-9a-f]{3,8}|rgba?\([\d\s,.%]+\))$/i.test(color))el.style[prop]=color;}
+    if(['normal','bold','bolder','400','500','600','700','800','900'].includes(node.style.fontWeight))el.style.fontWeight=node.style.fontWeight;
+    if(['normal','italic','oblique'].includes(node.style.fontStyle))el.style.fontStyle=node.style.fontStyle;
+    if(['underline','line-through','underline line-through'].includes(node.style.textDecorationLine))el.style.textDecorationLine=node.style.textDecorationLine;
+    if(/^(\d{1,2}(\.\d+)?)px$/.test(node.style.fontSize))el.style.fontSize=node.style.fontSize;
+    for(const child of node.childNodes)copy(child,el);
+    parent.append(el);
+  };
+  for(const node of doc.body.childNodes)copy(node,output);
+  return output.innerHTML;
+}
+function diaryPlain(html){const doc=new DOMParser().parseFromString(String(html||''),'text/html');return doc.body.textContent||'';}
+function renderDiary(){
+  const rows=lifeData().diary.filter(item=>(item.title+' '+diaryPlain(item.html)).toLocaleLowerCase('ru').includes(diaryQuery.toLocaleLowerCase('ru'))).sort((a,b)=>b.date.localeCompare(a.date)||String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  $('#lifeContent').innerHTML=`<div class="section-row"><p class="section-hint">Мысли, события и личные записи.</p><button class="small-button" data-diary-add>+ Запись</button></div><label class="form-field diary-search"><span>Поиск по дневнику</span><input type="search" data-diary-search value="${esc(diaryQuery)}" placeholder="Название или текст"></label><div id="diaryList" class="life-stack">${diaryCards(rows)}</div>`;
+}
+function diaryCards(rows){return rows.map(item=>`<button class="diary-entry" data-diary-open="${esc(item.id)}"><small>${esc(dateLabel(item.date))}</small><b>${esc(item.title)}</b><span>${esc(diaryPlain(item.html).slice(0,160))||'Запись с изображением'}</span></button>`).join('')||'<p class="empty-state">Записей пока нет или ничего не найдено.</p>';}
+function openDiary(item){
+  $('#lifeContent').innerHTML=`<div class="section-row"><button class="text-button" data-diary-back>‹ Все записи</button><button class="small-button" data-diary-edit="${esc(item.id)}">Изменить</button></div><article class="diary-reading"><small>${esc(dateLabel(item.date))}</small><h2>${esc(item.title)}</h2><div class="diary-document">${cleanDiaryHtml(item.html)}</div></article>`;
+  $('#lifeContent .diary-document').querySelectorAll('input').forEach(el=>el.disabled=true);
+  window.scrollTo(0,0);
+}
+function diaryEditorField(html){
+  const commands=[['bold','Жирный','<b>Ж</b>'],['italic','Курсив','<i>К</i>'],['underline','Подчёркивание','<u>Ч</u>'],['strikeThrough','Зачёркивание','<s>А</s>'],['insertUnorderedList','Маркированный список','• Список'],['insertOrderedList','Нумерованный список','1. Список'],['justifyLeft','По левому краю','Влево'],['justifyCenter','По центру','Центр'],['justifyRight','По правому краю','Вправо'],['indent','Увеличить отступ','→'],['outdent','Уменьшить отступ','←'],['undo','Отменить','↶'],['redo','Повторить','↷'],['removeFormat','Убрать оформление','Очистить стиль']];
+  return `<div class="diary-editor-shell"><div class="diary-toolbar" role="toolbar" aria-label="Форматирование записи"><label class="diary-format-label">Стиль<select data-diary-format aria-label="Стиль текста"><option value="p">Обычный текст</option><option value="h1">Заголовок 1</option><option value="h2">Заголовок 2</option><option value="h3">Заголовок 3</option><option value="blockquote">Цитата</option></select></label><label class="diary-format-label">Размер<select data-diary-size aria-label="Размер текста"><option value="2">Мелкий</option><option value="3" selected>Обычный</option><option value="4">Крупный</option><option value="5">Очень крупный</option></select></label>${commands.map(([cmd,label,text])=>`<button type="button" data-diary-command="${cmd}" title="${label}" aria-label="${label}">${text}</button>`).join('')}<label class="diary-color">Текст<input type="color" data-diary-color="foreColor" value="#303030" aria-label="Цвет текста"></label><label class="diary-color">Маркер<input type="color" data-diary-color="hiliteColor" value="#f6e7a6" aria-label="Цвет выделения"></label><button type="button" data-diary-insert="check">☑ Чек-лист</button><button type="button" data-diary-insert="link">Ссылка</button><button type="button" data-diary-insert="table">Таблица</button><button type="button" data-diary-insert="image">Фото</button><input id="diaryImageFile" type="file" accept="image/*" hidden></div><div id="diaryEditor" class="diary-document diary-editable" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Текст записи" data-rich-editor="html" spellcheck="true">${cleanDiaryHtml(html)}</div><small id="diaryWordCount" class="field-help"></small><p class="field-help">Нажми «Сохранить», чтобы записать изменения. Фото сохраняются вместе с записью.</p></div>`;
+}
+function diaryEditor(item=null){
+  diaryDirty=false;diarySelection=null;
+  openModal(item?'Редактировать запись':'Новая запись дневника',[
+    {name:'title',label:'Название',required:true,value:item?.title||''},
+    {name:'date',label:'Дата',type:'date',required:true,value:item?.date||todayISO()},
+    {name:'html',type:'diary',value:item?.html||''}
+  ],async v=>{
+    if(!v.title.trim()||!v.date)return;
+    const before=cloneState(state),record={id:item?.id||uid(),title:v.title.trim(),date:v.date,html:cleanDiaryHtml(v.html),updatedAt:new Date().toISOString()};
+    const existing=lifeData().diary.find(x=>x.id===record.id);if(existing)Object.assign(existing,record);else lifeData().diary.push(record);
+    try{await commit();diaryDirty=false;closeModal();openDiary(record);}catch{state=before;renderAll();}
+  },{extraAction:item?{label:'Удалить запись',handler:async()=>{
+    if(!confirm('Удалить запись дневника?'))return;
+    const before=cloneState(state);state.life.diary=lifeData().diary.filter(x=>x.id!==item.id);
+    try{await commit();diaryDirty=false;closeModal();}catch{state=before;renderAll();}
+  }}:null});
+  $('#modalBackdrop').classList.add('diary-modal');diaryCount();
+}
+function diaryCount(){const el=$('#diaryEditor');if(!el)return;const text=el.innerText.trim();$('#diaryWordCount').textContent=`${text?text.split(/\s+/).length:0} слов · ${text.length} знаков`;}
+function diaryRememberSelection(){
+  const editor=$('#diaryEditor'),sel=window.getSelection();
+  if(editor&&sel?.rangeCount&&editor.contains(sel.getRangeAt(0).commonAncestorContainer))diarySelection=sel.getRangeAt(0).cloneRange();
+}
+function diaryRestoreSelection(){
+  const editor=$('#diaryEditor');if(!editor)return false;editor.focus();
+  const sel=window.getSelection();sel.removeAllRanges();
+  if(diarySelection&&editor.contains(diarySelection.commonAncestorContainer))sel.addRange(diarySelection);
+  else{const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);sel.addRange(range);}
+  return true;
+}
+function diaryCommand(command,value=null){
+  if(!diaryRestoreSelection())return;
+  document.execCommand(command,false,value);diaryDirty=true;diaryRememberSelection();diaryCount();
+}
+function bindDiary(){
+  document.addEventListener('selectionchange',diaryRememberSelection);
+  document.addEventListener('pointerdown',e=>{if(e.target.closest('.diary-toolbar'))diaryRememberSelection();if(e.target.closest('[data-diary-command],[data-diary-insert]'))e.preventDefault();});
+  document.addEventListener('click',e=>{
+    const action=e.target.closest('[data-diary-add],[data-diary-edit],[data-diary-open],[data-diary-back]');
+    if(action){
+      if(action.hasAttribute('data-diary-add'))diaryEditor();
+      else if(action.hasAttribute('data-diary-back'))renderDiary();
+      else{const item=lifeData().diary.find(x=>x.id===(action.dataset.diaryEdit||action.dataset.diaryOpen));if(item)action.hasAttribute('data-diary-edit')?diaryEditor(item):openDiary(item);}
+    }
+    const cmd=e.target.closest('[data-diary-command]');if(cmd)diaryCommand(cmd.dataset.diaryCommand);
+    const insert=e.target.closest('[data-diary-insert]');if(!insert)return;
+    const kind=insert.dataset.diaryInsert;
+    if(kind==='image')$('#diaryImageFile').click();
+    if(kind==='check')diaryCommand('insertHTML','<p><input type="checkbox"> Пункт списка</p><p><br></p>');
+    if(kind==='link'){const url=prompt('Адрес ссылки (https://...)');if(url){const safe=lifeUrl(url);if(safe)diaryCommand('createLink',safe);else toast('Введи полный адрес https:// или http://');}}
+    if(kind==='table'){
+      const answer=prompt('Строки × столбцы (например 3x2)','3x2');if(!answer)return;
+      const match=answer.match(/^\s*(\d+)\s*[xх×*]\s*(\d+)\s*$/i);if(!match||+match[1]<1||+match[1]>20||+match[2]<1||+match[2]>6){toast('Укажи от 1 до 20 строк и от 1 до 6 столбцов');return;}
+      diaryCommand('insertHTML',`<table><tbody>${Array.from({length:+match[1]},()=>`<tr>${'<td><br></td>'.repeat(+match[2])}</tr>`).join('')}</tbody></table><p><br></p>`);
+    }
+  });
+  document.addEventListener('input',e=>{
+    if(e.target.matches('[data-diary-search]')){
+      diaryQuery=e.target.value;
+      const rows=lifeData().diary.filter(item=>(item.title+' '+diaryPlain(item.html)).toLocaleLowerCase('ru').includes(diaryQuery.toLocaleLowerCase('ru'))).sort((a,b)=>b.date.localeCompare(a.date));
+      $('#diaryList').innerHTML=diaryCards(rows);return;
+    }
+    if($('#diaryEditor')&&e.target.closest('#modalForm')){diaryDirty=true;diaryCount();}
+  });
+  document.addEventListener('change',async e=>{
+    if(e.target.matches('[data-diary-format]'))diaryCommand('formatBlock',e.target.value);
+    if(e.target.matches('[data-diary-size]'))diaryCommand('fontSize',e.target.value);
+    if(e.target.matches('[data-diary-color]'))diaryCommand(e.target.dataset.diaryColor,e.target.value);
+    if(e.target.matches('#diaryEditor input[type=checkbox]')){e.target.toggleAttribute('checked',e.target.checked);diaryDirty=true;}
+    if(e.target.id==='diaryImageFile'&&e.target.files[0]){
+      const editor=$('#diaryEditor');
+      try{const src=await imageToDataUrl(e.target.files[0],1600);if(editor===$('#diaryEditor'))diaryCommand('insertHTML',`<p><img src="${src}" alt=""></p><p><br></p>`);}catch{toast('Не удалось открыть изображение');}
+      e.target.value='';
+    }
+  });
+  document.addEventListener('paste',e=>{
+    if(!e.target.closest('#diaryEditor'))return;
+    e.preventDefault();
+    const html=e.clipboardData.getData('text/html'),plain=e.clipboardData.getData('text/plain');
+    diaryCommand('insertHTML',html?cleanDiaryHtml(html):esc(plain).replace(/\n/g,'<br>'));
+  });
+  document.addEventListener('drop',e=>{if(e.target.closest('#diaryEditor'))e.preventDefault();});
+  window.addEventListener('beforeunload',e=>{if(diaryDirty){e.preventDefault();e.returnValue='';}});
+}
+
 async function init(){
   const saved=await loadState();
   const migrated=!!saved&&Number(saved.version)!==VERSION;
@@ -2095,7 +2229,7 @@ async function init(){
   if(syncAllAutoClosedWeeks()||iconsCentered||migrated||monthlyBalancesMigrated)await saveState(state);
   selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;ensurePeriod(state,selectedPeriodKey);
   committedState=cloneState(state);
-  bindStaticEvents();bindDelegatedEvents();bindCategoryDragging();bindLife();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
+  bindStaticEvents();bindDelegatedEvents();bindCategoryDragging();bindLife();bindDiary();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
   scheduleAutoWeekClose();
   registerServiceWorker();
   await maybeAskCarryover();

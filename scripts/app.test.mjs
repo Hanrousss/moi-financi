@@ -476,3 +476,14 @@ test('reset is atomic when later envelope spending prevents reversal',async()=>{
  assert.deepEqual(a.value('state'),a.value('original'));
  assert.equal(a.value('saved.length'),0);
 });
+
+test('home quick actions are configurable and persist',async()=>{
+ const a=app();
+ a.run('quickActionsModal()');
+ await a.run("modal.submit({slot0:'payments',slot1:'month',slot2:'food',slot3:'pet'})");
+ a.run('state=cloneState(saved.at(-1))');
+ assert.deepEqual(a.value('quickActionIds()'),['payments','month','food','pet']);
+ a.run('quickActionsModal()');
+ await a.run("modal.submit({slot0:'month',slot1:'month',slot2:'food',slot3:'pet'})");
+ assert.equal(a.value('saved.length'),1);
+});

@@ -14,7 +14,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.2.3';
+const APP_BUILD='1.2.4';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -477,14 +477,41 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.3');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.3');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.4');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.4');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
   if(custom.image)return `<img class="custom-nav-icon" src="${esc(custom.image)}" alt="">`;
   return icon(custom.icon||item.icon,size);
 }
+const quickActionOptions=[
+  {value:'expense',label:'Расход'},{value:'month',label:'Бюджет'},
+  {value:'savings',label:'Отложить'},{value:'gifts',label:'Подарки'},
+  {value:'payments',label:'Платежи'},{value:'pet',label:'Питомец'},
+  {value:'purchases',label:'Покупки'},{value:'food',label:'Еда'}
+];
+function quickActionIds(){
+  const defaults=['expense','month','savings','gifts'];
+  return defaults.map((fallback,index)=>quickActionOptions.some(o=>o.value===state.settings.quickActions?.[index])?state.settings.quickActions[index]:fallback);
+}
+function renderQuickActions(){
+  $('#homeQuickActions').innerHTML=quickActionIds().map(id=>{
+    const label=quickActionOptions.find(o=>o.value===id).label;
+    const symbol=id==='expense'?icon('minus',24):id==='gifts'?sharedSectionIconHtml('gifts',29):sharedSectionIconHtml(id,29);
+    return `<button type="button" class="quick-action" data-shortcut="${id}"><span class="action-circle ${id==='expense'?'accent':''}">${symbol}</span><span>${label}</span></button>`;
+  }).join('');
+}
+function quickActionsModal(){
+  const ids=quickActionIds();
+  openModal('Кружки на главной',ids.map((id,index)=>({name:'slot'+index,label:`Кружок ${index+1}`,type:'select',value:id,options:quickActionOptions})),async values=>{
+    const selected=ids.map((_,index)=>values['slot'+index]);
+    if(selected.some(id=>!quickActionOptions.some(o=>o.value===id)))return;
+    if(new Set(selected).size!==selected.length){toast('Выбери разные действия для кружков');return;}
+    state.settings.quickActions=selected;await commit();closeModal();
+  });
+}
+
 function sharedSectionIconHtml(id,size=22){
   const linkedCategory=state.categories?.find(category=>category.id===id);
   if(linkedCategory)return categoryIconHtml(linkedCategory,size);
@@ -758,7 +785,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.3')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.4')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · 6 готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -784,8 +811,8 @@ function renderNav(){
   $$('.bottom-nav button').forEach((button,index)=>{const item=navDefaults[index],shown=visible.includes(item.id);button.hidden=!shown;button.setAttribute('aria-label',sectionLabel(item.id));button.setAttribute('aria-current',activeScreen===item.id?'page':'false');button.innerHTML=`<span class="nav-symbol">${navItemIconHtml(item,29)}</span>${labels?`<small>${esc(sectionLabel(item.id))}</small>`:''}`;button.classList.toggle('active',activeScreen===item.id);});
   $('#settingsBtn').innerHTML=navItemIconHtml(settingsControlDefault,21);$('#closeOverlayBtn').innerHTML=icon('close',21);
   $('#prevMonth').innerHTML=icon('chevronLeft');$('#nextMonth').innerHTML=icon('chevronRight');$('#foodPrevMonth').innerHTML=icon('chevronLeft');$('#foodNextMonth').innerHTML=icon('chevronRight');
-  $('#quickExpenseBtn').innerHTML=`<span class="action-circle accent">${icon('minus',24)}</span><span>Расход</span>`;
-  $$('[data-action-icon]').forEach(el=>{el.innerHTML=icon(el.dataset.actionIcon,23)});$('#undoLastBtn').innerHTML=icon('undo',18);
+  renderQuickActions();
+  $('#undoLastBtn').innerHTML=icon('undo',18);
   $('#editBalanceBtn').innerHTML=icon('edit',17);$('#addCategoryBtn').innerHTML=icon('plus',23);$('#addCategoryBtn').setAttribute('aria-label','Добавить категорию в месяц');$('#depositSavings').innerHTML=`${icon('plus',18)} Отложить`;$('#withdrawSavings').innerHTML=`${icon('minus',18)} Взять`;$('#topupPet').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendPet').innerHTML=`${icon('minus',18)} Вычесть`;$('#topupGifts').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendGifts').innerHTML=`${icon('minus',18)} Вычесть`;$('#addPetNeed').innerHTML=`${icon('plus',17)} Добавить`;$('#addGiftPlan').innerHTML=`${icon('plus',17)} Добавить`;$('#addPurchaseBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#addPaymentBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#settingsAddCategory').innerHTML=`${icon('plus',17)} Добавить`;$('#modalClose').innerHTML=icon('close',19);
 }
 function renderAll(){applyAppearance();renderNav();renderHome();renderRecentActivity();renderMonth();renderSavings();renderPet();renderGifts();renderPurchases();renderFood();renderPayments();renderSettings();}
@@ -1179,7 +1206,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.3',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.4',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -1340,7 +1367,7 @@ function bindStaticEvents(){
   $('#profileAvatarBtn').addEventListener('click',profileAvatarModal);$('#editProfileAvatarBtn').addEventListener('click',profileAvatarModal);
   $$('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>setScreen(b.dataset.nav)));
   $('#settingsBtn').addEventListener('click',()=>openOverlay('settings'));$('#closeOverlayBtn').addEventListener('click',closeOverlay);
-  $('#quickExpenseBtn').addEventListener('click',quickExpenseModal);$('#undoLastBtn').addEventListener('click',undoLastAction);
+  $('#editQuickActionsBtn').addEventListener('click',quickActionsModal);$('#undoLastBtn').addEventListener('click',undoLastAction);
   $('#periodPill').addEventListener('click',()=>setScreen('month'));$('#editBalanceBtn').addEventListener('click',openBalanceEditor);$('#weekCard').addEventListener('click',()=>{foodPeriodKey=currentPeriod().key;openOverlay('food')});
   $('#prevMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,-1);ensurePeriod(state,selectedPeriodKey);renderAll()});$('#nextMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,1);ensurePeriod(state,selectedPeriodKey);renderAll()});
   $('#foodPrevMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,-1);ensurePeriod(state,foodPeriodKey);renderFood()});$('#foodNextMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,1);ensurePeriod(state,foodPeriodKey);renderFood()});
@@ -1367,7 +1394,7 @@ function bindStaticEvents(){
 }
 function bindDelegatedEvents(){
   document.addEventListener('click',async e=>{
-    const shortcut=e.target.closest('[data-shortcut]');if(shortcut){if(shortcut.dataset.shortcut==='savings')savingsModal('deposit');else{if(shortcut.dataset.shortcut==='month')selectedPeriodKey=currentPeriod().key;setScreen(shortcut.dataset.shortcut);}return;}
+    const shortcut=e.target.closest('[data-shortcut]');if(shortcut){if(shortcut.dataset.shortcut==='expense')quickExpenseModal();else if(shortcut.dataset.shortcut==='savings')savingsModal('deposit');else{if(shortcut.dataset.shortcut==='month')selectedPeriodKey=currentPeriod().key;if(shortcut.dataset.shortcut==='food')foodPeriodKey=currentPeriod().key;setScreen(shortcut.dataset.shortcut);}return;}
     const dashboard=e.target.closest('[data-dashboard]');if(dashboard){const id=dashboard.dataset.dashboard,category=categoryById(dashboardCategoryId(id));if(category){selectedPeriodKey=currentPeriod().key;if(category.kind==='food'){foodPeriodKey=currentPeriod().key;openOverlay('food')}else if(category.kind==='pet')setScreen('pet');else if(category.kind==='gift')openOverlay('gifts');else setScreen('month');return;}if(id==='payments')openOverlay('payments');else setScreen(id);return;}
     const nav=e.target.closest('[data-nav-to]');if(nav){setScreen(nav.dataset.navTo);return;}
     if(e.target.closest('[data-open-food]')){foodPeriodKey=selectedPeriodKey;openOverlay('food');return;}

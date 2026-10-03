@@ -487,3 +487,10 @@ test('home quick actions are configurable and persist',async()=>{
  await a.run("modal.submit({slot0:'month',slot1:'month',slot2:'food',slot3:'pet'})");
  assert.equal(a.value('saved.length'),1);
 });
+
+test('month can stay hidden in bottom navigation after normalization',()=>{
+ const a=app();a.run("state.settings.navItems=['home','savings'];normalizeState();");
+ assert.deepEqual(a.value('navItems()'),['home','savings']);
+ a.run('state=cloneState(state);normalizeState();');
+ assert.equal(a.value("navItems().includes('month')"),false);
+});

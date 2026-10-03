@@ -494,3 +494,44 @@ test('month can stay hidden in bottom navigation after normalization',()=>{
  a.run('state=cloneState(state);normalizeState();');
  assert.equal(a.value("navItems().includes('month')"),false);
 });
+
+test('personal section records survive full backup migration without changing finance',async()=>{
+ const a=app();a.context.URL=URL;
+ a.run("lifeSection='ideas';globalThis.financial=cloneState(state);lifeEditor();");
+ await a.run("modal.submit({title:'Полка',text:'Описание',links:''})");
+ a.run("lifeDetail=state.life.ideas[0].id;lifeEditor(null,{note:true});");
+ await a.run("modal.submit({title:'Размеры',text:'120 см',links:'https://example.com'})");
+ a.run('globalThis.restored=migrateBackupState(state);');
+ assert.deepEqual(a.value('restored.life'),a.value('state.life'));
+ assert.deepEqual(a.value('state.periods'),a.value('financial.periods'));
+ assert.deepEqual(a.value('state.account'),a.value('financial.account'));
+ assert.equal(a.value('backupSummaryForState(state).lifeRecords'),2);
+ assert.equal(a.value("lifeUrl('javascript:alert(1)')"),'');
+ assert.equal(a.value("lifeUrl('data:text/html,test')"),'');
+});
+
+test('activity allows multiple types per day and prevents duplicate marks',async()=>{
+ const a=app();
+ for(const kind of ['gym','steps']){
+  a.run("lifeActivityEditor('2026-10-05')");
+  await a.run(`modal.submit({date:'2026-10-05',kind:'${kind}',title:''})`);
+ }
+ a.run("lifeActivityEditor('2026-10-05')");
+ await a.run("modal.submit({date:'2026-10-05',kind:'gym',title:''})");
+ assert.equal(a.value('lifeData().activities.length'),2);
+ a.run('lifeWeightEditor()');
+ await a.run("modal.submit({date:'2026-10-05',value:65.4})");
+ a.run('lifeWeightEditor()');
+ await a.run("modal.submit({date:'2026-10-05',value:65.2})");
+ assert.equal(a.value('state.life.weights.length'),1);
+ assert.equal(a.value('state.life.weights[0].value'),65.2);
+ assert.equal(a.value('validLifeData(state.life)'),true);
+ assert.equal(a.value("validLifeData({weights:[{id:'bad',date:'2026-10-05',value:-1}]})"),false);
+});
+
+test('old backups remain compatible and malformed personal data is rejected',()=>{
+ const a=app();
+ assert.equal(a.value('validLifeData(undefined)'),true);
+ assert.equal(a.value("validLifeData({ideas:'bad'})"),false);
+ assert.throws(()=>a.run("migrateBackupState({...state,life:{ideas:'bad'}})"),/format/);
+});

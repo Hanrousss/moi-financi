@@ -12,7 +12,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="./icons/favicon.png">
-  <link rel="stylesheet" href="./styles.css?v=1.1.3">
+  <link rel="stylesheet" href="./styles.css?v=1.1.4">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -89,7 +89,7 @@
       </section>
 
       <section id="gifts" class="screen overlay-screen">
-        <article class="gift-hero"><div class="gift-mark">✉</div><div><span>Осталось в конверте подарков</span><strong id="giftBalance">0 BYN</strong><small id="giftSummary"></small></div></article>
+        <article class="gift-hero"><div class="gift-mark"><img class="pack-icon" src="./icons/universal/02-categories/08-gifts.png" alt=""></div><div><span>Осталось в конверте подарков</span><strong id="giftBalance">0 BYN</strong><small id="giftSummary"></small></div></article>
         <div class="button-row"><button id="topupGifts" class="primary-button"></button><button id="spendGifts" class="secondary-button"></button></div>
         <div class="section-row"><h2>Подарки</h2><button id="addGiftPlan" class="text-button"></button></div><div id="giftPlans" class="gift-list"></div>
         <div class="section-row"><h2>История конверта</h2></div><div id="giftHistory" class="history-list"></div>
@@ -116,6 +116,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.1.3"></script>
+  <script src="./app.bundle.js?v=1.1.4"></script>
 </body>
 </html>

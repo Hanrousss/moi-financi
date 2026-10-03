@@ -339,3 +339,15 @@ test('legacy category colors remain selected and dark icon presets keep light fo
   assert.match(a.run(`categoryColorStyle('#202820')`),/var\(--on-dark\)/);
   assert.match(a.run(`categoryColorStyle('#c5ec63')`),/var\(--text\)/);
 });
+
+test('universal icon pack replaces saved phone icons once and preserves finances and later choices',()=>{
+ const a=app();
+ a.run(`currentPeriod().salary=1234.56;state.settings.navIcons={home:{image:'old'}};state.categories[0].iconImage='old';state.pet.avatarImage='old';state.safety.iconImage='old';normalizeState();`);
+ assert.equal(a.value('state.settings.navIcons.home.image'),'./icons/universal/01-navigation/home.png');
+ assert.equal(a.value('state.categories[0].iconImage'),'./icons/universal/02-categories/01-food.png');
+ assert.equal(a.value('state.pet.avatarImage'),'./icons/universal/04-avatar/pet-avatar.png');
+ assert.equal(a.value('state.safety.iconImage'),'./icons/universal/03-safety/safety.png');
+ assert.equal(a.value('currentPeriod().salary'),1234.56);
+ a.run(`state.settings.navIcons.home.image='later-choice';normalizeState();`);
+ assert.equal(a.value('state.settings.navIcons.home.image'),'later-choice');
+});

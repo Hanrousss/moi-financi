@@ -503,7 +503,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.1.3';
+const APP_BUILD='1.1.4';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -589,6 +589,9 @@ const dateLabel = value => value ? new Date(`${value}T12:00:00`).toLocaleDateStr
 const shortDate = value => value ? new Date(`${value}T12:00:00`).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'}) : '';
 const pluralDays = n => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'день' : [2,3,4].includes(n % 10) && ![12,13,14].includes(n % 100) ? 'дня' : 'дней'}`;
 
+const PACK_NAV={"month": "./icons/universal/01-navigation/month.png", "settings": "./icons/universal/01-navigation/settings.png", "home": "./icons/universal/01-navigation/home.png", "savings": "./icons/universal/01-navigation/savings.png", "food": "./icons/universal/01-navigation/food.png", "payments": "./icons/universal/01-navigation/payments.png", "pet": "./icons/universal/01-navigation/pet.png", "purchases": "./icons/universal/01-navigation/purchases.png"};
+const PACK_CATEGORIES={"pet": "./icons/universal/02-categories/04-pet.png", "hobby": "./icons/universal/02-categories/11-hobby.png", "unexpected": "./icons/universal/02-categories/12-unexpected.png", "beauty": "./icons/universal/02-categories/05-beauty.png", "home": "./icons/universal/02-categories/10-home.png", "health": "./icons/universal/02-categories/06-health.png", "leisure": "./icons/universal/02-categories/09-leisure.png", "everyday": "./icons/universal/02-categories/02-everyday.png", "sport": "./icons/universal/02-categories/03-sport.png", "clothing": "./icons/universal/02-categories/07-clothing.png", "gifts": "./icons/universal/02-categories/08-gifts.png", "food": "./icons/universal/02-categories/01-food.png"};
+const PACK_ICONS={"home": "./icons/universal/01-navigation/home.png", "calendar": "./icons/universal/01-navigation/month.png", "piggy": "./icons/universal/01-navigation/savings.png", "paw": "./icons/universal/01-navigation/pet.png", "bag": "./icons/universal/01-navigation/purchases.png", "settings": "./icons/universal/01-navigation/settings.png", "money": "./icons/universal/01-navigation/payments.png", "utensils": "./icons/universal/01-navigation/food.png", "shield": "./icons/universal/03-safety/safety.png", "wallet": "./icons/universal/02-categories/02-everyday.png", "dumbbell": "./icons/universal/02-categories/03-sport.png", "sparkles": "./icons/universal/02-categories/05-beauty.png", "heart": "./icons/universal/02-categories/06-health.png", "shirt": "./icons/universal/02-categories/07-clothing.png", "gift": "./icons/universal/02-categories/08-gifts.png", "ticket": "./icons/universal/02-categories/09-leisure.png", "palette": "./icons/universal/02-categories/11-hobby.png"};
 const iconPaths = {
   home:'<path d="M3 11.5 12 4l9 7.5v8a2 2 0 0 1-2 2h-5v-6h-4v6H5a2 2 0 0 1-2-2z"/>',
   calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
@@ -618,8 +621,18 @@ const iconPaths = {
   undo:'<path d="M3 7v6h6"/><path d="M5.5 17.5A8 8 0 1 0 5 8l-2 5"/>',
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'
 };
-function icon(name,size=22){return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name]||iconPaths.wallet}</svg>`}
-function petAvatar(){return `<button class="pet-avatar-button" data-edit-pet-avatar aria-label="Изменить аватар питомца"><img src="${esc(state.pet?.avatarImage||'./icons/pet-face.png')}" alt="Сэмми" loading="lazy"></button>`}
+function icon(name,size=22){if(PACK_ICONS[name])return `<img class="pack-icon" src="${PACK_ICONS[name]}" width="${size}" height="${size}" alt="" aria-hidden="true">`;return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name]||iconPaths.wallet}</svg>`}
+function petAvatar(){return `<button class="pet-avatar-button" data-edit-pet-avatar aria-label="Изменить аватар питомца"><img src="${esc(state.pet?.avatarImage||'./icons/universal/04-avatar/pet-avatar.png')}" alt="Сэмми" loading="lazy"></button>`}
+function migrateUniversalIcons(){
+  if(state.settings.universalIconPackVersion===1)return false;
+  state.settings.navIcons=state.settings.navIcons||{};
+  for(const [id,image] of Object.entries(PACK_NAV))state.settings.navIcons[id]={...(state.settings.navIcons[id]||{}),image};
+  for(const category of state.categories||[])if(PACK_CATEGORIES[category.id])category.iconImage=PACK_CATEGORIES[category.id];
+  state.safety.iconImage=PACK_ICONS.shield;
+  state.pet.avatarImage='./icons/universal/04-avatar/pet-avatar.png';
+  state.settings.universalIconPackVersion=1;
+  return true;
+}
 function normalizeState(){
   state.settings.navItems=Array.isArray(state.settings.navItems)?state.settings.navItems:['home','month','savings','pet','purchases'];
   for(const id of ['home','month'])if(!state.settings.navItems.includes(id))state.settings.navItems.unshift(id);
@@ -656,7 +669,8 @@ function normalizeState(){
   state.gifts.recipients=Array.isArray(state.gifts.recipients)&&state.gifts.recipients.length?state.gifts.recipients:['Паше','Маме','Другому'];
   const giftsCategory=state.categories?.find(c=>c.id==='gifts');
   if(giftsCategory)giftsCategory.kind='gift';
-  return monthlyBalancesMigrated||savingsPeriodsPinned;
+  const iconsMigrated=migrateUniversalIcons();
+  return monthlyBalancesMigrated||savingsPeriodsPinned||iconsMigrated;
 }
 
 async function centerStoredIconImages(){
@@ -1159,7 +1173,7 @@ function renderGifts(){
   $('#giftSummary').textContent=open.length?`Запланировано ${open.length} · нужно ${formatByn(open.reduce((s,g)=>s+num(g.costByn),0))}`:'Планов подарков пока нет';
   $('#giftPlans').innerHTML=open.length?[...open].sort((a,b)=>giftPinnedRank(a)-giftPinnedRank(b)||a.name.localeCompare(b.name)).map(g=>{
     const color=g.color||'#e4edf0', enough=balance>=num(g.costByn);
-    return `<article class="gift-card ${enough?'affordable':''}" style="--gift-color:${esc(color)}">${g.imageDataUrl?`<img class="purchase-thumb" src="${g.imageDataUrl}" alt="">`:`<span class="gift-envelope" style="${categoryColorStyle(g.color)}">✉</span>`}<div><b>${esc(g.name)}</b><small>${esc(g.recipient||'Другому')}${g.note?` · ${esc(g.note)}`:''}</small>${g.link?`<a href="${esc(g.link)}" target="_blank" rel="noreferrer">Ссылка на подарок</a>`:''}</div><div class="purchase-cost"><b>${formatByn(g.costByn)}</b><small class="${enough?'success-text':'negative-number'}">${enough?'Конверт позволяет':`Не хватает ${formatByn(num(g.costByn)-balance)}`}</small><div><button class="mini-icon" data-complete-gift="${g.id}">${icon('check',16)}</button><button class="mini-icon" data-edit-gift="${g.id}">${icon('edit',16)}</button></div></div></article>`;
+    return `<article class="gift-card ${enough?'affordable':''}" style="--gift-color:${esc(color)}">${g.imageDataUrl?`<img class="purchase-thumb" src="${g.imageDataUrl}" alt="">`:`<span class="gift-envelope" style="${categoryColorStyle(g.color)}">${icon('gift',40)}</span>`}<div><b>${esc(g.name)}</b><small>${esc(g.recipient||'Другому')}${g.note?` · ${esc(g.note)}`:''}</small>${g.link?`<a href="${esc(g.link)}" target="_blank" rel="noreferrer">Ссылка на подарок</a>`:''}</div><div class="purchase-cost"><b>${formatByn(g.costByn)}</b><small class="${enough?'success-text':'negative-number'}">${enough?'Конверт позволяет':`Не хватает ${formatByn(num(g.costByn)-balance)}`}</small><div><button class="mini-icon" data-complete-gift="${g.id}">${icon('check',16)}</button><button class="mini-icon" data-edit-gift="${g.id}">${icon('edit',16)}</button></div></div></article>`;
   }).join(''):'<div class="empty-state">Добавь подарок, ссылку или идею</div>';
   $('#giftHistory').innerHTML=state.gifts.transactions.length?[...state.gifts.transactions].sort((a,b)=>b.date.localeCompare(a.date)).map(t=>`<article class="history-row"><span class="history-icon ${t.type==='topup'?'green':'red'}">${icon(t.type==='topup'?'arrowDown':'arrowUp',18)}</span><div><b class="${t.type==='spend'?'negative-number':''}">${t.type==='topup'?'+':'−'} ${formatByn(t.amountByn)}</b><small>${esc(t.note||'Без комментария')} · ${dateLabel(t.date)}</small></div><button class="mini-icon" data-delete-gift-tx="${t.id}">${icon('trash',17)}</button></article>`).join(''):'<div class="empty-state">История конверта пока пустая</div>';
 }
@@ -1379,7 +1393,7 @@ function navIconModal(id){
   },{extraAction:current.icon||current.image?{label:'Сбросить иконку',handler:async()=>{delete settings[id];await commit();closeModal();}}:null});
 }
 function petAvatarModal(){
-  openModal('Аватар питомца',[{name:'avatar',label:'Картинка питомца',type:'file',crop:true,preview:state.pet.avatarImage||'./icons/pet-face.png',accept:'image/png,image/jpeg,image/webp,image/*',help:'Можно загрузить новую картинку, настроить кроп или сбросить к стандартной.'}],async v=>{if(v.avatar)state.pet.avatarImage=await imageToDataUrl(v.avatar,512,cropOptions(v,'avatar'));await commit();closeModal();},{extraAction:state.pet.avatarImage?{label:'Вернуть стандартную картинку',handler:async()=>{state.pet.avatarImage='';await commit();closeModal();}}:null});
+  openModal('Аватар питомца',[{name:'avatar',label:'Картинка питомца',type:'file',crop:true,preview:state.pet.avatarImage||'./icons/universal/04-avatar/pet-avatar.png',accept:'image/png,image/jpeg,image/webp,image/*',help:'Можно загрузить новую картинку, настроить кроп или сбросить к стандартной.'}],async v=>{if(v.avatar)state.pet.avatarImage=await imageToDataUrl(v.avatar,512,cropOptions(v,'avatar'));await commit();closeModal();},{extraAction:state.pet.avatarImage?{label:'Вернуть стандартную картинку',handler:async()=>{state.pet.avatarImage='';await commit();closeModal();}}:null});
 }
 function openCategoryEditor(id){
   const c=categoryById(id), p=selectedPeriod(), b=categoryBudget(p,c);const deletable=!['food','pet'].includes(c.kind);

@@ -10,9 +10,9 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.1.7">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.1.7">
-  <link rel="stylesheet" href="./styles.css?v=1.1.7">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.1.8">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.1.8">
+  <link rel="stylesheet" href="./styles.css?v=1.1.8">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -96,7 +96,7 @@
       </section>
 
       <section id="payments" class="screen overlay-screen">
-        <article class="debt-hero"><span>Осталось закрыть</span><strong id="debtRemaining">0 BYN</strong><div class="progress-track"><span id="debtProgress"></span></div><small id="debtMeta"></small></article>
+        <article class="debt-hero"><div class="debt-heading"><span>Осталось закрыть</span><button id="editPaymentRemainingBtn" class="debt-edit-button" type="button">Изменить сумму</button></div><strong id="debtRemaining">0 BYN</strong><div class="progress-track"><span id="debtProgress"></span></div><small id="debtMeta"></small></article>
         <div class="section-row"><h2>График</h2><button id="addPaymentBtn" class="text-button"></button></div><div id="paymentsList" class="payments-list"></div>
       </section>
 
@@ -116,6 +116,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.1.7"></script>
+  <script src="./app.bundle.js?v=1.1.8"></script>
 </body>
 </html>

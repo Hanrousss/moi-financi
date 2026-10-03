@@ -411,6 +411,7 @@ export function validateState(v){
   const moneyFields=(value,keys)=>object(value)&&keys.every(key=>money(value[key]));
   const date=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&toISODate(parseISODate(value))===value;
   if(!object(v)||v.version!==VERSION||!object(v.settings)||!Array.isArray(v.categories)||!object(v.periods)||!Array.isArray(v.payments)||!Array.isArray(v.savings)||!Array.isArray(v.purchases)||!object(v.account)||!object(v.pet))return false;
+  if(v.settings.paymentPageTotalByn!=null&&(!Number.isFinite(v.settings.paymentPageTotalByn)||v.settings.paymentPageTotalByn<0))return false;
   if(v.settings.salaryDay!=null&&(!Number.isInteger(Number(v.settings.salaryDay))||Number(v.settings.salaryDay)<1||Number(v.settings.salaryDay)>28))return false;
   if(new Set(v.categories.map(c=>c?.id)).size!==v.categories.length||!v.categories.every(c=>object(c)&&typeof c.id==='string'&&c.id.length>0))return false;
   if(v.categories.filter(c=>c.kind==='food').length!==1)return false;

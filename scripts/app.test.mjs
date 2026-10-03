@@ -352,3 +352,34 @@ test('universal icon pack replaces saved phone icons once and preserves finances
  a.run(`state.settings.navIcons.home.image='later-choice';normalizeState();`);
  assert.equal(a.value('state.settings.navIcons.home.image'),'later-choice');
 });
+
+test('payment page target is isolated from monthly budgets and dashboard debt',async()=>{
+ const a=app();
+ a.run(`currentPeriod().salary=2000;state.payments=[{id:'p',periodKey:currentPeriod().key,planned:500,paid:100}];globalThis.before={free:liveFreeBalance(state,currentPeriod()),debt:debtRemaining(state),account:state.account.balanceByn};paymentRemainingModal();`);
+ await a.run('modal.submit({remaining:3000});');
+ assert.equal(a.value('paymentPageSummary().remaining'),3000);
+ assert.equal(a.value('paymentPageSummary().unallocated'),2600);
+ assert.equal(a.value('liveFreeBalance(state,currentPeriod())'),a.value('before.free'));
+ assert.equal(a.value('debtRemaining(state)'),a.value('before.debt'));
+ assert.equal(a.value('state.account.balanceByn'),a.value('before.account'));
+ a.run('state=cloneState(saved.at(-1));paymentModal();');
+ assert.equal(a.value("modal.fields.find(f=>f.name==='planned').value"),'');
+ assert.equal(a.value("modal.fields.find(f=>f.name==='planned').placeholder"),'2600');
+});
+
+test('payment recommendations follow unpaid plans and payments without double subtraction',()=>{
+ const a=app();
+ a.run(`state.settings.paymentPageTotalByn=3100;state.payments=[{id:'p',periodKey:'2026-10',planned:500,paid:100}];`);
+ assert.equal(a.value('paymentPageSummary().unallocated'),2600);
+ a.run('state.payments[0].paid=200;');
+ assert.equal(a.value('paymentPageSummary().remaining'),2900);
+ assert.equal(a.value('paymentPageSummary().unallocated'),2600);
+ a.run(`state.payments.push({id:'q',periodKey:'2026-11',planned:1000,paid:0});`);
+ assert.equal(a.value('paymentPageSummary().unallocated'),1600);
+ a.run('state.payments.pop();');
+ assert.equal(a.value('paymentPageSummary().unallocated'),2600);
+ a.run('state.settings.paymentPageTotalByn=0;');
+ assert.equal(a.value('paymentPageSummary().remaining'),0);
+ assert.equal(a.value('paymentPageSummary().unallocated'),0);
+ assert.equal(a.value('paymentPageSummary().overallocated'),300);
+});

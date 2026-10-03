@@ -194,3 +194,15 @@ button:active:not(:disabled){transform:scale(.97)}
 .debt-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px}
 .debt-edit-button{border:0;border-radius:22px;background:var(--green);color:var(--on-accent);font-size:11px;font-weight:600;padding:10px 12px;min-height:40px}
 .form-field input::placeholder{color:var(--muted);opacity:.8}
+#addCategoryBtn{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--green);color:var(--on-accent);padding:0}
+.category-drag-handle{display:grid;place-items:center;flex-shrink:0;width:36px;height:44px;border:0;background:transparent;color:var(--muted);font-size:28px;line-height:1;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.category-dragging{outline:2px solid var(--green-dark);box-shadow:var(--shadow);position:relative;z-index:2}
+.category-dragging .category-drag-handle{cursor:grabbing}
+.category-finished{background:var(--surface-soft);filter:grayscale(1)}
+.category-finished .category-head,.category-finished .category-open{opacity:.58}
+.category-finished .category-budget-fields{opacity:.7}
+.home-category-list{display:grid;gap:10px}
+.month-home-row{display:flex;align-items:center;background:var(--card);border-radius:20px;padding:10px 8px 10px 14px;min-width:0}
+.month-home-row.category-finished{background:var(--surface-soft)}
+.category-open{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;flex:1;min-width:0;text-align:left;background:transparent;border:0;padding:7px 0}
+.category-open strong{font-size:13px;max-width:110px;overflow-wrap:anywhere;text-align:right}.category-open .category-icon{width:36px;height:36px}

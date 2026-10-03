@@ -504,7 +504,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.1.8';
+const APP_BUILD='1.2.0';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -967,8 +967,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.1.8');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.1.8');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.0');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.0');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -1079,7 +1079,8 @@ function renderHome(){
     purchases:{id:'purchases',icon:'bag',tone:'lavender',title:sectionLabel('purchases'),value:`${openPurchases.length}`,meta:affordable?`${affordable} уже доступны`:'пока накоплений не хватает'}
   };
   const categoryRow=id=>{const c=categoryById(dashboardCategoryId(id));if(!c||!c.visible)return null;const b=categoryBudget(p,c);return {id,category:c,title:c.name,value:formatByn(c.kind==='pet'?petBalanceByn(state):c.kind==='gift'?giftBalanceByn():roundMoney(num(b.plan)-num(b.spent))),meta:c.kind==='pet'||c.kind==='gift'?'осталось в конверте':'осталось на этот месяц'};};
-  const rows=dashboardCards().map(id=>rowMap[id]||categoryRow(id)).filter(Boolean);
+  const rows=dashboardCards().filter(id=>['savings','payments','purchases'].includes(id)).map(id=>rowMap[id]).filter(Boolean);
+  renderHomeCategories(p);
   $('#dashboardList').innerHTML=rows.map(r=>`<button class="dashboard-row" data-dashboard="${r.id}"><span class="dashboard-icon ${r.tone||''}" ${r.category?`style="${categoryColorStyle(r.category.color)}"`:''}>${r.category?categoryIconHtml(r.category):sharedSectionIconHtml(r.id)}</span><span class="dashboard-copy"><b>${esc(r.title)}</b><small>${esc(r.meta)}</small></span><strong>${esc(r.value)}</strong>${icon('chevronRight',18)}</button>`).join('');
 }
 
@@ -1100,14 +1101,46 @@ function renderMandatoryCard(name,plan,spent,kind,{locked=false}={}){
   const available=roundMoney(plan-spent);
   return `<article class="mandatory-card ${budgetToneClass(plan,available)}"><div class="mandatory-title"><b>${esc(name)}</b><span class="settings-actions"><button class="mini-icon" data-edit-mandatory="${kind}" aria-label="Изменить">${icon('edit',17)}</button>${locked?'':`<button class="mini-icon" data-remove-mandatory-section="${kind}" aria-label="Убрать из обязательного">${icon('close',16)}</button>`}</span></div><div class="metrics-row">${metric('План',formatByn(plan))}${metric('Потрачено',formatByn(spent))}${metric('Доступно',`<span class="${budgetValueClass(plan,available)}">${formatByn(available)}</span>`)}</div></article>`;
 }
+function monthCategoryIds(period){
+  if(!Array.isArray(period.selectedCategoryIds)){
+    period.selectedCategoryIds=[...state.categories].sort((a,b)=>a.order-b.order).filter(c=>{const b=categoryBudget(period,c);return num(b.plan)>0||num(b.spent)>0;}).map(c=>c.id);
+  }
+  period.selectedCategoryIds=period.selectedCategoryIds.filter((id,index,ids)=>categoryById(id)&&ids.indexOf(id)===index);
+  return period.selectedCategoryIds;
+}
+function categoryFinished(period,category){const b=categoryBudget(period,category);return num(b.plan)>0&&num(b.spent)>=num(b.plan);}
+function orderedMonthCategories(period){return monthCategoryIds(period).map(categoryById).sort((a,b)=>Number(categoryFinished(period,a))-Number(categoryFinished(period,b)));}
+function moveMonthCategory(period,id,targetId){
+  const ids=monthCategoryIds(period),from=ids.indexOf(id),to=ids.indexOf(targetId);
+  if(from<0||to<0||from===to||categoryFinished(period,categoryById(id))!==categoryFinished(period,categoryById(targetId)))return false;
+  ids.splice(from,1);ids.splice(to,0,id);return true;
+}
+function categoryDragHandle(id){return `<button type="button" class="category-drag-handle" data-drag-category="${esc(id)}" aria-label="Перетащить категорию; стрелки вверх и вниз меняют порядок" title="Перетащить">⠿</button>`;}
+function monthCategoryPicker(){
+  const period=selectedPeriod(),selected=monthCategoryIds(period);
+  const available=[...state.categories].filter(c=>!selected.includes(c.id)).sort((a,b)=>a.order-b.order);
+  openModal('Добавить категории',available.map(c=>({name:c.id,label:c.name,type:'checkbox',value:false})),async values=>{
+    for(const category of available)if(values[category.id]&&!selected.includes(category.id))selected.push(category.id);
+    await commit();closeModal();
+  },{submitLabel:'Добавить выбранные'});
+  if(!available.length)$('#modalBody').innerHTML='<div class="empty-state">Все категории уже добавлены в этот месяц.</div>';
+}
+function renderHomeCategories(period){
+  $('#homeCategoryList').innerHTML=orderedMonthCategories(period).map(c=>{
+    const b=categoryBudget(period,c),finished=categoryFinished(period,c),remaining=roundMoney(num(b.plan)-num(b.spent));
+    return `<article class="month-home-row ${finished?'category-finished':''}" data-month-category="${esc(c.id)}"><button class="category-open" data-dashboard="${dashboardCategoryKey(c.id)}"><span class="category-icon" style="${categoryColorStyle(c.color)}">${categoryIconHtml(c)}</span><span class="dashboard-copy"><b>${esc(c.name)}</b><small>${finished?(remaining<0?'План превышен':'План использован'):'Осталось по плану'}</small></span><strong class="${remaining<0?'negative-number':''}">${formatByn(remaining)}</strong></button>${categoryDragHandle(c.id)}</article>`;
+  }).join('')||'<div class="empty-state">Выбери категории кнопкой «+» во вкладке «Месяц».</div>';
+  $('#weekCard').hidden=!monthCategoryIds(period).some(id=>categoryById(id)?.kind==='food');
+}
+
 function renderCategoryCard(category,period,{mandatory=false}={}){
   const b=categoryBudget(period,category);
   const food=category.kind==='food', pet=category.kind==='pet', gift=category.kind==='gift';
   const planInput=`<label class="inline-money-input"><input class="number-field compact" data-category-plan="${category.id}" ${moneyInputAttributes(0)} value="${num(b.plan)}" aria-label="План: ${esc(category.name)}"><span>BYN</span></label>`;
   const spentInput=`<label class="inline-money-input"><input class="number-field compact" data-category-spent="${category.id}" ${moneyInputAttributes(0)} value="${num(b.spent)}" aria-label="${pet||gift?'Отложено':'Потрачено'}: ${esc(category.name)}"><span>BYN</span></label>`;
-  const actions=`<span class="settings-actions"><button class="mini-icon" data-edit-category="${category.id}" aria-label="Изменить категорию">${icon('edit',17)}</button>${mandatory&&category.id!=='food'?`<button class="mini-icon" data-remove-mandatory-category="${category.id}" aria-label="Убрать из обязательного">${icon('close',16)}</button>`:!mandatory?`<button class="mini-icon" data-add-mandatory-category="${category.id}" aria-label="В обязательное">${icon('plus',16)}</button>`:''}</span>`;
+  const actions=`<span class="settings-actions"><button class="mini-icon" data-edit-category="${category.id}" aria-label="Изменить категорию">${icon('edit',17)}</button>${categoryDragHandle(category.id)}</span>`;
   const detailAttr=food||pet||gift?` data-open-category-detail="${category.id}"`:'';
-  return `<article class="category-card" data-category="${category.id}"${detailAttr}>
+  return `<article class="category-card ${categoryFinished(period,category)?'category-finished':''}" data-month-category="${esc(category.id)}" data-category="${category.id}"${detailAttr}>
     <div class="category-head"><span class="category-icon" style="${categoryColorStyle(category.color)}">${categoryIconHtml(category)}</span><div><b>${esc(category.name)}</b><small>${mandatory?'обязательное этого месяца':category.kind==='food'?'по неделям':category.kind==='pet'?'переводы в конверт питомца':category.kind==='gift'?'переводы в конверт подарков':'месячная сумма'}</small></div>${actions}</div>
     <div class="category-budget-fields"><div class="category-budget-field"><span>План</span>${planInput}</div><div class="category-budget-field"><span>${pet||gift?'Отложено':'Потрачено'}</span>${spentInput}</div></div>
   </article>`;
@@ -1125,9 +1158,9 @@ function renderMonth(){
     renderMandatoryCard(mandatoryLabel('housing'),num(p.mandatory.housingPlan),num(p.mandatory.housingSpent),'housing',{locked:true}),
     sections.includes('payment')?renderMandatoryCard(sectionLabel('payments'),roundMoney(state.payments.filter(item=>item.periodKey===p.key).reduce((sum,item)=>sum+num(item.planned),0)),periodPaymentsPaid(state,p.key),'payment'):null,
     sections.includes('reserve')?renderMandatoryCard(mandatoryLabel('reserve'),num(p.mandatory.reservePlan),num(p.mandatory.reserveAllocated),'reserve'):null,
-    ...mandatoryCategories(p).map(c=>renderCategoryCard(c,p,{mandatory:true}))
+
   ].filter(Boolean).join('')+(addableSections?`<article class="pass-through"><div><b>Добавить в обязательное</b><small>Для ${periodTitle(p.key)} можно вернуть скрытые обязательные пункты.</small></div><div class="settings-actions">${addableSections}</div></article>`:'')+`<article class="pass-through"><label class="check-label"><input type="checkbox" data-utility-paid="${p.key}" ${p.passThroughs?.[0]?.paid?'checked':''}><span>${p.passThroughs?.[0]?.paid?'Оплачено':'Не оплачено'}</span></label><div><b>Коммунальные ${formatByn(p.passThroughs?.[0]?.amount||120)}</b><small>Аванс 25 числа приходит и сразу уходит. Основной доход не уменьшается.</small></div></article>`;
-  $('#categoryList').innerHTML=optionalCategories(p).map(c=>renderCategoryCard(c,p)).join('')||'<div class="empty-state">Все видимые категории уже в обязательном для этого месяца</div>';
+  $('#categoryList').innerHTML=orderedMonthCategories(p).map(c=>renderCategoryCard(c,p)).join('')||'<div class="empty-state">Нажми «+», чтобы выбрать категории для этого месяца.</div>';
   $('#monthFreeValue').textContent=formatByn(free);
   $('#monthLimitMeta').textContent=`Осталось по факту: ${formatByn(accountBalance)} · Запланированные траты: ${formatByn(reserved)}`;
   $('#monthFreeCard').classList.toggle('negative',free<0);
@@ -1216,7 +1249,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.1.8')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.0')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · 6 готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1224,7 +1257,7 @@ function renderSettings(){
   $('#settingsNavIcons').innerHTML=`<label class="toggle-field"><input type="checkbox" data-nav-labels ${showNavLabels()?'checked':''}><span><b>Показывать названия</b><small>Если выключить, нижнее меню останется только с крупными иконками.</small></span></label>`+settingsIconRow+navDefaults.map(item=>`<article class="settings-row dashboard-setting"><span><span class="nav-icon-preview">${navItemIconHtml(item,20)}</span><span><b>${esc(sectionLabel(item.id))}</b><small>${['home','month'].includes(item.id)?'Обязательный раздел':navItems().includes(item.id)?'Показывается':'Скрыт'}</small></span></span><span class="settings-actions"><label class="mini-toggle"><input type="checkbox" data-nav-item="${item.id}" ${navItems().includes(item.id)?'checked':''} ${['home','month'].includes(item.id)?'disabled':''}><span></span></label><button class="mini-icon" data-edit-nav-icon="${item.id}" aria-label="Изменить раздел">${icon('edit',16)}</button></span></article>`).join('');
   const cardLabels={savings:sectionLabel('savings'),payments:sectionLabel('payments'),pet:sectionLabel('pet'),purchases:sectionLabel('purchases')};
   const dashboardLabel=id=>cardLabels[id]||categoryById(dashboardCategoryId(id))?.name||id;
-  const dashboardList=dashboardCards(), availableDashboard=[...dashboardDefaults,...visibleCategories().map(c=>dashboardCategoryKey(c.id))].filter(id=>!dashboardList.includes(id)&&isDashboardCardAvailable(id));
+  const dashboardList=dashboardCards().filter(id=>['savings','payments','purchases'].includes(id)), availableDashboard=['savings','payments','purchases'].filter(id=>!dashboardList.includes(id));
   $('#settingsDashboardCards').innerHTML=dashboardList.map((id,index)=>`<article class="settings-row dashboard-setting"><span><b>${esc(dashboardLabel(id))}</b><small>${index+1} на главной</small></span><span class="settings-actions"><button class="mini-icon" data-card-up="${id}" ${index===0?'disabled':''}>${icon('chevronLeft',16)}</button><button class="mini-icon" data-card-down="${id}" ${index===dashboardList.length-1?'disabled':''}>${icon('chevronRight',16)}</button><button class="mini-icon" data-card-remove="${id}" aria-label="Скрыть">${icon('close',16)}</button></span></article>`).join('')+availableDashboard.map(id=>`<button class="settings-row" data-card-add="${id}"><span><b>${esc(dashboardLabel(id))}</b><small>${dashboardCategoryId(id)?'Категория · скрыта':'Скрыта'}</small></span>${icon('plus',18)}</button>`).join('');
   $('#settingsCategories').innerHTML=[...state.categories].sort((a,b)=>a.order-b.order).map(c=>`<button class="settings-row" data-settings-category="${c.id}"><span><span class="category-icon" style="${categoryColorStyle(c.color)}">${categoryIconHtml(c,20)}</span><span><b>${esc(c.name)}</b><small>${c.visible?'Показывается':'Скрыта'} · ${c.kind==='food'?'по неделям':['pet','gift'].includes(c.kind)?'расширенная':'обычная'}</small></span></span>${icon('chevronRight',18)}</button>`).join('');
   $('#exportBtn').innerHTML=`<span>${icon('download',20)}<b>Скачать полную резервную копию</b></span>${icon('chevronRight',18)}`;
@@ -1244,7 +1277,7 @@ function renderNav(){
   $('#prevMonth').innerHTML=icon('chevronLeft');$('#nextMonth').innerHTML=icon('chevronRight');$('#foodPrevMonth').innerHTML=icon('chevronLeft');$('#foodNextMonth').innerHTML=icon('chevronRight');
   $('#quickExpenseBtn').innerHTML=`<span class="action-circle accent">${icon('minus',24)}</span><span>Расход</span>`;
   $$('[data-action-icon]').forEach(el=>{el.innerHTML=icon(el.dataset.actionIcon,23)});$('#undoLastBtn').innerHTML=icon('undo',18);
-  $('#editBalanceBtn').innerHTML=icon('edit',17);$('#addCategoryBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#depositSavings').innerHTML=`${icon('plus',18)} Отложить`;$('#withdrawSavings').innerHTML=`${icon('minus',18)} Взять`;$('#topupPet').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendPet').innerHTML=`${icon('minus',18)} Вычесть`;$('#topupGifts').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendGifts').innerHTML=`${icon('minus',18)} Вычесть`;$('#addPetNeed').innerHTML=`${icon('plus',17)} Добавить`;$('#addGiftPlan').innerHTML=`${icon('plus',17)} Добавить`;$('#addPurchaseBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#addPaymentBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#settingsAddCategory').innerHTML=`${icon('plus',17)} Добавить`;$('#modalClose').innerHTML=icon('close',19);
+  $('#editBalanceBtn').innerHTML=icon('edit',17);$('#addCategoryBtn').innerHTML=icon('plus',23);$('#addCategoryBtn').setAttribute('aria-label','Добавить категорию в месяц');$('#depositSavings').innerHTML=`${icon('plus',18)} Отложить`;$('#withdrawSavings').innerHTML=`${icon('minus',18)} Взять`;$('#topupPet').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendPet').innerHTML=`${icon('minus',18)} Вычесть`;$('#topupGifts').innerHTML=`${icon('plus',18)} Пополнить`;$('#spendGifts').innerHTML=`${icon('minus',18)} Вычесть`;$('#addPetNeed').innerHTML=`${icon('plus',17)} Добавить`;$('#addGiftPlan').innerHTML=`${icon('plus',17)} Добавить`;$('#addPurchaseBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#addPaymentBtn').innerHTML=`${icon('plus',17)} Добавить`;$('#settingsAddCategory').innerHTML=`${icon('plus',17)} Добавить`;$('#modalClose').innerHTML=icon('close',19);
 }
 function renderAll(){applyAppearance();renderNav();renderHome();renderRecentActivity();renderMonth();renderSavings();renderPet();renderGifts();renderPurchases();renderFood();renderPayments();renderSettings();}
 
@@ -1440,7 +1473,7 @@ function openCategoryEditor(id){
     await commit();closeModal();
   }}:null});
 }
-function openNewCategory(){openModal('Новая категория',[{name:'name',label:'Название',required:true},{name:'plan',label:'Лимит текущего месяца, BYN',type:'money',value:0},{name:'icon',label:'Иконка',type:'select',value:'wallet',options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,help:'Можно загрузить свою картинку и вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:'#C8E4E8',options:colorOptions}],async v=>{const id=`category-${uid()}`;const order=Math.max(0,...state.categories.map(c=>c.order))+1;state.categories.push({id,name:v.name.trim()||'Новая категория',icon:v.icon,iconImage:v.iconImage?await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage')):'',color:v.color,kind:'monthly',order,visible:true});Object.values(state.periods).forEach(period=>{period.categoryBudgets[id]={plan:period.key===selectedPeriodKey?num(v.plan):0,spent:0}});await commit();closeModal();});}
+function openNewCategory(){openModal('Новая категория',[{name:'name',label:'Название',required:true},{name:'plan',label:'Лимит текущего месяца, BYN',type:'money',value:0},{name:'icon',label:'Иконка',type:'select',value:'wallet',options:iconOptions},{name:'iconImage',label:'Своя иконка',type:'file',crop:true,help:'Можно загрузить свою картинку и вручную настроить кроп.'},{name:'color',label:'Цвет',type:'palette',value:'#C8E4E8',options:colorOptions}],async v=>{const id=`category-${uid()}`;const order=Math.max(0,...state.categories.map(c=>c.order))+1;state.categories.push({id,name:v.name.trim()||'Новая категория',icon:v.icon,iconImage:v.iconImage?await imageToDataUrl(v.iconImage,256,cropOptions(v,'iconImage')):'',color:v.color,kind:'monthly',order,visible:true});Object.values(state.periods).forEach(period=>{period.categoryBudgets[id]={plan:period.key===selectedPeriodKey?num(v.plan):0,spent:0}});if(num(v.plan)>0){const ids=monthCategoryIds(selectedPeriod());if(!ids.includes(id))ids.push(id);}await commit();closeModal();});}
 
 function savingsModal(type){openModal(type==='deposit'?'Перевести в накопления':'Вернуть из накоплений',[{name:'currency',label:'Валюта накоплений',type:'select',value:'usd',options:[{value:'usd',label:'USD'},{value:'byn',label:'BYN'}]},{name:'amount',label:'Сумма в выбранной валюте',type:'money',min:0,required:true},{name:'accountByn',label:type==='deposit'?'Списать с обычного счета, BYN':'Вернуть на обычный счет, BYN',type:'money',min:0,help:'Для BYN приложение возьмет ту же сумму. Для USD укажи реальную сумму обмена в BYN.'},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const currency=v.currency==='byn'?'byn':'usd', amount=num(v.amount), accountAmount=currency==='byn'?amount:num(v.accountByn);if(amount<=0){toast('Введи сумму');return;}if(accountAmount<=0){toast('Введи изменение обычного счета в BYN');return;}const date=v.date||todayISO(), note=v.note.trim()||`${type==='deposit'?'В накопления':'Из накоплений'} ${currency.toUpperCase()}`;const transaction={id:uid(),type,currency,amountUsd:currency==='usd'?amount:0,amountByn:currency==='byn'?amount:0,accountAmountByn:accountAmount,exchangeRate:currency==='usd'?roundMoney(accountAmount/amount):1,date,note,periodKey:accountPeriodKey(date)};const accountTransaction=recordAccountDelta(type==='deposit'?-accountAmount:accountAmount,{type:type==='deposit'?'transfer_out':'transfer_in',date,periodKey:transaction.periodKey,note,linkedId:`savings:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';state.savings.push(transaction);await commit();closeModal();});}
 function safetyModal(){openModal('Подушка безопасности',[
@@ -1593,7 +1626,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.1.8',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.0',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -1717,6 +1750,37 @@ async function importBackup(file){
   }
 }
 
+function bindCategoryDragging(){
+  let drag=null,frame=0;
+  const periodFor=list=>list.id==='homeCategoryList'?currentPeriod():selectedPeriod();
+  const scroll=()=>{if(!drag)return;const y=drag.y;let step=y<110?-12:y>window.innerHeight-125?12:0;if(step)window.scrollBy(0,step);frame=requestAnimationFrame(scroll);};
+  document.addEventListener('pointerdown',event=>{
+    const handle=event.target.closest('[data-drag-category]');if(!handle||event.button!==0)return;
+    const card=handle.closest('[data-month-category]'),list=card.parentElement;
+    drag={handle,card,list,id:handle.dataset.dragCategory,period:periodFor(list),y:event.clientY,changed:false};
+    handle.setPointerCapture(event.pointerId);card.classList.add('category-dragging');event.preventDefault();frame=requestAnimationFrame(scroll);
+  });
+  document.addEventListener('pointermove',event=>{
+    if(!drag)return;event.preventDefault();drag.y=event.clientY;
+    const target=document.elementsFromPoint(event.clientX,event.clientY).map(el=>el.closest('[data-month-category]')).find(el=>el&&el!==drag.card&&el.parentElement===drag.list);
+    if(!target||categoryFinished(drag.period,categoryById(drag.id))!==categoryFinished(drag.period,categoryById(target.dataset.monthCategory)))return;
+    const cards=[...drag.list.children],down=cards.indexOf(drag.card)<cards.indexOf(target);
+    drag.list.insertBefore(drag.card,down?target.nextSibling:target);drag.changed=true;
+  },{passive:false});
+  const finish=async(event)=>{
+    if(!drag)return;const current=drag;drag=null;cancelAnimationFrame(frame);current.card.classList.remove('category-dragging');
+    if(event.type==='pointercancel'){renderAll();return;}
+    if(current.changed){current.period.selectedCategoryIds=[...current.list.querySelectorAll('[data-month-category]')].map(el=>el.dataset.monthCategory);await commit();}
+  };
+  document.addEventListener('pointerup',finish);document.addEventListener('pointercancel',finish);
+  document.addEventListener('click',event=>{if(event.target.closest('[data-drag-category]')){event.stopImmediatePropagation();event.preventDefault();}},true);
+  document.addEventListener('keydown',async event=>{
+    const handle=event.target.closest('[data-drag-category]');if(!handle||!['ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();
+    const list=handle.closest('[data-month-category]').parentElement,period=periodFor(list),rows=orderedMonthCategories(period),index=rows.findIndex(c=>c.id===handle.dataset.dragCategory),target=rows[index+(event.key==='ArrowUp'?-1:1)];
+    if(target&&moveMonthCategory(period,handle.dataset.dragCategory,target.id)){await commit();list.querySelector(`[data-drag-category="${handle.dataset.dragCategory}"]`)?.focus();}
+  });
+}
+
 function bindStaticEvents(){
   $('#editPaymentRemainingBtn').addEventListener('click',paymentRemainingModal);
   $('#editAppIconBtn').addEventListener('click',appIconModal);
@@ -1727,7 +1791,7 @@ function bindStaticEvents(){
   $('#periodPill').addEventListener('click',()=>setScreen('month'));$('#editBalanceBtn').addEventListener('click',openBalanceEditor);$('#weekCard').addEventListener('click',()=>{foodPeriodKey=currentPeriod().key;openOverlay('food')});
   $('#prevMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,-1);ensurePeriod(state,selectedPeriodKey);renderAll()});$('#nextMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,1);ensurePeriod(state,selectedPeriodKey);renderAll()});
   $('#foodPrevMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,-1);ensurePeriod(state,foodPeriodKey);renderFood()});$('#foodNextMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,1);ensurePeriod(state,foodPeriodKey);renderFood()});
-  $('#editPeriodBtn').addEventListener('click',openPeriodEditor);$('#addCategoryBtn').addEventListener('click',openNewCategory);$('#settingsAddCategory').addEventListener('click',openNewCategory);
+  $('#editPeriodBtn').addEventListener('click',openPeriodEditor);$('#addCategoryBtn').addEventListener('click',monthCategoryPicker);$('#settingsAddCategory').addEventListener('click',openNewCategory);
   $('#depositSavings').addEventListener('click',()=>savingsModal('deposit'));$('#withdrawSavings').addEventListener('click',()=>savingsModal('withdraw'));
   $('#topupPet').addEventListener('click',()=>petTransactionModal('topup'));$('#spendPet').addEventListener('click',()=>petTransactionModal('spend'));$('#addPetNeed').addEventListener('click',()=>needModal());
   $('#topupGifts').addEventListener('click',()=>giftTransactionModal('topup'));$('#spendGifts').addEventListener('click',()=>giftTransactionModal('spend'));$('#addGiftPlan').addEventListener('click',()=>giftModal());
@@ -1751,7 +1815,7 @@ function bindStaticEvents(){
 function bindDelegatedEvents(){
   document.addEventListener('click',async e=>{
     const shortcut=e.target.closest('[data-shortcut]');if(shortcut){if(shortcut.dataset.shortcut==='savings')savingsModal('deposit');else{if(shortcut.dataset.shortcut==='month')selectedPeriodKey=currentPeriod().key;setScreen(shortcut.dataset.shortcut);}return;}
-    const dashboard=e.target.closest('[data-dashboard]');if(dashboard){const id=dashboard.dataset.dashboard,category=categoryById(dashboardCategoryId(id));if(category){if(category.kind==='food'){foodPeriodKey=currentPeriod().key;openOverlay('food')}else if(category.kind==='pet')setScreen('pet');else if(category.kind==='gift')openOverlay('gifts');else setScreen('month');return;}if(id==='payments')openOverlay('payments');else setScreen(id);return;}
+    const dashboard=e.target.closest('[data-dashboard]');if(dashboard){const id=dashboard.dataset.dashboard,category=categoryById(dashboardCategoryId(id));if(category){selectedPeriodKey=currentPeriod().key;if(category.kind==='food'){foodPeriodKey=currentPeriod().key;openOverlay('food')}else if(category.kind==='pet')setScreen('pet');else if(category.kind==='gift')openOverlay('gifts');else setScreen('month');return;}if(id==='payments')openOverlay('payments');else setScreen(id);return;}
     const nav=e.target.closest('[data-nav-to]');if(nav){setScreen(nav.dataset.navTo);return;}
     if(e.target.closest('[data-open-food]')){foodPeriodKey=selectedPeriodKey;openOverlay('food');return;}
     const detail=e.target.closest('[data-open-category-detail]');if(detail&&!e.target.closest('button,input,label,.settings-actions')){const id=detail.dataset.openCategoryDetail;if(id==='food'){foodPeriodKey=selectedPeriodKey;openOverlay('food')}else if(id==='pet')setScreen('pet');else if(id==='gifts')openOverlay('gifts');return;}
@@ -1805,7 +1869,7 @@ async function init(){
   if(syncAllAutoClosedWeeks()||iconsCentered||migrated||monthlyBalancesMigrated)await saveState(state);
   selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;ensurePeriod(state,selectedPeriodKey);
   committedState=cloneState(state);
-  bindStaticEvents();bindDelegatedEvents();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
+  bindStaticEvents();bindDelegatedEvents();bindCategoryDragging();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
   scheduleAutoWeekClose();
   registerServiceWorker();
   await maybeAskCarryover();

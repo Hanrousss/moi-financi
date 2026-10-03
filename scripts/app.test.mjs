@@ -301,7 +301,7 @@ test('home displays remaining food and category budgets and month highlights spe
     const w=p.foodWeeks[currentWeekIndex(p.key,new Date(),state.settings.salaryDay)];w.plan=100;w.spent=30;
     state.settings.dashboardCards=[dashboardCategoryKey('everyday')];renderHome();renderMonth();`);
   assert.equal(a.value("nodes.get('#weekPlan').textContent"),a.run('formatByn(70)'));
-  assert.match(a.value("nodes.get('#dashboardList').innerHTML"),/60/);
+  assert.match(a.value("nodes.get('#homeCategoryList').innerHTML"),/60/);
   assert.equal(a.value("nodes.get('#incomeTotal').textContent"),a.run('formatByn(800)'));
   assert.equal(a.value("nodes.get('#monthFreeValue').textContent"),a.run('formatByn(800)'));
   assert.equal(a.value("nodes.get('#incomeDetails').textContent"),a.run('`Остаток до планов — ${formatByn(930)}\\nЗапланированные траты — ${formatByn(130)}`'));
@@ -382,4 +382,28 @@ test('payment recommendations follow unpaid plans and payments without double su
  assert.equal(a.value('paymentPageSummary().remaining'),0);
  assert.equal(a.value('paymentPageSummary().unallocated'),0);
  assert.equal(a.value('paymentPageSummary().overallocated'),300);
+});
+
+test('month category selection preserves funded history and isolates months',async()=>{
+ const a=app();
+ a.run(`currentPeriod().categoryBudgets.everyday={plan:100,spent:20};currentPeriod().categoryBudgets.pet={plan:0,spent:30};`);
+ assert.deepEqual(a.value('monthCategoryIds(currentPeriod())'),['everyday','pet']);
+ a.run('monthCategoryPicker();');
+ await a.run('modal.submit({sport:true});');
+ assert.deepEqual(a.value('monthCategoryIds(currentPeriod())'),['everyday','pet','sport']);
+ assert.deepEqual(a.value("monthCategoryIds(ensurePeriod(state,'2026-11'))"),[]);
+ a.run('state=cloneState(saved.at(-1));');
+ assert.deepEqual(a.value('monthCategoryIds(currentPeriod())'),['everyday','pet','sport']);
+ assert.equal(a.value('currentPeriod().categoryBudgets.everyday.spent'),20);
+});
+
+test('completed categories sink to the bottom and become active again after a plan increase',()=>{
+ const a=app();
+ a.run(`currentPeriod().selectedCategoryIds=['everyday','sport','pet'];currentPeriod().categoryBudgets.everyday={plan:100,spent:100};currentPeriod().categoryBudgets.sport={plan:200,spent:20};`);
+ assert.deepEqual(a.value('orderedMonthCategories(currentPeriod()).map(c=>c.id)'),['sport','pet','everyday']);
+ assert.equal(a.run("moveMonthCategory(currentPeriod(),'pet','sport')"),true);
+ assert.deepEqual(a.value('orderedMonthCategories(currentPeriod()).map(c=>c.id)'),['pet','sport','everyday']);
+ assert.equal(a.run("moveMonthCategory(currentPeriod(),'everyday','pet')"),false);
+ a.run('currentPeriod().categoryBudgets.everyday.plan=120;');
+ assert.deepEqual(a.value('orderedMonthCategories(currentPeriod()).map(c=>c.id)'),['everyday','pet','sport']);
 });

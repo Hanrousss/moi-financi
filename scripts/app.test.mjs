@@ -296,7 +296,7 @@ test('carryover starts next period, waits for other dialogs and remembers confir
 
 test('home displays remaining food and category budgets and month highlights spendable money with a budget breakdown',()=>{
   const a=app();
-  a.run(`globalThis.nodes=new Map();document={querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{textContent:'',innerHTML:'',classList:{toggle(){},remove(){}},querySelector(){return {dataset:{}};}});return nodes.get(selector);}};
+  a.run(`globalThis.nodes=new Map();document={querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{textContent:'',innerHTML:'',style:{},classList:{toggle(){},remove(){}},querySelector(){return {dataset:{}};}});return nodes.get(selector);}};
     const p=currentPeriod();p.salary=1000;p.categoryBudgets.everyday={plan:100,spent:40};
     const w=p.foodWeeks[currentWeekIndex(p.key,new Date(),state.settings.salaryDay)];w.plan=100;w.spent=30;
     state.settings.dashboardCards=[dashboardCategoryKey('everyday')];renderHome();renderMonth();`);
@@ -406,4 +406,24 @@ test('completed categories sink to the bottom and become active again after a pl
  assert.equal(a.run("moveMonthCategory(currentPeriod(),'everyday','pet')"),false);
  a.run('currentPeriod().categoryBudgets.everyday.plan=120;');
  assert.deepEqual(a.value('orderedMonthCategories(currentPeriod()).map(c=>c.id)'),['everyday','pet','sport']);
+});
+
+test('deleted September payment stays deleted after rendering and reloading',async()=>{
+  const a=app();
+  a.run(`selectedPeriodKey='2026-09';ensurePeriod(state,selectedPeriodKey);
+    state.payments=[{id:'september',periodKey:'2026-09',planned:600,paid:0,note:''}];
+    globalThis.nodes=new Map();document={querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{textContent:'',innerHTML:'',style:{},classList:{toggle(){},remove(){}},querySelector(){return {dataset:{}};}});return nodes.get(selector);}};
+    renderAll=()=>{renderHome();renderMonth();renderPayments();};
+    paymentModal(state.payments[0]);`);
+  await a.run('modal.options.extraAction.handler()');
+  assert.equal(a.value('state.payments.length'),0);
+  a.run('state=cloneState(saved.at(-1));renderAll();');
+  assert.equal(a.value('state.payments.length'),0);
+  a.run("openMandatoryEditor('housing');");
+  assert.equal(a.value('state.payments.length'),0);
+  a.run("openMandatoryEditor('payment');");
+  assert.equal(a.value('state.payments.length'),0);
+  await a.run("modal.submit({name:'Платежи',plan:200,spent:0})");
+  assert.equal(a.value('state.payments.length'),1);
+  assert.equal(a.value('state.payments[0].planned'),200);
 });

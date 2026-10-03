@@ -14,7 +14,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.2.0';
+const APP_BUILD='1.2.1';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -477,8 +477,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.0');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.0');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.1');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.1');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -542,7 +542,6 @@ function editableAccountBalance(){return liveFreeBalance(state,currentPeriod());
 function periodSpentDigest(period){
   const rows=[];
   const add=(name,spent)=>{const value=roundMoney(num(spent));if(value>0)rows.push({name,spent:value});};
-  periodPayment(state,period.key);
   add(mandatoryLabel('housing'),period.mandatory.housingSpent);
   add(sectionLabel('payments'),periodPaymentsPaid(state,period.key));
   add(mandatoryLabel('reserve'),period.mandatory.reserveAllocated);
@@ -656,7 +655,7 @@ function renderCategoryCard(category,period,{mandatory=false}={}){
   </article>`;
 }
 function renderMonth(){
-  const p=selectedPeriod(), payment=periodPayment(state,p.key);
+  const p=selectedPeriod();
   const sections=mandatorySections(p);
   const addableSections=[!sections.includes('payment')?`<button class="text-button" data-add-mandatory-section="payment">+ ${esc(sectionLabel('payments'))}</button>`:'',!sections.includes('reserve')?`<button class="text-button" data-add-mandatory-section="reserve">+ ${esc(mandatoryLabel('reserve'))}</button>`:''].filter(Boolean).join('');
   $('#monthTitle').textContent=periodTitle(p.key);$('#monthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
@@ -759,7 +758,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.0')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.1')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · 6 готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -933,7 +932,7 @@ function quickExpenseModal(){
     toast(`${formatByn(amount)} · ${category.name}`);
   },{submitLabel:'Учесть расход'});
 }
-function openMandatoryEditor(kind){const p=selectedPeriod();if(kind==='payment'&&state.payments.filter(item=>item.periodKey===p.key).length>1){openOverlay('payments');return;}const pay=periodPayment(state,p.key);const config={housing:{title:mandatoryLabel('housing'),plan:p.mandatory.housingPlan,spent:p.mandatory.housingSpent},payment:{title:sectionLabel('payments'),plan:pay.planned,spent:pay.paid},reserve:{title:mandatoryLabel('reserve'),plan:p.mandatory.reservePlan,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'name',label:'Название',value:config.title},{name:'plan',label:'План, BYN',type:'money',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'money',value:config.spent}],async v=>{const oldSpent=num(config.spent);if(kind==='payment')setSectionLabel('payments',v.name);else setMandatoryLabel(kind,v.name);if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}const newSpent=kind==='housing'?num(p.mandatory.housingSpent):kind==='payment'?num(pay.paid):num(p.mandatory.reserveAllocated);recordAccountDelta(-(newSpent-oldSpent),{type:kind==='reserve'?'transfer_out':'expense',date:todayISO(),periodKey:p.key,categoryId:`mandatory:${kind}`,linkedId:kind==='payment'?`payment:${pay.id}`:'',note:v.name.trim()||config.title});await commit();closeModal();});}
+function openMandatoryEditor(kind){const p=selectedPeriod();if(kind==='payment'&&state.payments.filter(item=>item.periodKey===p.key).length>1){openOverlay('payments');return;}const pay=state.payments.find(item=>item.periodKey===p.key)||{id:uid(),periodKey:p.key,title:'',planned:0,paid:0,note:''};const config={housing:{title:mandatoryLabel('housing'),plan:p.mandatory.housingPlan,spent:p.mandatory.housingSpent},payment:{title:sectionLabel('payments'),plan:pay.planned,spent:pay.paid},reserve:{title:mandatoryLabel('reserve'),plan:p.mandatory.reservePlan,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'name',label:'Название',value:config.title},{name:'plan',label:'План, BYN',type:'money',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'money',value:config.spent}],async v=>{const oldSpent=num(config.spent);if(kind==='payment')setSectionLabel('payments',v.name);else setMandatoryLabel(kind,v.name);if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){if(!state.payments.includes(pay))state.payments.push(pay);pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}const newSpent=kind==='housing'?num(p.mandatory.housingSpent):kind==='payment'?num(pay.paid):num(p.mandatory.reserveAllocated);recordAccountDelta(-(newSpent-oldSpent),{type:kind==='reserve'?'transfer_out':'expense',date:todayISO(),periodKey:p.key,categoryId:`mandatory:${kind}`,linkedId:kind==='payment'?`payment:${pay.id}`:'',note:v.name.trim()||config.title});await commit();closeModal();});}
 
 const iconOptions=['wallet','home','calendar','piggy','paw','bag','money','utensils','dumbbell','sparkles','heart','shirt','gift','ticket','palette','shield'].map(i=>({label:i,value:i}));
 const colorOptions=[
@@ -1136,7 +1135,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.0',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.1',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});

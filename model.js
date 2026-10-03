@@ -331,7 +331,7 @@ function legacyPreviousFreeBalance(state,period,seen=new Set()){
   seen.add(previous.key);
   const savingsPlanByn=Number(previous.mandatory?.savingsPlanByn??previous.mandatory?.savingsPlanUsd??0);
   const sections=Array.isArray(previous.mandatory?.sections)?previous.mandatory.sections:['payment','reserve'];
-  const paymentPlan=sections.includes('payment')?Number(periodPayment(state,previous.key).planned||0):0;
+  const paymentPlan=sections.includes('payment')?Number(state.payments.find(p=>p.periodKey===previous.key)?.planned||0):0;
   const reservePlan=sections.includes('reserve')?Number(previous.mandatory?.reservePlan||0):0;
   const base=periodIncome(previous)+legacyPreviousFreeBalance(state,previous,seen)-Number(previous.mandatory?.housingPlan||0)-paymentPlan-reservePlan-savingsPlanByn-plannedCategoryTotal(state,previous);
   const overCategories=state.categories.filter(c=>c.visible&&c.kind!=='food').reduce((sum,c)=>{const budget=categoryBudget(previous,c);return sum+Math.min(0,Number(budget.plan||0)-Number(budget.spent||0))},0);

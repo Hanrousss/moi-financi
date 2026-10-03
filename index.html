@@ -10,9 +10,9 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.2.1">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.2.1">
-  <link rel="stylesheet" href="./styles.css?v=1.2.1">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.2.2">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.2.2">
+  <link rel="stylesheet" href="./styles.css?v=1.2.2">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -60,6 +60,7 @@
         <div id="categoryList" class="category-list"></div>
         <div class="section-row"><h2>Операции по счету</h2></div>
         <div id="accountHistory" class="history-list"></div>
+        <button id="resetMonthBtn" class="text-button danger-row" type="button">Сбросить месяц полностью</button>
         <article id="monthFreeCard" class="bottom-total"><span>Можно потратить</span><strong id="monthFreeValue">0 BYN</strong><small id="monthLimitMeta"></small></article>
       </section>
 
@@ -117,6 +118,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.2.1"></script>
+  <script src="./app.bundle.js?v=1.2.2"></script>
 </body>
 </html>

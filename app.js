@@ -14,7 +14,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.2.1';
+const APP_BUILD='1.2.2';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -477,8 +477,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.1');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.1');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.2');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.2');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -758,7 +758,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.1')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.2')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · 6 готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1102,6 +1102,50 @@ function completePurchaseModal(item){
     item.completed=true;item.completedAt=date;item.paidFrom=v.source;await commit();closeModal();
   },{submitLabel:'Подтвердить покупку'});
 }
+async function resetSelectedMonth(){
+  const key=selectedPeriodKey;
+  if(!confirm(`Полностью сбросить ${periodTitle(key)}?
+
+Будут удалены доходы, перенос остатка, планы, расходы, выбранные категории и платежи этого месяца. Переводы и траты в накоплениях и конвертах за этот месяц тоже будут отменены. Другие месяцы и настройки сохранятся.
+
+После сброса можно отменить действие кнопкой отмены на главной.`))return;
+  const before=cloneState(state);
+  const belongs=tx=>{
+    const linked=state.account.transactions.find(a=>a.id===tx.accountTransactionId);
+    return (tx.periodKey||tx.budgetPeriodKey||(linked?accountTransactionPeriodKey(state,linked):tx.date?accountPeriodKey(tx.date):''))===key;
+  };
+  const removedAccount=state.account.transactions.filter(t=>accountTransactionPeriodKey(state,t)===key);
+  const purchaseIds=new Set(removedAccount.filter(t=>String(t.linkedId||'').startsWith('purchase:')).map(t=>t.linkedId.slice(9)));
+  const removedSavings=state.savings.filter(t=>savingsTransactionPeriodKey(state,t)===key);
+  removedSavings.forEach(t=>{if(t.purchaseId)purchaseIds.add(t.purchaseId);});
+  state.savings=state.savings.filter(t=>!removedSavings.includes(t));
+  for(const owner of ['pet','gifts','safety']){
+    const bucket=state[owner];if(!bucket?.transactions)continue;
+    const removed=bucket.transactions.filter(belongs);
+    for(const tx of removed){
+      if(owner==='pet')bucket.balanceByn=roundMoney(num(bucket.balanceByn)+(tx.type==='topup'?-1:1)*num(tx.amountByn));
+      if(owner==='safety')bucket.amountUsd=roundMoney(num(bucket.amountUsd)+(tx.type==='topup'?-1:1)*num(tx.amountUsd));
+      if(tx.purchaseId)purchaseIds.add(tx.purchaseId);
+      if(tx.needId){const item=state.pet.needs.find(x=>x.id===tx.needId);if(item)item.completed=false;}
+      if(tx.giftPlanId){const item=state.gifts.plans.find(x=>x.id===tx.giftPlanId);if(item)item.completed=false;}
+    }
+    bucket.transactions=bucket.transactions.filter(t=>!removed.includes(t));
+  }
+  if(num(state.safety?.amountUsd)<0||num(state.pet?.balanceByn)<0){
+    state=before;toast('Сброс невозможен: переводы этого месяца уже потрачены в другом месяце. Сначала отмени связанные траты.');return;
+  }
+  state.purchases.forEach(item=>{if(purchaseIds.has(item.id)){item.completed=false;delete item.completedAt;delete item.paidFrom;}});
+  state.account.balanceByn=roundMoney(num(state.account.balanceByn)-removedAccount.reduce((sum,t)=>sum+num(t.deltaByn),0));
+  state.account.transactions=state.account.transactions.filter(t=>!removedAccount.includes(t));
+  state.payments=state.payments.filter(p=>p.periodKey!==key);
+  state.periods[key]=createPeriod(key);
+  state.periods[key].selectedCategoryIds=[];
+  state.periods[key].carryoverConfirmed=true;
+  ensurePeriod(state,key);
+  try{await commit();toast('Месяц полностью сброшен. Действие можно отменить на главной.');}
+  catch(error){state=before;renderAll();throw error;}
+}
+
 function paymentModal(item=null){
   openModal(item?'Платеж':'Новый платеж',[
     {name:'title',label:'Название',value:item?.title||''},
@@ -1135,7 +1179,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.1',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.2',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -1300,7 +1344,7 @@ function bindStaticEvents(){
   $('#periodPill').addEventListener('click',()=>setScreen('month'));$('#editBalanceBtn').addEventListener('click',openBalanceEditor);$('#weekCard').addEventListener('click',()=>{foodPeriodKey=currentPeriod().key;openOverlay('food')});
   $('#prevMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,-1);ensurePeriod(state,selectedPeriodKey);renderAll()});$('#nextMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,1);ensurePeriod(state,selectedPeriodKey);renderAll()});
   $('#foodPrevMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,-1);ensurePeriod(state,foodPeriodKey);renderFood()});$('#foodNextMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,1);ensurePeriod(state,foodPeriodKey);renderFood()});
-  $('#editPeriodBtn').addEventListener('click',openPeriodEditor);$('#addCategoryBtn').addEventListener('click',monthCategoryPicker);$('#settingsAddCategory').addEventListener('click',openNewCategory);
+  $('#resetMonthBtn').addEventListener('click',resetSelectedMonth);$('#editPeriodBtn').addEventListener('click',openPeriodEditor);$('#addCategoryBtn').addEventListener('click',monthCategoryPicker);$('#settingsAddCategory').addEventListener('click',openNewCategory);
   $('#depositSavings').addEventListener('click',()=>savingsModal('deposit'));$('#withdrawSavings').addEventListener('click',()=>savingsModal('withdraw'));
   $('#topupPet').addEventListener('click',()=>petTransactionModal('topup'));$('#spendPet').addEventListener('click',()=>petTransactionModal('spend'));$('#addPetNeed').addEventListener('click',()=>needModal());
   $('#topupGifts').addEventListener('click',()=>giftTransactionModal('topup'));$('#spendGifts').addEventListener('click',()=>giftTransactionModal('spend'));$('#addGiftPlan').addEventListener('click',()=>giftModal());

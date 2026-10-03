@@ -427,3 +427,52 @@ test('deleted September payment stays deleted after rendering and reloading',asy
   assert.equal(a.value('state.payments.length'),1);
   assert.equal(a.value('state.payments[0].planned'),200);
 });
+
+test('month reset clears only selected period and can be undone',async()=>{
+ const a=app();
+ a.run(`globalThis.confirm=()=>true;const p=currentPeriod();p.salary=1000;p.selectedCategoryIds=['sport'];p.categoryBudgets.sport={plan:200,spent:50};
+ state.payments=[{id:'a',periodKey:'2026-10',planned:100,paid:0},{id:'b',periodKey:'2026-11',planned:300,paid:0}];
+ recordAccountDelta(-50,{periodKey:p.key,date:'2026-10-15',categoryId:'sport'});
+ ensurePeriod(state,'2026-11').salary=2222;
+ committedState=cloneState(state);globalThis.original=cloneState(state);`);
+ await a.run('resetSelectedMonth()');
+ assert.equal(a.value('currentPeriod().salary'),0);
+ assert.deepEqual(a.value('currentPeriod().selectedCategoryIds'),[]);
+ assert.equal(a.value('state.account.transactions.length'),0);
+ assert.equal(a.value('state.payments.length'),1);
+ assert.equal(a.value("state.periods['2026-11'].salary"),2222);
+ assert.equal(a.value('liveFreeBalance(state,currentPeriod())'),0);
+ assert.equal(a.value('validateState(state)'),true);
+ assert.deepEqual(a.value('undoState'),a.value('original'));
+ a.run('state=cloneState(saved.at(-1));');
+ assert.equal(a.value('currentPeriod().salary'),0);
+});
+
+test('cancelling month reset leaves data unchanged',async()=>{
+ const a=app();a.run('globalThis.confirm=()=>false;globalThis.original=cloneState(state);');
+ await a.run('resetSelectedMonth()');
+ assert.deepEqual(a.value('state'),a.value('original'));
+ assert.equal(a.value('saved.length'),0);
+});
+
+test('month reset reverses envelope transfers and preserves other months',async()=>{
+ const a=app();
+ a.run(`globalThis.confirm=()=>true;
+ state.pet.balanceByn=150;state.pet.transactions=[{id:'p',type:'topup',amountByn:100,date:'2026-10-15',budgetPeriodKey:'2026-10'},{id:'q',type:'topup',amountByn:50,date:'2026-11-15'}];
+ state.safety.amountUsd=30;state.safety.transactions=[{id:'s',type:'topup',amountUsd:20,date:'2026-10-15'}];
+ state.savings=[{id:'d',type:'deposit',amountUsd:10,periodKey:'2026-10',date:'2026-10-15'}];
+ recordAccountDelta(-100,{date:'2026-10-15',periodKey:'2026-10',linkedId:'pet:p'});`);
+ await a.run('resetSelectedMonth()');
+ assert.equal(a.value('state.pet.balanceByn'),50);
+ assert.equal(a.value('state.pet.transactions.length'),1);
+ assert.equal(a.value('state.safety.amountUsd'),10);
+ assert.equal(a.value('state.savings.length'),0);
+});
+
+test('reset is atomic when later envelope spending prevents reversal',async()=>{
+ const a=app();
+ a.run(`globalThis.confirm=()=>true;state.pet.balanceByn=0;state.pet.transactions=[{id:'p',type:'topup',amountByn:100,date:'2026-10-15'},{id:'q',type:'spend',amountByn:100,date:'2026-11-15'}];globalThis.original=cloneState(state);`);
+ await a.run('resetSelectedMonth()');
+ assert.deepEqual(a.value('state'),a.value('original'));
+ assert.equal(a.value('saved.length'),0);
+});

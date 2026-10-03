@@ -504,7 +504,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.2.5';
+const APP_BUILD='1.2.6';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -955,6 +955,16 @@ const THEME_PRESETS = {
   sky:{label:'Небо',description:'Прохладный голубой',accent:'#b0d8ff',bg:'#edf3fa',card:'#ffffff',ink:'#243141',muted:'#60738a',dark:'#202d3d',onDark:'#f1f7ff',line:'#dce5ef',soft:'#e0ebf6',success:'#326953',red:'#b3324c',redSoft:'#fce5ed',warning:'#805618',warningSoft:'#fff0d7'},
   sand:{label:'Песок',description:'Сдержанная и нейтральная',accent:'#ded4b5',bg:'#f4f2eb',card:'#fffefa',ink:'#302f29',muted:'#706e61',dark:'#2d2e28',onDark:'#faf9f0',line:'#e3dfd2',soft:'#eae6da',success:'#526039',red:'#aa3740',redSoft:'#f8e6e5',warning:'#795821',warningSoft:'#f8edda'}
 };
+Object.assign(THEME_PRESETS,{
+  sage:{...THEME_PRESETS.sand,label:'Тёплый шалфей',description:'Олива, сливки и тёплый зелёный',accent:'#c5d4a5',bg:'#f4f3e9',card:'#fffef8',ink:'#30392b',muted:'#66705d',dark:'#344232',line:'#dfe3d3',soft:'#e7ebdb',success:'#4f6738'},
+  rose:{...THEME_PRESETS.peach,label:'Роза и олива',description:'Пудровый розовый с зеленью',accent:'#eab9c4',bg:'#faf0f1',card:'#fffafb',ink:'#3d3035',muted:'#78636b',dark:'#354336',line:'#ebdce0',soft:'#f1e1e6',success:'#4c643b'},
+  stone:{...THEME_PRESETS.sand,label:'Серый кашемир',description:'Тёплый серый и фисташка',accent:'#c6d7ad',bg:'#f0efec',card:'#fcfbf8',ink:'#343733',muted:'#696e66',dark:'#353a36',line:'#dddfd8',soft:'#e5e8df',success:'#50633f'},
+  butter:{...THEME_PRESETS.sand,label:'Матча и сливки',description:'Масляный жёлтый и матча',accent:'#f1dc97',bg:'#f7f5e9',card:'#fffef7',ink:'#37432e',muted:'#6b735d',dark:'#3d4c32',line:'#e2e5cf',soft:'#e9eedb',success:'#53672f'},
+  cherry:{...THEME_PRESETS.peach,label:'Вишнёвое молоко',description:'Вишня, молочный и розовый',accent:'#f0b7c4',bg:'#fcf1ee',card:'#fffaf6',ink:'#492c35',muted:'#80656d',dark:'#592536',line:'#eedce0',soft:'#f4e0e6',success:'#596946'},
+  plum:{...THEME_PRESETS.lilac,label:'Нефрит и слива',description:'Приглушённая зелень и слива',accent:'#b4d1bd',bg:'#eff4ef',card:'#fbfdf9',ink:'#39313d',muted:'#6c706b',dark:'#392b40',line:'#dce6dc',soft:'#e1ebe1',success:'#3d6551'},
+  checkerRed:{...THEME_PRESETS.sand,label:'Шахматы · красный',description:'Чёрно-белый и вишнёвый',accent:'#b92d45',onAccent:'#ffffff',bg:'#f4f1ed',card:'#fffefa',ink:'#262422',muted:'#706964',dark:'#242322',onDark:'#fffaf5',line:'#e2dcd6',soft:'#eee7e0',success:'#47633e',checker:true},
+  checkerPink:{...THEME_PRESETS.lilac,label:'Шахматы · розовый',description:'Чёрно-белый и bubblegum',accent:'#f2a8ce',bg:'#fbf1f7',card:'#fffafd',ink:'#302730',muted:'#796675',dark:'#29252b',onDark:'#fff7fc',line:'#eadce6',soft:'#f3e1ed',success:'#45644c',checker:true}
+});
 function selectedTheme(){const key=appearanceSettings().preset;return Object.hasOwn(THEME_PRESETS,key)?THEME_PRESETS[key]:THEME_PRESETS.lime;}
 function applyAppearance(){
   if(!state?.settings)return;
@@ -963,12 +973,12 @@ function applyAppearance(){
     green:t.accent,'green-dark':t.success,'green-soft':t.soft,'green-tint':t.bg,blue:t.ink,'blue-soft':t.soft,'blue-line':t.line,
     lavender:t.soft,peach:t.soft,orange:t.warning,'orange-soft':t.warningSoft,'orange-line':t.warning,
     red:t.red,'red-soft':t.redSoft,'red-line':t.red,grey:t.muted,'grey-soft':t.soft,
-    'icon-frame':t.soft,'icon-frame-line':t.line,dark:t.dark,'on-dark':t.onDark,'on-accent':t.ink,'surface-soft':t.soft};
+    'icon-frame':t.soft,'icon-frame-line':t.line,dark:t.dark,'on-dark':t.onDark,'on-accent':t.onAccent||t.ink,'surface-soft':t.soft};
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.5');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.5');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.6');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.6');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -1263,10 +1273,10 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.5')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.6')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
-  $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · 6 готовых палитр</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
   const settingsIconRow=`<article class="settings-row dashboard-setting"><span><span class="nav-icon-preview">${navItemIconHtml(settingsControlDefault,20)}</span><span><b>Кнопка настроек</b><small>Верхняя кнопка справа</small></span></span><span class="settings-actions"><button class="mini-icon" data-edit-nav-icon="settings" aria-label="Изменить иконку настроек">${icon('edit',16)}</button></span></article>`;
   $('#settingsNavIcons').innerHTML=`<label class="toggle-field"><input type="checkbox" data-nav-labels ${showNavLabels()?'checked':''}><span><b>Показывать названия</b><small>Если выключить, нижнее меню останется только с крупными иконками.</small></span></label>`+settingsIconRow+navDefaults.map(item=>`<article class="settings-row dashboard-setting"><span><span class="nav-icon-preview">${navItemIconHtml(item,20)}</span><span><b>${esc(sectionLabel(item.id))}</b><small>${['home','month'].includes(item.id)?'Обязательный раздел':navItems().includes(item.id)?'Показывается':'Скрыт'}</small></span></span><span class="settings-actions"><label class="mini-toggle"><input type="checkbox" data-nav-item="${item.id}" ${navItems().includes(item.id)?'checked':''} ${['home','month'].includes(item.id)?'disabled':''}><span></span></label><button class="mini-icon" data-edit-nav-icon="${item.id}" aria-label="Изменить раздел">${icon('edit',16)}</button></span></article>`).join('');
   const cardLabels={savings:sectionLabel('savings'),payments:sectionLabel('payments'),pet:sectionLabel('pet'),purchases:sectionLabel('purchases')};
@@ -1305,7 +1315,7 @@ function validateMoneyInput(input){
 function fieldHtml(field){
   const id=`field-${field.name}`;const value=field.value??'';const common=`id="${id}" name="${field.name}" ${field.required?'required':''}`;
   if(field.type==='money')return `<label class="form-field"><span>${esc(field.label)}</span><input ${common} ${moneyInputAttributes(field.min)} value="${esc(value)}" placeholder="${esc(field.placeholder||'')}">${field.help?`<small>${esc(field.help)}</small>`:''}</label>`;
-  if(field.type==='theme')return `<fieldset class="theme-picker"><legend>${esc(field.label)}</legend><div class="theme-grid">${Object.entries(THEME_PRESETS).map(([key,t])=>`<label class="theme-option"><input type="radio" name="${esc(field.name)}" value="${key}" ${value===key?'checked':''}><span class="theme-tile" style="--preview-bg:${t.bg};--preview-ink:${t.ink};--preview-muted:${t.muted};--preview-card:${t.card};--preview-accent:${t.accent};--preview-dark:${t.dark}"><span class="theme-miniature" aria-hidden="true"><i></i><i></i><i></i></span><b>${t.label}<span class="theme-check">✓</span></b><small>${t.description}</small></span></label>`).join('')}</div><p class="field-help">${esc(field.help)}</p></fieldset>`;
+  if(field.type==='theme')return `<fieldset class="theme-picker"><legend>${esc(field.label)}</legend><div class="theme-grid">${Object.entries(THEME_PRESETS).map(([key,t])=>`<label class="theme-option"><input type="radio" name="${esc(field.name)}" value="${key}" ${value===key?'checked':''}><span class="theme-tile ${t.checker?'theme-checkered':''}" style="--preview-bg:${t.bg};--preview-ink:${t.ink};--preview-muted:${t.muted};--preview-card:${t.card};--preview-accent:${t.accent};--preview-dark:${t.dark}"><span class="theme-miniature" aria-hidden="true"><i></i><i></i><i></i></span><b>${t.label}<span class="theme-check">✓</span></b><small>${t.description}</small></span></label>`).join('')}</div><p class="field-help">${esc(field.help)}</p></fieldset>`;
   if(field.type==='palette'){
     const hasMatch=field.options.some(o=>String(o.value).toLowerCase()===String(value).toLowerCase());
     const options=!hasMatch&&/^#[0-9a-f]{6}$/i.test(String(value))?[{label:'Текущий',value},...field.options]:field.options;
@@ -1682,7 +1692,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.5',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.6',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});

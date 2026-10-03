@@ -324,12 +324,12 @@ test('appearance presets persist without changing budgets or losing legacy custo
   assert.equal(a.value('appearanceSettings().preset'),'lime');
 });
 
-test('theme previews expose six selectable palettes and opening the dialog does not change the theme',()=>{
+test('theme previews expose all selectable palettes and opening the dialog does not change the theme',()=>{
   const a=app();
   a.run(`state.settings.appearance={preset:'sky'};appearanceModal();`);
   assert.equal(a.value('appearanceSettings().preset'),'sky');
   const html=a.run('fieldHtml(modal.fields[0])');
-  assert.equal((html.match(/type="radio"/g)||[]).length,6);
+  assert.equal((html.match(/type="radio"/g)||[]).length,14);
   assert.match(html,/value="sky" checked/);
 });
 

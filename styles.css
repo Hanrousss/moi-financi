@@ -206,3 +206,11 @@ button:active:not(:disabled){transform:scale(.97)}
 .month-home-row.category-finished{background:var(--surface-soft)}
 .category-open{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;flex:1;min-width:0;text-align:left;background:transparent;border:0;padding:7px 0}
 .category-open strong{font-size:13px;max-width:110px;overflow-wrap:anywhere;text-align:right}.category-open .category-icon{width:36px;height:36px}
+
+/* Checkerboard is confined to decorative bands, leaving amounts on solid surfaces. */
+[data-theme^="checker"] .hero-card{padding-bottom:38px}
+[data-theme^="checker"] .hero-card::before{inset:auto 0 0;height:14px;background:conic-gradient(#fffaf5 25%,#242322 0 50%,#fffaf5 0 75%,#242322 0) 0 0/28px 28px;mask-image:none}
+[data-theme="checkerRed"] .balance-breakdown summary{color:#ffb9c5}
+.theme-checkered .theme-miniature i:first-child{background:conic-gradient(#fffaf5 25%,#242322 0 50%,#fffaf5 0 75%,#242322 0) 0 0/20px 20px}
+.theme-checkered .theme-miniature i:first-child::after{box-shadow:0 0 0 3px var(--preview-dark)}
+[data-theme="checkerRed"] .bottom-nav button.active{color:#ffb9c5}

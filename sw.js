@@ -1,5 +1,5 @@
-const CACHE='moi-dengi-private-v1.1.1';
-const CORE=['./','./index.html','./styles.css?v=1.1.1','./app.bundle.js?v=1.1.1','./app.js','./model.js','./storage.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png','./icons/pet-face.png','./icons/profile-avatar.jpg'];
+const CACHE='moi-dengi-private-v1.1.2';
+const CORE=['./','./index.html','./styles.css?v=1.1.2','./app.bundle.js?v=1.1.2','./app.js','./model.js','./storage.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png','./icons/pet-face.png','./icons/profile-avatar.jpg'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('moi-dengi-private-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()))});
 self.addEventListener('message',event=>{if(event.data?.type==='SKIP_WAITING')self.skipWaiting()});

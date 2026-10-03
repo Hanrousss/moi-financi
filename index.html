@@ -10,9 +10,9 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.2.4">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.2.4">
-  <link rel="stylesheet" href="./styles.css?v=1.2.4">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.2.5">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.2.5">
+  <link rel="stylesheet" href="./styles.css?v=1.2.5">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -40,8 +40,6 @@
           <article class="summary-card"><span>До зарплаты</span><strong id="daysToSalary">0 дней</strong><small id="salaryMeta">Новый период с 5-го числа</small></article>
         </div>
         <div id="spendDigest" class="spend-digest" aria-live="polite"></div>
-        <div class="section-row"><h2>Мои деньги</h2><span class="section-hint">Конверты и планы</span></div>
-        <div id="dashboardList" class="dashboard-list"></div>
         <div class="section-row"><h2>Категории месяца</h2><span class="section-hint">Перетаскивай за ⠿</span></div><div id="homeCategoryList" class="home-category-list"></div>
         <div class="section-row"><h2>Последние операции</h2><button class="text-button" data-shortcut="month">Все ↗</button></div>
         <div id="recentActivity" class="history-list recent-activity"></div>
@@ -102,7 +100,6 @@
         <div class="settings-group"><h2>Общие</h2><div class="settings-stack"><button id="editGeneralBtn" class="settings-row"></button><button id="editProfileAvatarBtn" class="settings-row"></button></div></div>
         <div class="settings-group"><h2>Внешний вид</h2><div class="settings-stack"><button id="editAppearanceBtn" class="settings-row"></button><button id="editAppIconBtn" class="settings-row"></button></div></div>
         <div class="settings-group"><h2>Нижнее меню</h2><div id="settingsNavIcons" class="settings-stack"></div></div>
-        <div class="settings-group"><h2>Главная</h2><div id="settingsDashboardCards" class="settings-stack"></div></div>
         <div class="settings-group"><div class="section-row"><h2>Категории</h2><button id="settingsAddCategory" class="text-button"></button></div><div id="settingsCategories" class="settings-stack"></div></div>
         <div class="settings-group"><h2>Данные</h2><div class="settings-stack"><button id="exportBtn" class="settings-row"></button><label class="settings-row file-row" id="importLabel"><input id="importInput" type="file" accept="application/json"><span id="importContent"></span></label><button id="resetBtn" class="settings-row danger-row"></button></div></div>
         <p class="version-note">Данные хранятся локально на этом устройстве.</p>
@@ -114,6 +111,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.2.4"></script>
+  <script src="./app.bundle.js?v=1.2.5"></script>
 </body>
 </html>

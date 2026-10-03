@@ -504,7 +504,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.2.4';
+const APP_BUILD='1.2.5';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -967,8 +967,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.4');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.4');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.2.5');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.2.5');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -1095,19 +1095,7 @@ function renderHome(){
   digestTrack.querySelector('span').dataset.repeat=digestText;
   $('#undoLastBtn').disabled=!undoState;
 
-  const savings=savingsBalanceUsd(state), pet=petBalanceByn(state), debt=Math.max(0,roundMoney((num(state.settings.debtInitial)||state.payments.reduce((s,p)=>s+num(p.planned),0))-paymentsPaidTotal(state)));
-  const openPurchases=state.purchases.filter(pu=>!pu.completed);
-  const affordable=openPurchases.filter(pu=>purchaseAvailable(state,purchaseCostUsd(pu))).length;
-  const rowMap={
-    savings:{id:'savings',icon:'piggy',tone:'green',title:sectionLabel('savings'),value:formatSavingsTotal(savings,savingsBalanceByn(state)),meta:savingsBalanceByn(state)>0?'есть BYN для обмена':'только USD'},
-    payments:{id:'payments',icon:'money',tone:'blue',title:sectionLabel('payments'),value:formatByn(debt),meta:'осталось закрыть'},
-    pet:{id:'pet',icon:'paw',tone:'peach',title:sectionLabel('pet'),value:formatByn(pet),meta:`осталось в конверте · на планы нужно ${formatByn(totalOpenNeeds())}`},
-    purchases:{id:'purchases',icon:'bag',tone:'lavender',title:sectionLabel('purchases'),value:`${openPurchases.length}`,meta:affordable?`${affordable} уже доступны`:'пока накоплений не хватает'}
-  };
-  const categoryRow=id=>{const c=categoryById(dashboardCategoryId(id));if(!c||!c.visible)return null;const b=categoryBudget(p,c);return {id,category:c,title:c.name,value:formatByn(c.kind==='pet'?petBalanceByn(state):c.kind==='gift'?giftBalanceByn():roundMoney(num(b.plan)-num(b.spent))),meta:c.kind==='pet'||c.kind==='gift'?'осталось в конверте':'осталось на этот месяц'};};
-  const rows=dashboardCards().filter(id=>['savings','purchases'].includes(id)).map(id=>rowMap[id]).filter(Boolean);
   renderHomeCategories(p);
-  $('#dashboardList').innerHTML=rows.map(r=>`<button class="dashboard-row" data-dashboard="${r.id}"><span class="dashboard-icon ${r.tone||''}" ${r.category?`style="${categoryColorStyle(r.category.color)}"`:''}>${r.category?categoryIconHtml(r.category):sharedSectionIconHtml(r.id)}</span><span class="dashboard-copy"><b>${esc(r.title)}</b><small>${esc(r.meta)}</small></span><strong>${esc(r.value)}</strong>${icon('chevronRight',18)}</button>`).join('');
 }
 
 function renderRecentActivity(){
@@ -1275,7 +1263,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.4')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.2.5')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · 6 готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1283,8 +1271,6 @@ function renderSettings(){
   $('#settingsNavIcons').innerHTML=`<label class="toggle-field"><input type="checkbox" data-nav-labels ${showNavLabels()?'checked':''}><span><b>Показывать названия</b><small>Если выключить, нижнее меню останется только с крупными иконками.</small></span></label>`+settingsIconRow+navDefaults.map(item=>`<article class="settings-row dashboard-setting"><span><span class="nav-icon-preview">${navItemIconHtml(item,20)}</span><span><b>${esc(sectionLabel(item.id))}</b><small>${['home','month'].includes(item.id)?'Обязательный раздел':navItems().includes(item.id)?'Показывается':'Скрыт'}</small></span></span><span class="settings-actions"><label class="mini-toggle"><input type="checkbox" data-nav-item="${item.id}" ${navItems().includes(item.id)?'checked':''} ${['home','month'].includes(item.id)?'disabled':''}><span></span></label><button class="mini-icon" data-edit-nav-icon="${item.id}" aria-label="Изменить раздел">${icon('edit',16)}</button></span></article>`).join('');
   const cardLabels={savings:sectionLabel('savings'),payments:sectionLabel('payments'),pet:sectionLabel('pet'),purchases:sectionLabel('purchases')};
   const dashboardLabel=id=>cardLabels[id]||categoryById(dashboardCategoryId(id))?.name||id;
-  const dashboardList=dashboardCards().filter(id=>['savings','purchases'].includes(id)), availableDashboard=['savings','purchases'].filter(id=>!dashboardList.includes(id));
-  $('#settingsDashboardCards').innerHTML=dashboardList.map((id,index)=>`<article class="settings-row dashboard-setting"><span><b>${esc(dashboardLabel(id))}</b><small>${index+1} на главной</small></span><span class="settings-actions"><button class="mini-icon" data-card-up="${id}" ${index===0?'disabled':''}>${icon('chevronLeft',16)}</button><button class="mini-icon" data-card-down="${id}" ${index===dashboardList.length-1?'disabled':''}>${icon('chevronRight',16)}</button><button class="mini-icon" data-card-remove="${id}" aria-label="Скрыть">${icon('close',16)}</button></span></article>`).join('')+availableDashboard.map(id=>`<button class="settings-row" data-card-add="${id}"><span><b>${esc(dashboardLabel(id))}</b><small>${dashboardCategoryId(id)?'Категория · скрыта':'Скрыта'}</small></span>${icon('plus',18)}</button>`).join('');
   $('#settingsCategories').innerHTML=[...state.categories].sort((a,b)=>a.order-b.order).map(c=>`<button class="settings-row" data-settings-category="${c.id}"><span><span class="category-icon" style="${categoryColorStyle(c.color)}">${categoryIconHtml(c,20)}</span><span><b>${esc(c.name)}</b><small>${c.visible?'Показывается':'Скрыта'} · ${c.kind==='food'?'по неделям':['pet','gift'].includes(c.kind)?'расширенная':'обычная'}</small></span></span>${icon('chevronRight',18)}</button>`).join('');
   $('#exportBtn').innerHTML=`<span>${icon('download',20)}<b>Скачать полную резервную копию</b></span>${icon('chevronRight',18)}`;
   $('#importContent').innerHTML=`<span>${icon('upload',20)}<b>Восстановить полную копию</b></span>${icon('chevronRight',18)}`;
@@ -1696,7 +1682,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.4',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.2.5',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -1897,10 +1883,6 @@ function bindDelegatedEvents(){
     const editCategory=e.target.closest('[data-edit-category]');if(editCategory){openCategoryEditor(editCategory.dataset.editCategory);return;}
     const settingsCategory=e.target.closest('[data-settings-category]');if(settingsCategory){openCategoryEditor(settingsCategory.dataset.settingsCategory);return;}
     const navIcon=e.target.closest('[data-edit-nav-icon]');if(navIcon){navIconModal(navIcon.dataset.editNavIcon);return;}
-    const cardUp=e.target.closest('[data-card-up]');if(cardUp){const list=dashboardCards(),i=list.indexOf(cardUp.dataset.cardUp);if(i>0){[list[i-1],list[i]]=[list[i],list[i-1]];await commit()}return;}
-    const cardDown=e.target.closest('[data-card-down]');if(cardDown){const list=dashboardCards(),i=list.indexOf(cardDown.dataset.cardDown);if(i>=0&&i<list.length-1){[list[i+1],list[i]]=[list[i],list[i+1]];await commit()}return;}
-    const cardRemove=e.target.closest('[data-card-remove]');if(cardRemove){state.settings.dashboardCards=dashboardCards().filter(id=>id!==cardRemove.dataset.cardRemove);await commit();return;}
-    const cardAdd=e.target.closest('[data-card-add]');if(cardAdd){const list=dashboardCards();if(!list.includes(cardAdd.dataset.cardAdd))list.push(cardAdd.dataset.cardAdd);await commit();return;}
     const accountDelete=e.target.closest('[data-delete-account-tx]');if(accountDelete){if(!confirm('Удалить операцию и отменить ее влияние на деньги?'))return;deleteAccountOperation(accountDelete.dataset.deleteAccountTx);await commit();return;}
     const savingDelete=e.target.closest('[data-delete-saving]');if(savingDelete){if(!confirm('Удалить операцию и отменить перевод или обмен?'))return;deleteSavingsOperation(savingDelete.dataset.deleteSaving);await commit();return;}
     const petDelete=e.target.closest('[data-delete-pet-tx]');if(petDelete){if(!confirm('Удалить операцию и отменить ее влияние на баланс?'))return;const transaction=state.pet.transactions.find(t=>t.id===petDelete.dataset.deletePetTx);if(transaction?.needId){const need=state.pet.needs.find(item=>item.id===transaction.needId);if(need)need.completed=false;}if(transaction?.accountTransactionId)deleteAccountOperation(transaction.accountTransactionId);else if(transaction){state.pet.balanceByn=roundMoney(petBalanceByn(state)+(transaction.type==='topup'?-num(transaction.amountByn):num(transaction.amountByn)));state.pet.transactions=state.pet.transactions.filter(t=>t.id!==transaction.id)}await commit();return;}

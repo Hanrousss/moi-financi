@@ -2,8 +2,8 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <meta name="theme-color" content="#f5f8f4">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f0f6e7">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Мои деньги">
@@ -12,44 +12,54 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" href="./icons/favicon.png">
-  <link rel="stylesheet" href="./styles.css?v=1.0.49">
+  <link rel="stylesheet" href="./styles.css?v=1.1.1">
   <title>Мои деньги</title>
 </head>
 <body>
   <div id="loading" class="loading-screen"><div class="loading-mark">M</div><p>Загрузка данных</p></div>
   <div id="app" class="app-shell" hidden>
     <header class="topbar">
-      <div><p id="eyebrow" class="eyebrow"></p><h1 id="screenTitle">Главная</h1></div>
+      <button id="profileAvatarBtn" class="profile-avatar" aria-label="Изменить аватарку"><img id="profileAvatar" src="./icons/profile-avatar.jpg" alt="Твоя аватарка"></button><div><p id="eyebrow" class="eyebrow"></p><h1 id="screenTitle">Главная</h1></div>
       <button id="settingsBtn" class="icon-button" aria-label="Настройки"></button>
       <button id="closeOverlayBtn" class="icon-button" aria-label="Закрыть" hidden></button>
     </header>
 
     <main class="main-content">
       <section id="home" class="screen active">
-        <button id="periodPill" class="period-pill"></button>
+        <div class="home-heading"><span class="section-kicker">МОЙ БЮДЖЕТ</span><button id="periodPill" class="period-pill"></button></div>
         <article id="freeCard" class="hero-card status-good">
-          <div class="hero-card-head"><span>Свободный остаток</span><span class="hero-card-actions"><button id="undoLastBtn" class="mini-icon undo-action-button" type="button" aria-label="Отменить последнее действие" title="Отменить последнее действие"></button><button id="editBalanceBtn" class="mini-icon" aria-label="Изменить свободный остаток"></button></span></div>
-          <strong id="freeValue">0 BYN</strong><small id="freeMeta"></small>
+          <div class="hero-orbit" aria-hidden="true"><span>↗</span></div>
+          <div class="hero-card-head"><span>Можно потратить</span><span class="hero-card-actions"><button id="undoLastBtn" class="mini-icon undo-action-button" type="button" aria-label="Отменить последнее действие" title="Отменить последнее действие"></button><button id="editBalanceBtn" class="mini-icon" aria-label="Изменить сумму «Можно потратить»"></button></span></div>
+          <strong id="freeValue">0 BYN</strong><p class="hero-caption">После всех запланированных расходов</p><details class="balance-breakdown"><summary>Как считается</summary><small id="freeMeta"></small></details>
         </article>
+        <div class="quick-actions" aria-label="Быстрые действия">
+          <button id="quickExpenseBtn" class="quick-action" type="button" aria-label="Добавить расход"></button>
+          <button class="quick-action" data-shortcut="month"><span class="action-circle" data-action-icon="wallet"></span><span>Бюджет</span></button>
+          <button class="quick-action" data-shortcut="savings"><span class="action-circle" data-action-icon="piggy"></span><span>Отложить</span></button>
+          <button class="quick-action" data-shortcut="gifts"><span class="action-circle" data-action-icon="gift"></span><span>Подарки</span></button>
+        </div>
+        <div class="section-row home-section-title"><h2>Сейчас</h2><span class="section-hint">Текущий период</span></div>
         <div class="two-col">
-          <button id="weekCard" class="summary-card text-left"><span>Еда · эта неделя</span><strong id="weekPlan">0 BYN</strong><small>Сумма на эту неделю</small></button>
-          <article class="summary-card"><span>До зарплаты</span><strong id="daysToSalary">0 дней</strong><small>Следующий период начинается 5 числа</small></article>
+          <button id="weekCard" class="summary-card text-left"><span>Еда · эта неделя</span><strong id="weekPlan">0 BYN</strong><small>Осталось на эту неделю</small></button>
+          <article class="summary-card"><span>До зарплаты</span><strong id="daysToSalary">0 дней</strong><small id="salaryMeta">Новый период с 5-го числа</small></article>
         </div>
         <div id="spendDigest" class="spend-digest" aria-live="polite"></div>
+        <div class="section-row"><h2>Мои деньги</h2><span class="section-hint">Конверты и планы</span></div>
         <div id="dashboardList" class="dashboard-list"></div>
-        <button id="quickExpenseBtn" class="quick-expense-button" type="button" aria-label="Добавить расход" title="Добавить расход"></button>
+        <div class="section-row"><h2>Последние операции</h2><button class="text-button" data-shortcut="month">Все ↗</button></div>
+        <div id="recentActivity" class="history-list recent-activity"></div>
       </section>
 
       <section id="month" class="screen">
         <div class="month-switcher"><button id="prevMonth" aria-label="Предыдущий месяц"></button><div><strong id="monthTitle"></strong><small id="monthRange"></small></div><button id="nextMonth" aria-label="Следующий месяц"></button></div>
-        <article class="income-card"><div><span>Баланс месяца</span><strong id="incomeTotal">0 BYN</strong><small id="incomeDetails"></small></div><button id="editPeriodBtn" class="small-button">Изменить</button></article>
+        <article class="income-card"><div><span>Осталось в бюджете</span><strong id="incomeTotal">0 BYN</strong><small id="incomeDetails"></small></div><button id="editPeriodBtn" class="small-button">Изменить</button></article>
         <div class="section-row"><h2>Обязательное</h2></div>
         <div id="mandatoryGrid" class="mandatory-grid"></div>
         <div class="section-row"><h2>Категории</h2><button id="addCategoryBtn" class="text-button"></button></div>
         <div id="categoryList" class="category-list"></div>
         <div class="section-row"><h2>Операции по счету</h2></div>
         <div id="accountHistory" class="history-list"></div>
-        <article id="monthFreeCard" class="bottom-total"><span>Свободный остаток</span><strong id="monthFreeValue">0 BYN</strong><small id="monthLimitMeta"></small></article>
+        <article id="monthFreeCard" class="bottom-total"><span>Можно потратить</span><strong id="monthFreeValue">0 BYN</strong><small id="monthLimitMeta"></small></article>
       </section>
 
       <section id="savings" class="screen">
@@ -61,7 +71,7 @@
       </section>
 
       <section id="pet" class="screen">
-        <article class="pet-hero"><div id="petAvatar"></div><div><span>Баланс питомца</span><strong id="petBalance">0 BYN</strong><small id="petNeedSummary"></small></div></article>
+        <article class="pet-hero"><div id="petAvatar"></div><div><span>Осталось в конверте питомца</span><strong id="petBalance">0 BYN</strong><small id="petNeedSummary"></small></div></article>
         <div class="button-row"><button id="topupPet" class="primary-button"></button><button id="spendPet" class="secondary-button"></button></div>
         <div class="section-row"><h2>Что нужно</h2><button id="addPetNeed" class="text-button"></button></div><div id="petNeeds" class="need-list"></div>
         <div class="section-row"><h2>История баланса</h2></div><div id="petHistory" class="history-list"></div>
@@ -79,7 +89,7 @@
       </section>
 
       <section id="gifts" class="screen overlay-screen">
-        <article class="gift-hero"><div class="gift-mark">✉</div><div><span>Конверт подарков</span><strong id="giftBalance">0 BYN</strong><small id="giftSummary"></small></div></article>
+        <article class="gift-hero"><div class="gift-mark">✉</div><div><span>Осталось в конверте подарков</span><strong id="giftBalance">0 BYN</strong><small id="giftSummary"></small></div></article>
         <div class="button-row"><button id="topupGifts" class="primary-button"></button><button id="spendGifts" class="secondary-button"></button></div>
         <div class="section-row"><h2>Подарки</h2><button id="addGiftPlan" class="text-button"></button></div><div id="giftPlans" class="gift-list"></div>
         <div class="section-row"><h2>История конверта</h2></div><div id="giftHistory" class="history-list"></div>
@@ -91,7 +101,7 @@
       </section>
 
       <section id="settings" class="screen overlay-screen">
-        <div class="settings-group"><h2>Общие</h2><button id="editGeneralBtn" class="settings-row"></button></div>
+        <div class="settings-group"><h2>Общие</h2><div class="settings-stack"><button id="editGeneralBtn" class="settings-row"></button><button id="editProfileAvatarBtn" class="settings-row"></button></div></div>
         <div class="settings-group"><h2>Внешний вид</h2><button id="editAppearanceBtn" class="settings-row"></button></div>
         <div class="settings-group"><h2>Нижнее меню</h2><div id="settingsNavIcons" class="settings-stack"></div></div>
         <div class="settings-group"><h2>Главная</h2><div id="settingsDashboardCards" class="settings-stack"></div></div>
@@ -106,6 +116,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.0.49"></script>
+  <script src="./app.bundle.js?v=1.1.1"></script>
 </body>
 </html>

@@ -251,3 +251,91 @@ test('a repeated form submit while the first one is saving executes the mutation
   assert.equal(a.value('calls'),1);
   assert.equal(a.value('modalSubmitting'),false);
 });
+
+test('carryover adds once to the new budget, preserves history and envelopes, and can be reversed',async()=>{
+  const a=app();
+  a.run(`state.periods['2026-09'].salary=400; currentPeriod().salary=1000; currentPeriod().categoryBudgets.everyday.plan=700; state.pet.balanceByn=90; saveCarryover(currentPeriod(),125.56); saveCarryover(currentPeriod(),125.56);`);
+  assert.equal(a.value('accountBalanceAfterSpending(state,currentPeriod())'),1125.56);
+  assert.equal(a.value('liveFreeBalance(state,currentPeriod())'),425.56);
+  assert.equal(a.value("accountBalanceAfterSpending(state,state.periods['2026-09'])"),400);
+  assert.equal(a.value('petBalanceByn(state)'),90);
+  assert.equal(a.value('state.account.transactions.length'),1);
+  await a.run('commit(false);');
+  a.run('state=cloneState(saved.at(-1)); saveCarryover(currentPeriod(),125.56);');
+  assert.equal(a.value('state.account.transactions.length'),1);
+  a.run('deleteAccountOperation(state.account.transactions[0].id);');
+  assert.equal(a.value('liveFreeBalance(state,currentPeriod())'),300);
+});
+
+test('carryover zero completes the prompt without an operation and invalid amounts are rejected',()=>{
+  const a=app();
+  for(const value of ['-1','NaN','Infinity'])assert.throws(()=>a.run(`saveCarryover(currentPeriod(),${value});`));
+  assert.equal(a.value('state.account.transactions.length'),0);
+  a.run('saveCarryover(currentPeriod(),0);');
+  assert.equal(a.value('currentPeriod().carryoverConfirmed'),true);
+  assert.equal(a.value('state.account.transactions.length'),0);
+});
+
+test('carryover starts next period, waits for other dialogs and remembers confirmation after reload',async()=>{
+  const a=app();
+  a.run(`document={querySelector:()=>({hidden:true})};`);
+  await a.run('maybeAskCarryover()');
+  assert.equal(a.value('state.settings.carryoverStartPeriod'),'2026-10');
+  assert.equal(a.run('typeof modal'),'undefined');
+  a.run(`state.settings.carryoverStartPeriod='2026-09'; document.querySelector=()=>({hidden:false});`);
+  await a.run('maybeAskCarryover()');
+  assert.equal(a.run('typeof modal'),'undefined');
+  a.run('document.querySelector=()=>({hidden:true});');
+  await a.run('maybeAskCarryover()');
+  assert.equal(a.value('modal.title'),'Сколько перенести с прошлого месяца?');
+  await a.run('modal.submit({amount:50});');
+  a.run('state=cloneState(saved.at(-1)); delete globalThis.modal;');
+  await a.run('maybeAskCarryover()');
+  assert.equal(a.run('typeof modal'),'undefined');
+});
+
+test('home displays remaining food and category budgets and month separates budget from spendable money',()=>{
+  const a=app();
+  a.run(`globalThis.nodes=new Map();document={querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{textContent:'',innerHTML:'',classList:{toggle(){},remove(){}},querySelector(){return {dataset:{}};}});return nodes.get(selector);}};
+    const p=currentPeriod();p.salary=1000;p.categoryBudgets.everyday={plan:100,spent:40};
+    const w=p.foodWeeks[currentWeekIndex(p.key,new Date(),state.settings.salaryDay)];w.plan=100;w.spent=30;
+    state.settings.dashboardCards=[dashboardCategoryKey('everyday')];renderHome();renderMonth();`);
+  assert.equal(a.value("nodes.get('#weekPlan').textContent"),a.run('formatByn(70)'));
+  assert.match(a.value("nodes.get('#dashboardList').innerHTML"),/60/);
+  assert.equal(a.value("nodes.get('#incomeTotal').textContent"),a.run('formatByn(930)'));
+  assert.equal(a.value("nodes.get('#monthFreeValue').textContent"),a.run('formatByn(800)'));
+  assert.match(a.run("renderCategoryCard(categoryById('pet'),currentPeriod())"),/>Отложено</);
+});
+
+test('appearance presets persist without changing budgets or losing legacy custom settings',async()=>{
+  const a=app();
+  a.run(`currentPeriod().salary=1234.56;state.settings.appearance={primary:'#123456',backgroundImage:'data:image/png;base64,old'};appearanceModal();`);
+  assert.equal(a.value('modal.fields[0].value'),'lime');
+  await a.run(`modal.submit({preset:'lilac'});`);
+  a.run('state=cloneState(saved.at(-1));');
+  assert.equal(a.value('appearanceSettings().preset'),'lilac');
+  assert.equal(a.value('selectedTheme().label'),'Лаванда');
+  assert.equal(a.value('currentPeriod().salary'),1234.56);
+  assert.equal(a.value('appearanceSettings().backgroundImage'),'data:image/png;base64,old');
+  a.run(`appearanceModal();`);
+  assert.equal(a.value('modal.fields[0].value'),'lilac');
+  await a.run(`modal.submit({preset:'not-a-theme'});`);
+  assert.equal(a.value('appearanceSettings().preset'),'lime');
+});
+
+test('theme previews expose six selectable palettes and opening the dialog does not change the theme',()=>{
+  const a=app();
+  a.run(`state.settings.appearance={preset:'sky'};appearanceModal();`);
+  assert.equal(a.value('appearanceSettings().preset'),'sky');
+  const html=a.run('fieldHtml(modal.fields[0])');
+  assert.equal((html.match(/type="radio"/g)||[]).length,6);
+  assert.match(html,/value="sky" checked/);
+});
+
+test('legacy category colors remain selected and dark icon presets keep light foregrounds',()=>{
+  const a=app();
+  const html=a.run(`fieldHtml({name:'color',type:'palette',label:'Цвет',value:'#123456',options:colorOptions})`);
+  assert.match(html,/value="#123456" checked/);
+  assert.match(a.run(`categoryColorStyle('#202820')`),/var\(--on-dark\)/);
+  assert.match(a.run(`categoryColorStyle('#c5ec63')`),/var\(--text\)/);
+});

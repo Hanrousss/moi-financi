@@ -12,6 +12,7 @@ const types = {
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
   '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
 

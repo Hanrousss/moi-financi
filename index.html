@@ -10,9 +10,9 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.2.6">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.2.6">
-  <link rel="stylesheet" href="./styles.css?v=1.2.6">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.2.7">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.2.7">
+  <link rel="stylesheet" href="./styles.css?v=1.2.7">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -28,7 +28,7 @@
       <section id="home" class="screen active">
         <div class="home-heading"><span class="section-kicker">МОЙ БЮДЖЕТ</span><button id="periodPill" class="period-pill"></button></div>
         <article id="freeCard" class="hero-card status-good">
-          <div class="hero-orbit" aria-hidden="true"><span>↗</span></div>
+          <button type="button" class="hero-orbit" data-shortcut="month" aria-label="Перейти во вкладку Месяц"><span aria-hidden="true">↗</span></button>
           <div class="hero-card-head"><span>Можно потратить</span><span class="hero-card-actions"><button id="undoLastBtn" class="mini-icon undo-action-button" type="button" aria-label="Отменить последнее действие" title="Отменить последнее действие"></button><button id="editBalanceBtn" class="mini-icon" aria-label="Изменить сумму «Можно потратить»"></button></span></div>
           <strong id="freeValue">0 BYN</strong><p class="hero-caption">После всех запланированных расходов</p><details class="balance-breakdown"><summary>Как считается</summary><small id="freeMeta"></small></details>
         </article>
@@ -111,6 +111,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.2.6"></script>
+  <script src="./app.bundle.js?v=1.2.7"></script>
 </body>
 </html>

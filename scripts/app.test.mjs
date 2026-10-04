@@ -545,3 +545,28 @@ test('diary rich text survives backup migration and does not change finance',()=
  assert.equal(a.value('backupSummaryForState(state).lifeRecords'),1);
  assert.equal(a.value("validLifeData({diary:[{id:'bad',title:'Bad',date:'not-a-date',html:5}]})"),false);
 });
+
+test('custom section builder preserves records when blocks are disabled and restored',async()=>{
+ const a=app();a.run("sectionBuilder(null,'recipes')");
+ await a.run("modal.submit({title:'Моя кухня',use_recipes:true,use_checklist:true,name_checklist:'Купить'})");
+ assert.equal(a.value('customSections()[0].blocks.length'),2);
+ a.run("customSections()[0].blocks.find(b=>b.type==='recipes').items.push({id:'recipe',title:'Суп',ingredients:'Вода',steps:'Варить'});sectionBuilder(customSections()[0]);");
+ await a.run("modal.submit({title:'Кухня',use_checklist:true})");
+ assert.equal(a.value("customSections()[0].blocks.find(b=>b.type==='recipes').hidden"),true);
+ a.run('sectionBuilder(customSections()[0])');
+ await a.run("modal.submit({title:'Кухня',use_checklist:true,use_recipes:true})");
+ assert.equal(a.value("customSections()[0].blocks.find(b=>b.type==='recipes').items[0].title"),'Суп');
+ assert.equal(a.value('validLifeData(state.life)'),true);
+ assert.deepEqual(a.value('migrateBackupState(state).life'),a.value('state.life'));
+});
+
+test('section order and names persist independently from finance and hidden records',()=>{
+ const a=app();a.run("globalThis.before=cloneState(state);lifeData().ideas.push({id:'idea',title:'Полка'});state.settings.appSectionNames={ideas:'Мой уют'};state.settings.appSectionOrder=['diary','home','ideas'];state.settings.hiddenAppSections=['ideas','home'];");
+ assert.equal(a.value('visibleSections()[0].id'),'diary');
+ assert.equal(a.value("visibleSections().some(s=>s.id==='home')"),true);
+ assert.equal(a.value("visibleSections().some(s=>s.id==='ideas')"),false);
+ assert.equal(a.value("sectionName('ideas')"),'Мой уют');
+ assert.equal(a.value('state.life.ideas.length'),1);
+ assert.deepEqual(a.value('state.periods'),a.value('before.periods'));
+ assert.deepEqual(a.value('state.account'),a.value('before.account'));
+});

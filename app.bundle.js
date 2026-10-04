@@ -504,7 +504,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.3.1';
+const APP_BUILD='1.4.0';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -977,8 +977,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.3.1');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.3.1');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.0');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.0');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -1291,7 +1291,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.3.1')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.0')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1711,7 +1711,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.3.1',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.0',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -1954,6 +1954,7 @@ function validLifeData(data){
   const dated=x=>x&&typeof x.id==='string'&&typeof x.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x.date)&&!Number.isNaN(Date.parse(x.date));
   if(data.activities!=null&&(!Array.isArray(data.activities)||!data.activities.every(x=>dated(x)&&typeof x.title==='string'&&['gym','steps','other'].includes(x.kind))))return false;
   if(data.diary!=null&&(!Array.isArray(data.diary)||!data.diary.every(x=>dated(x)&&typeof x.title==='string'&&typeof x.html==='string')))return false;
+  if(data.customSections!=null&&(!Array.isArray(data.customSections)||!data.customSections.every(s=>s&&typeof s.id==='string'&&s.id.startsWith('section-')&&typeof s.title==='string'&&Array.isArray(s.blocks)&&s.blocks.every(b=>b&&typeof b.id==='string'&&Object.hasOwn(SECTION_BLOCKS,b.type)&&typeof b.title==='string'&&Array.isArray(b.items)&&b.items.every(record)))))return false;
   if(data.weights!=null&&(!Array.isArray(data.weights)||!data.weights.every(x=>dated(x)&&Number.isFinite(x.value)&&x.value>0)))return false;
   return true;
 }
@@ -1966,8 +1967,8 @@ function lifeUrl(value){try{const u=new URL(value);return ['https:','http:'].inc
 function lifeLinks(text){return String(text||'').split('\n').map(line=>{const url=lifeUrl(line.trim());return url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(new URL(url).hostname)} ↗</a>`:''}).join('');}
 function lifePicture(src){return typeof src==='string'&&/^data:image\/(png|jpeg|webp);base64,/.test(src)?`<img src="${esc(src)}" alt="" loading="lazy">`:'';}
 function switchLife(section){
-  if(!Object.hasOwn(LIFE_SECTIONS,section))return;
-  lifeSection=section;lifeDetail=null;
+  if(!visibleSections().some(s=>s.id===section))return;
+  sectionHaptic();lifeSection=section;lifeDetail=null;
   $('#sectionMenu').hidden=true;$('#sectionSwitch').setAttribute('aria-expanded','false');
   setScreen(section==='home'?'home':'life');
 }
@@ -1975,11 +1976,12 @@ function renderLife(){
   if(!$('#lifeContent'))return;
   const isLife=activeScreen==='life';
   $('#sectionSwitch').setAttribute('aria-label','Разделы приложения');
-  $('#screenTitle').textContent=LIFE_SECTIONS[lifeSection]||'Финанси';
+  $('#screenTitle').textContent=sectionName(lifeSection);
   $('.bottom-nav').hidden=isLife||lifeSection!=='home';
-  $('#sectionMenu').innerHTML=Object.entries(LIFE_SECTIONS).map(([id,label])=>`<button type="button" data-life-section="${id}" aria-current="${id===lifeSection?'page':'false'}">${label}<span>${id===lifeSection?'✓':'↗'}</span></button>`).join('');
+  renderSectionMenu();renderSectionSettings();
   if(!isLife)return;
   const data=lifeData();
+  const custom=customSections().find(s=>s.id===lifeSection);if(custom){renderCustomSection(custom);return;}
   if(lifeSection==='diary'){renderDiary();return;}
   if(lifeSection==='activity'){renderLifeActivity();return;}
   const container=$('#lifeContent'),collection=data[lifeSection];
@@ -2064,7 +2066,7 @@ function lifeWeightEditor(item=null){
   },{extraAction:item?{label:'Удалить запись',handler:async()=>{if(!confirm('Удалить запись веса?'))return;state.life.weights=state.life.weights.filter(x=>x.id!==item.id);await commit();closeModal();}}:null});
 }
 function bindLife(){
-  $('#sectionSwitch').addEventListener('click',()=>{const menu=$('#sectionMenu');menu.hidden=!menu.hidden;$('#sectionSwitch').setAttribute('aria-expanded',String(!menu.hidden));});
+  $('#sectionSwitch').addEventListener('click',()=>{const menu=$('#sectionMenu');if(menu.hidden)openSectionMenu();else{menu.hidden=true;$('#sectionSwitch').setAttribute('aria-expanded','false');}});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#sectionMenu').hidden=true;$('#sectionSwitch').setAttribute('aria-expanded','false');}});
   document.addEventListener('click',e=>{
     if(!e.target.closest('.section-selector')){$('#sectionMenu').hidden=true;$('#sectionSwitch').setAttribute('aria-expanded','false');}
@@ -2220,6 +2222,209 @@ function bindDiary(){
   window.addEventListener('beforeunload',e=>{if(diaryDirty){e.preventDefault();e.returnValue='';}});
 }
 
+const SECTION_BLOCKS={notebooks:'Блокноты',notes:'Заметки',checklist:'Список дел',calendar:'Календарь',gallery:'Галерея',recipes:'Рецепты',links:'Ссылки'};
+const SECTION_TEMPLATES={
+ notebooks:{title:'Блокноты',description:'Отдельные задумки с заметками, фото и ссылками',blocks:['notebooks']},
+ checklist:{title:'Список',description:'Дела, покупки или подготовка с отметками',blocks:['checklist']},
+ calendar:{title:'Календарь отметок',description:'События и привычки с цветными отметками',blocks:['calendar']},
+ gallery:{title:'Коллекция референсов',description:'Галерея изображений и заметки',blocks:['gallery','notes']},
+ recipes:{title:'Рецепты и покупки',description:'Фото, ингредиенты, приготовление и список покупок',blocks:['recipes','checklist']},
+ project:{title:'Личный проект',description:'Блокноты, задачи и даты в одном месте',blocks:['notebooks','checklist','calendar']},
+ learning:{title:'Моя библиотека знаний',description:'Темы для изучения, полезные ссылки и список дел',blocks:['notebooks','links','checklist']},
+ blank:{title:'Собрать самостоятельно',description:'Выбери нужные блоки и дай им свои названия',blocks:['notes']}
+};
+let sectionMenuEditing=false,sectionWheelTick=null,sectionPress=null,sectionDrag=null,sectionSuppressUntil=0,sectionCalendarMonth=toISODate(new Date()).slice(0,7);
+function customSections(){const data=lifeData();if(!Array.isArray(data.customSections))data.customSections=[];return data.customSections;}
+function sectionCatalog(){
+  const names=state.settings.appSectionNames||{};
+  return [...Object.entries(LIFE_SECTIONS).map(([id,title])=>({id,title:names[id]||title,builtin:true})),...customSections()];
+}
+function visibleSections(){
+  const all=sectionCatalog(),hidden=state.settings.hiddenAppSections||[],order=state.settings.appSectionOrder||[];
+  return all.filter(s=>s.id==='home'||!hidden.includes(s.id)).sort((a,b)=>{
+    const ai=order.indexOf(a.id),bi=order.indexOf(b.id);return (ai<0?order.length+all.indexOf(a):ai)-(bi<0?order.length+all.indexOf(b):bi);
+  });
+}
+function sectionName(id){return sectionCatalog().find(s=>s.id===id)?.title||'Финанси';}
+function sectionHaptic(){if(state.settings.sectionHaptics!==false&&typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')try{navigator.vibrate(8);}catch{}}
+function sectionRename(id){
+  const item=sectionCatalog().find(s=>s.id===id);if(!item)return;
+  openModal('Название раздела',[{name:'title',label:'Название',required:true,value:item.title}],async v=>{
+    if(!v.title.trim())return;
+    if(item.builtin){state.settings.appSectionNames??={};state.settings.appSectionNames[id]=v.title.trim();}
+    else item.title=v.title.trim();
+    await commit();closeModal();renderSectionMenu();
+  });
+}
+async function sectionRemove(id){
+  if(id==='home')return;
+  const item=sectionCatalog().find(s=>s.id===id);if(!item)return;
+  if(!confirm(`Убрать «${item.title}» из меню? Записи сохранятся; раздел можно вернуть в настройках.`))return;
+  state.settings.hiddenAppSections=[...new Set([...(state.settings.hiddenAppSections||[]),id])];
+  if(lifeSection===id){lifeSection='home';if(activeScreen==='life')setScreen('home');}
+  await commit();
+}
+function renderSectionSettings(){
+  const root=$('#settingsAppSections');if(!root)return;
+  const hidden=sectionCatalog().filter(s=>(state.settings.hiddenAppSections||[]).includes(s.id)&&s.id!=='home');
+  root.innerHTML=`<button class="settings-row" data-section-new><span><b>Добавить раздел</b><small>Выбрать шаблон или собрать из блоков</small></span>${icon('plus',22)}</button><button class="settings-row" data-section-organize><span><b>Порядок и названия</b><small>Перетаскивай разделы в списке</small></span>${icon('edit',18)}</button><label class="toggle-field"><input type="checkbox" data-section-haptics ${state.settings.sectionHaptics!==false?'checked':''}><span><b>Отклик при прокрутке</b><small>${(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')?'Короткая вибрация при смене пункта':'В этом браузере вибрация недоступна'}</small></span></label>${visibleSections().map(s=>`<article class="settings-row"><span><b>${esc(s.title)}</b><small>${s.builtin?'Основной раздел':`${s.blocks.filter(b=>!b.hidden).length} блоков`}</small></span><span class="settings-actions"><button class="mini-icon" data-section-config="${s.id}" aria-label="Настроить ${esc(s.title)}">${icon('edit',18)}</button>${s.id!=='home'?`<button class="mini-icon" data-section-remove="${s.id}" aria-label="Убрать раздел">${icon('close',18)}</button>`:''}</span></article>`).join('')}${hidden.length?'<h3>Убраны из меню</h3>':''}${hidden.map(s=>`<button class="settings-row" data-section-restore="${s.id}"><span><b>${esc(s.title)}</b><small>Вернуть вместе с записями</small></span>${icon('plus',18)}</button>`).join('')}`;
+}
+function sectionTemplatePicker(){
+  openModal('Новый раздел',[],()=>{}, {submitLabel:'Закрыть'});
+  $('#modalBody').innerHTML=`<div class="template-grid">${Object.entries(SECTION_TEMPLATES).map(([id,t])=>`<button type="button" class="template-card" data-section-template="${id}"><b>${t.title}</b><small>${t.description}</small></button>`).join('')}</div>`;
+  modalSubmitHandler=async()=>closeModal();
+}
+function sectionBuilder(section=null,templateId='blank'){
+  const template=SECTION_TEMPLATES[templateId]||SECTION_TEMPLATES.blank;
+  const fields=[{name:'title',label:'Название страницы',required:true,value:section?.title||template.title}];
+  for(const [type,label] of Object.entries(SECTION_BLOCKS)){
+    const block=section?.blocks.find(b=>b.type===type);
+    fields.push({name:'use_'+type,label,type:'checkbox',value:section?!!block&&!block.hidden:template.blocks.includes(type)});
+    fields.push({name:'name_'+type,label:`Название блока «${label}»`,value:block?.title||(templateId==='recipes'&&type==='checklist'?'Купить продукты':label)});
+  }
+  openModal(section?'Настроить раздел':'Собрать раздел',fields,async v=>{
+    const enabled=Object.keys(SECTION_BLOCKS).filter(type=>v['use_'+type]);
+    if(!v.title.trim()||!enabled.length){toast('Укажи название и выбери хотя бы один блок');return;}
+    const target=section||{id:'section-'+uid(),title:'',blocks:[]};
+    target.title=v.title.trim();
+    for(const [type,label] of Object.entries(SECTION_BLOCKS)){
+      let block=target.blocks.find(b=>b.type===type);
+      if(!block&&enabled.includes(type)){block={id:uid(),type,title:label,items:[]};target.blocks.push(block);}
+      if(block){block.hidden=!enabled.includes(type);block.title=v['name_'+type]?.trim()||label;}
+    }
+    if(!section)customSections().push(target);
+    await commit();closeModal();
+  });
+}
+function renderSectionMenu(){
+  const menu=$('#sectionMenu');if(!menu||menu.hidden)return;
+  const items=visibleSections();
+  menu.classList.toggle('section-menu-editing',sectionMenuEditing);
+  if(sectionMenuEditing){
+    menu.innerHTML=`<div class="section-edit-header"><b>Разделы</b><button type="button" data-section-edit-done>Готово</button></div><p class="section-menu-hint">Перетаскивай за ⠿. Нажми название, чтобы изменить.</p><div class="section-order-list">${items.map(s=>`<div class="section-order-row" data-order-section="${s.id}"><button type="button" data-section-rename="${s.id}">${esc(s.title)}</button><button type="button" class="section-drag-handle" data-section-drag="${s.id}" aria-label="Перетащить ${esc(s.title)}; стрелки вверх и вниз меняют порядок">⠿</button></div>`).join('')}</div>`;
+    return;
+  }
+  menu.innerHTML=`<div class="section-wheel" tabindex="0" aria-label="Разделы: прокручивай и нажми нужное название"><div class="section-wheel-spacer"></div>${Array.from({length:items.length===1?1:5},(_,copy)=>items.map((s,index)=>`<button type="button" class="section-wheel-option" data-life-section="${s.id}" data-wheel-index="${copy*items.length+index}" ${items.length>1&&copy!==2?'tabindex="-1" aria-hidden="true"':''}>${esc(s.title)}</button>`).join('')).join('')}<div class="section-wheel-spacer"></div></div><p class="section-menu-hint">Удерживай название 2 секунды для настройки</p>`;
+  const wheel=menu.querySelector('.section-wheel'),count=items.length;
+  const index=Math.max(0,items.findIndex(s=>s.id===lifeSection));wheel.scrollTop=(count===1?0:count*2+index)*52;
+  let previous=count===1?0:count*2+index,recenterTimer;
+  const update=()=>{
+    const position=wheel.scrollTop/52,nearest=Math.round(position);
+    if(nearest!==previous){previous=nearest;sectionHaptic();}
+    for(const button of wheel.querySelectorAll('[data-wheel-index]')){
+      const distance=Math.abs(Number(button.dataset.wheelIndex)-position);
+      button.style.opacity=String(Math.max(.08,1-distance*.28));
+      button.style.transform=`scale(${Math.max(.88,1-distance*.035)})`;
+      button.classList.toggle('wheel-centered',distance<.5);
+    }
+    clearTimeout(recenterTimer);recenterTimer=setTimeout(()=>{
+      if(!wheel.isConnected||sectionMenuEditing)return;
+      const cycle=count*52;
+      if(count>1&&(wheel.scrollTop<cycle||wheel.scrollTop>=cycle*4)){const next=cycle*2+((wheel.scrollTop%cycle)+cycle)%cycle;previous=Math.round(next/52);wheel.scrollTop=next;}
+    },120);
+  };
+  wheel.addEventListener('scroll',()=>{if(sectionPress){clearTimeout(sectionPress.timer);sectionPress=null;}update();},{passive:true});update();
+  wheel.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();wheel.scrollBy({top:e.key==='ArrowDown'?52:-52,behavior:'smooth'});}
+    if(e.key==='Enter'&&e.target===wheel){e.preventDefault();switchLife(items[((Math.round(wheel.scrollTop/52)%count)+count)%count].id);}
+  });
+}
+function openSectionMenu(editing=false){
+  sectionMenuEditing=editing;$('#sectionMenu').hidden=false;$('#sectionSwitch').setAttribute('aria-expanded','true');renderSectionMenu();
+}
+function renderCustomSection(section){
+  const block=lifeDetail&&section.blocks.find(b=>b.id===lifeDetail.block),book=block?.items.find(x=>x.id===lifeDetail.item);
+  if(book){
+    $('#lifeContent').innerHTML=`<div class="section-row"><button class="text-button" data-custom-back>‹ Все блокноты</button><button class="text-button" data-custom-edit="${book.id}" data-custom-block="${block.id}">Изменить</button></div><h2>${esc(book.title)}</h2><div class="section-row"><h2>Материалы</h2><button class="small-button" data-custom-add="${block.id}" data-custom-parent="${book.id}">+ Добавить</button></div><div class="life-stack">${(book.entries||[]).map(x=>customItemCard(x,block,book.id)).join('')||'<p class="empty-state">Заметки, картинки и ссылки этой задумки.</p>'}</div>`;return;
+  }
+  $('#lifeContent').innerHTML=`<div class="section-row"><p class="section-hint">Твоя страница</p><button class="text-button" data-section-config="${section.id}">Настроить блоки</button></div>${section.blocks.filter(b=>!b.hidden).map(block=>`<section class="custom-block"><div class="section-row"><h2>${esc(block.title)}</h2><button class="small-button" data-custom-add="${block.id}">+ Добавить</button></div>${block.type==='calendar'?customCalendar(block):''}<div class="${['gallery','recipes','notebooks'].includes(block.type)?'life-gallery':'life-stack'}">${block.items.filter(x=>block.type!=='calendar'||x.date?.startsWith(sectionCalendarMonth)).map(x=>customItemCard(x,block)).join('')||'<p class="empty-state">Добавь первую запись.</p>'}</div></section>`).join('')}`;
+}
+function customItemCard(item,block,parent=''){
+  const attrs=`data-custom-block="${block.id}" data-custom-parent="${parent}"`;
+  if(block.type==='checklist')return `<article class="life-check-row"><label><input type="checkbox" data-custom-check="${item.id}" ${attrs} ${item.done?'checked':''}><span class="${item.done?'life-done':''}">${esc(item.title)}</span></label><button class="mini-icon" data-custom-edit="${item.id}" ${attrs} aria-label="Изменить">${icon('edit',18)}</button></article>`;
+  const opens=block.type==='notebooks'&&!parent;
+  return `<article class="life-card"><button class="life-card-open" ${opens?'data-custom-open':'data-custom-edit'}="${item.id}" ${attrs}>${item.image?lifePicture(item.image):opens?'<span class="life-cover-placeholder">✦</span>':''}<span class="life-card-copy">${item.date?`<small>${esc(dateLabel(item.date))}</small>`:''}<b>${esc(item.title)}</b></span></button>${!opens&&item.text?`<p class="life-prose">${esc(item.text)}</p>`:''}${item.ingredients?`<p class="life-prose"><b>Ингредиенты</b>\n${esc(item.ingredients)}</p><p class="life-prose"><b>Приготовление</b>\n${esc(item.steps||'')}</p>`:''}<div class="life-links">${lifeLinks(item.links)}</div></article>`;
+}
+function customCalendar(block){
+  const [year,month]=sectionCalendarMonth.split('-').map(Number),first=new Date(year,month-1,1),days=new Date(year,month,0).getDate(),offset=(first.getDay()+6)%7;
+  return `<div class="month-switcher"><button data-custom-month="-1" aria-label="Предыдущий месяц">‹</button><strong>${first.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}</strong><button data-custom-month="1" aria-label="Следующий месяц">›</button></div><div class="life-calendar">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(d=>`<small>${d}</small>`).join('')}${'<span></span>'.repeat(offset)}${Array.from({length:days},(_,i)=>{const date=`${sectionCalendarMonth}-${String(i+1).padStart(2,'0')}`;return `<button data-custom-date="${date}" data-custom-block="${block.id}">${i+1}<span class="activity-dots">${block.items.filter(x=>x.date===date).map(x=>`<i style="background:${safeHex(x.color,'#537847')}"></i>`).join('')}</span></button>`}).join('')}</div>`;
+}
+function customItemEditor(blockId,itemId='',parentId='',date=''){
+  const section=customSections().find(s=>s.id===lifeSection),block=section?.blocks.find(b=>b.id===blockId);if(!block)return;
+  const parent=parentId&&block.items.find(x=>x.id===parentId),list=parent?(parent.entries??=[]):block.items,item=list.find(x=>x.id===itemId);
+  const fields=[{name:'title',label:'Название',required:true,value:item?.title||''}];
+  if(block.type!=='checklist')fields.push({name:'text',label:'Заметка',type:'textarea',value:item?.text||''},{name:'links',label:'Ссылки, каждая с новой строки',type:'textarea',value:item?.links||''},{name:'image',label:'Изображение',type:'file',accept:'image/*',preview:item?.image||''});
+  if(block.type==='recipes')fields.push({name:'ingredients',label:'Ингредиенты',type:'textarea',value:item?.ingredients||''},{name:'steps',label:'Приготовление',type:'textarea',value:item?.steps||''});
+  if(block.type==='calendar')fields.push({name:'date',label:'Дата',type:'date',required:true,value:item?.date||date||todayISO()},{name:'color',label:'Цвет',type:'palette',value:item?.color||LIFE_ACTIVITY_COLORS[0],options:LIFE_ACTIVITY_COLORS.map(value=>({value,label:value}))});
+  if(item?.image)fields.push({name:'removeImage',label:'Удалить изображение',type:'checkbox',value:false});
+  openModal(item?'Изменить запись':'Добавить запись',fields,async v=>{
+    if(!v.title.trim())return;
+    if(v.links&&v.links.split('\n').some(l=>l.trim()&&!lifeUrl(l.trim()))){toast('Проверь адреса ссылок');return;}
+    const record={...(item||{id:uid(),entries:[],done:false}),title:v.title.trim()};
+    for(const key of ['text','links','ingredients','steps','date','color'])if(v[key]!=null)record[key]=v[key];
+    if(v.removeImage)delete record.image;if(v.image)record.image=await imageToDataUrl(v.image,1200);
+    const before=cloneState(state);if(item)Object.assign(item,record);else list.push(record);
+    try{await commit();closeModal();}catch{state=before;renderAll();}
+  },{extraAction:item?{label:'Удалить',handler:async()=>{if(!confirm(parent?'Удалить материал?':'Удалить запись и вложенные материалы?'))return;list.splice(list.indexOf(item),1);await commit();closeModal();}}:null});
+}
+function bindSectionManager(){
+  document.addEventListener('contextmenu',e=>{if(e.target.closest('#sectionMenu'))e.preventDefault();});
+  document.addEventListener('pointerdown',e=>{
+    const option=e.target.closest('[data-life-section]'),handle=e.target.closest('[data-section-drag]');
+    if(handle){
+      const row=handle.closest('[data-order-section]');sectionDrag={row,list:row.parentElement,y:e.clientY,id:e.pointerId};handle.setPointerCapture(e.pointerId);row.classList.add('section-dragging');e.preventDefault();return;
+    }
+    if(!option||sectionMenuEditing)return;
+    sectionPress={x:e.clientX,y:e.clientY};
+    sectionPress.timer=setTimeout(()=>{sectionSuppressUntil=Date.now()+800;sectionHaptic();openSectionMenu(true);sectionPress=null;},2000);
+  });
+  document.addEventListener('pointermove',e=>{
+    if(sectionPress&&Math.hypot(e.clientX-sectionPress.x,e.clientY-sectionPress.y)>9){clearTimeout(sectionPress.timer);sectionPress=null;}
+    if(!sectionDrag)return;
+    e.preventDefault();const {row,list}=sectionDrag;
+    const rect=list.getBoundingClientRect();if(e.clientY<rect.top+35)list.scrollTop-=12;else if(e.clientY>rect.bottom-35)list.scrollTop+=12;
+    const target=document.elementsFromPoint(e.clientX,e.clientY).map(el=>el.closest('[data-order-section]')).find(el=>el&&el!==row);
+    if(target){const rows=[...list.children],down=rows.indexOf(row)<rows.indexOf(target);list.insertBefore(row,down?target.nextSibling:target);}
+  },{passive:false});
+  const end=async e=>{
+    if(sectionPress){clearTimeout(sectionPress.timer);sectionPress=null;}
+    if(!sectionDrag)return;const drag=sectionDrag;sectionDrag=null;sectionSuppressUntil=Date.now()+400;
+    if(e.type==='pointercancel'){renderSectionMenu();return;}
+    state.settings.appSectionOrder=[...drag.list.children].map(el=>el.dataset.orderSection);await commit();
+  };
+  document.addEventListener('pointerup',end);document.addEventListener('pointercancel',end);
+  document.addEventListener('click',e=>{
+    if(Date.now()<sectionSuppressUntil&&e.target.closest('#sectionMenu')){e.stopImmediatePropagation();e.preventDefault();}
+  },true);
+  document.addEventListener('click',async e=>{
+    const el=e.target.closest('[data-section-new],[data-section-template],[data-section-config],[data-section-remove],[data-section-restore],[data-section-organize],[data-section-edit-done],[data-section-rename],[data-custom-add],[data-custom-edit],[data-custom-open],[data-custom-back],[data-custom-date],[data-custom-month]');
+    if(!el)return;
+    if(el.hasAttribute('data-section-new'))sectionTemplatePicker();
+    if(el.dataset.sectionTemplate)sectionBuilder(null,el.dataset.sectionTemplate);
+    if(el.dataset.sectionConfig){const item=sectionCatalog().find(s=>s.id===el.dataset.sectionConfig);if(item?.builtin)sectionRename(item.id);else if(item)sectionBuilder(item);}
+    if(el.dataset.sectionRemove)await sectionRemove(el.dataset.sectionRemove);
+    if(el.dataset.sectionRestore){state.settings.hiddenAppSections=(state.settings.hiddenAppSections||[]).filter(id=>id!==el.dataset.sectionRestore);await commit();}
+    if(el.hasAttribute('data-section-organize')){window.scrollTo(0,0);openSectionMenu(true);}
+    if(el.hasAttribute('data-section-edit-done')){sectionMenuEditing=false;renderSectionMenu();}
+    if(el.dataset.sectionRename)sectionRename(el.dataset.sectionRename);
+    if(el.dataset.customAdd)customItemEditor(el.dataset.customAdd,'',el.dataset.customParent);
+    if(el.dataset.customEdit)customItemEditor(el.dataset.customBlock,el.dataset.customEdit,el.dataset.customParent);
+    if(el.dataset.customOpen){lifeDetail={block:el.dataset.customBlock,item:el.dataset.customOpen};renderLife();}
+    if(el.hasAttribute('data-custom-back')){lifeDetail=null;renderLife();}
+    if(el.dataset.customDate)customItemEditor(el.dataset.customBlock,'','',el.dataset.customDate);
+    if(el.dataset.customMonth){sectionCalendarMonth=shiftPeriodKey(sectionCalendarMonth,Number(el.dataset.customMonth));renderLife();}
+  });
+  document.addEventListener('change',async e=>{
+    if(e.target.matches('[data-section-haptics]')){state.settings.sectionHaptics=e.target.checked;await commit();}
+    if(e.target.matches('[data-custom-check]')){const section=customSections().find(s=>s.id===lifeSection),block=section.blocks.find(b=>b.id===e.target.dataset.customBlock);block.items.find(x=>x.id===e.target.dataset.customCheck).done=e.target.checked;await commit();}
+  });
+  document.addEventListener('keydown',async e=>{
+    const handle=e.target.closest('[data-section-drag]');if(!handle||!['ArrowUp','ArrowDown'].includes(e.key))return;
+    e.preventDefault();const items=visibleSections().map(s=>s.id),i=items.indexOf(handle.dataset.sectionDrag),j=i+(e.key==='ArrowUp'?-1:1);if(j<0||j>=items.length)return;
+    [items[i],items[j]]=[items[j],items[i]];state.settings.appSectionOrder=items;await commit();$('#sectionMenu').querySelector(`[data-section-drag="${handle.dataset.sectionDrag}"]`)?.focus();
+  });
+}
+
 async function init(){
   const saved=await loadState();
   const migrated=!!saved&&Number(saved.version)!==VERSION;
@@ -2229,7 +2434,7 @@ async function init(){
   if(syncAllAutoClosedWeeks()||iconsCentered||migrated||monthlyBalancesMigrated)await saveState(state);
   selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;ensurePeriod(state,selectedPeriodKey);
   committedState=cloneState(state);
-  bindStaticEvents();bindDelegatedEvents();bindCategoryDragging();bindLife();bindDiary();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
+  bindStaticEvents();bindDelegatedEvents();bindCategoryDragging();bindLife();bindDiary();bindSectionManager();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
   scheduleAutoWeekClose();
   registerServiceWorker();
   await maybeAskCarryover();

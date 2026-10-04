@@ -10,9 +10,9 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.4.2">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.4.2">
-  <link rel="stylesheet" href="./styles.css?v=1.4.2">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.4.3">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.4.3">
+  <link rel="stylesheet" href="./styles.css?v=1.4.3">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -29,7 +29,7 @@
       <section id="home" class="screen active">
         <div class="home-heading"><span class="section-kicker">МОЙ БЮДЖЕТ</span><button id="periodPill" class="period-pill"></button></div>
         <article id="freeCard" class="hero-card status-good">
-          <button type="button" class="hero-orbit" data-shortcut="month" aria-label="Перейти во вкладку Месяц"><span aria-hidden="true">↗</span></button>
+          <button type="button" class="hero-orbit" data-shortcut="month" aria-label="Перейти во вкладку Месяц"><svg aria-hidden="true" viewBox="0 0 24 24" width="27" height="27" fill="none"><path d="M6 18 18 6M7 6h11v11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           <div class="hero-card-head"><span>Можно потратить</span><span class="hero-card-actions"><button id="undoLastBtn" class="mini-icon undo-action-button" type="button" aria-label="Отменить последнее действие" title="Отменить последнее действие"></button><button id="editBalanceBtn" class="mini-icon" aria-label="Изменить сумму «Можно потратить»"></button></span></div>
           <strong id="freeValue">0 BYN</strong><p class="hero-caption">После всех запланированных расходов</p><details class="balance-breakdown"><summary>Как считается</summary><small id="freeMeta"></small></details>
         </article>
@@ -98,12 +98,12 @@
       </section>
 
       <section id="settings" class="screen overlay-screen">
-        <div class="settings-group"><h2>Общие</h2><div class="settings-stack"><button id="editGeneralBtn" class="settings-row"></button><button id="editProfileAvatarBtn" class="settings-row"></button></div></div>
-        <div class="settings-group"><h2>Внешний вид</h2><div class="settings-stack"><button id="editAppearanceBtn" class="settings-row"></button><button id="editAppIconBtn" class="settings-row"></button></div></div>
-        <div class="settings-group"><h2>Разделы приложения</h2><div id="settingsAppSections" class="settings-stack"></div></div>
-        <div class="settings-group"><h2>Нижнее меню</h2><div id="settingsNavIcons" class="settings-stack"></div></div>
-        <div class="settings-group"><div class="section-row"><h2>Категории</h2><button id="settingsAddCategory" class="text-button"></button></div><div id="settingsCategories" class="settings-stack"></div></div>
-        <div class="settings-group"><h2>Данные</h2><div class="settings-stack"><button id="exportBtn" class="settings-row"></button><label class="settings-row file-row" id="importLabel"><input id="importInput" type="file" accept="application/json"><span id="importContent"></span></label><button id="resetBtn" class="settings-row danger-row"></button></div></div>
+        <details class="settings-group settings-fold"><summary>Общие</summary><div class="settings-stack"><button id="editGeneralBtn" class="settings-row"></button><button id="editProfileAvatarBtn" class="settings-row"></button></div></details>
+        <details class="settings-group settings-fold"><summary>Внешний вид</summary><div class="settings-stack"><button id="editAppearanceBtn" class="settings-row"></button><button id="editAppIconBtn" class="settings-row"></button></div></details>
+        <details class="settings-group settings-fold"><summary>Разделы приложения</summary><div id="settingsAppSections" class="settings-stack"></div></details>
+        <details class="settings-group settings-fold"><summary>Нижнее меню</summary><div id="settingsNavIcons" class="settings-stack"></div></details>
+        <details class="settings-group settings-fold"><summary>Категории</summary><div class="section-row"><button id="settingsAddCategory" class="text-button"></button></div><div id="settingsCategories" class="settings-stack"></div></details>
+        <details class="settings-group settings-fold"><summary>Данные</summary><div class="settings-stack"><button id="exportBtn" class="settings-row"></button><label class="settings-row file-row" id="importLabel"><input id="importInput" type="file" accept="application/json"><span id="importContent"></span></label><button id="resetBtn" class="settings-row danger-row"></button></div></details>
         <p class="version-note">Данные хранятся локально на этом устройстве.</p>
       </section>
     </main>
@@ -113,6 +113,6 @@
 
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.4.2"></script>
+  <script src="./app.bundle.js?v=1.4.3"></script>
 </body>
 </html>

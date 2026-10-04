@@ -14,7 +14,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.4.1';
+const APP_BUILD='1.4.2';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -487,8 +487,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.1');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.1');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.2');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.2');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -801,7 +801,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.1')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.2')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1221,7 +1221,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.1',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.2',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -1478,7 +1478,7 @@ function lifeLinks(text){return String(text||'').split('\n').map(line=>{const ur
 function lifePicture(src){return typeof src==='string'&&/^data:image\/(png|jpeg|webp);base64,/.test(src)?`<img src="${esc(src)}" alt="" loading="lazy">`:'';}
 function switchLife(section){
   if(!visibleSections().some(s=>s.id===section))return;
-  sectionHaptic();lifeSection=section;lifeDetail=null;
+  lifeSection=section;lifeDetail=null;
   $('#sectionMenu').hidden=true;$('#sectionSwitch').setAttribute('aria-expanded','false');
   setScreen(section==='home'?'home':'life');
 }
@@ -1756,7 +1756,6 @@ function visibleSections(){
   });
 }
 function sectionName(id){return sectionCatalog().find(s=>s.id===id)?.title||'Финанси';}
-function sectionHaptic(){if(state.settings.sectionHaptics!==false&&typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')try{navigator.vibrate(8);}catch{}}
 function sectionRename(id){
   const item=sectionCatalog().find(s=>s.id===id);if(!item)return;
   openModal('Название раздела',[{name:'title',label:'Название',required:true,value:item.title}],async v=>{
@@ -1777,7 +1776,7 @@ async function sectionRemove(id){
 function renderSectionSettings(){
   const root=$('#settingsAppSections');if(!root)return;
   const hidden=sectionCatalog().filter(s=>(state.settings.hiddenAppSections||[]).includes(s.id)&&s.id!=='home');
-  root.innerHTML=`<button class="settings-row" data-section-new><span><b>Добавить раздел из шаблона</b><small>Блокноты, списки, календарь, рецепты и другие</small></span>${icon('plus',22)}</button><p class="section-menu-hint">Перетаскивай за ⠿ для изменения порядка. Карандаш — название и настройки раздела.</p><label class="toggle-field"><input type="checkbox" data-section-haptics ${state.settings.sectionHaptics!==false?'checked':''}><span><b>Отклик при прокрутке</b><small>${(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')?'Короткая вибрация при смене пункта':'В этом браузере вибрация недоступна'}</small></span></label><div class="settings-section-order">${visibleSections().map(s=>`<article class="settings-row" data-order-section="${s.id}"><span><b>${esc(s.title)}</b><small>${s.builtin?'Основной раздел':`${s.blocks.filter(b=>!b.hidden).length} блоков`}</small></span><span class="settings-actions"><button type="button" class="section-drag-handle" data-section-drag="${s.id}" aria-label="Перетащить ${esc(s.title)}; стрелки вверх и вниз меняют порядок">⠿</button><button class="mini-icon" data-section-config="${s.id}" aria-label="Настроить ${esc(s.title)}">${icon('edit',18)}</button>${s.id!=='home'?`<button class="mini-icon" data-section-remove="${s.id}" aria-label="Убрать раздел">${icon('close',18)}</button>`:''}</span></article>`).join('')}</div>${hidden.length?'<h3>Убраны из меню</h3>':''}${hidden.map(s=>`<button class="settings-row" data-section-restore="${s.id}"><span><b>${esc(s.title)}</b><small>Вернуть вместе с записями</small></span>${icon('plus',18)}</button>`).join('')}`;
+  root.innerHTML=`<button class="settings-row" data-section-new><span><b>Добавить раздел из шаблона</b><small>Блокноты, списки, календарь, рецепты и другие</small></span>${icon('plus',22)}</button><p class="section-menu-hint">Перетаскивай за ⠿ для изменения порядка. Карандаш — название и настройки раздела.</p><div class="settings-section-order">${visibleSections().map(s=>`<article class="settings-row" data-order-section="${s.id}"><span><b>${esc(s.title)}</b><small>${s.builtin?'Основной раздел':`${s.blocks.filter(b=>!b.hidden).length} блоков`}</small></span><span class="settings-actions"><button type="button" class="section-drag-handle" data-section-drag="${s.id}" aria-label="Перетащить ${esc(s.title)}; стрелки вверх и вниз меняют порядок">⠿</button><button class="mini-icon" data-section-config="${s.id}" aria-label="Настроить ${esc(s.title)}">${icon('edit',18)}</button>${s.id!=='home'?`<button class="mini-icon" data-section-remove="${s.id}" aria-label="Убрать раздел">${icon('close',18)}</button>`:''}</span></article>`).join('')}</div>${hidden.length?'<h3>Убраны из меню</h3>':''}${hidden.map(s=>`<button class="settings-row" data-section-restore="${s.id}"><span><b>${esc(s.title)}</b><small>Вернуть вместе с записями</small></span>${icon('plus',18)}</button>`).join('')}`;
 }
 function sectionTemplatePicker(){
   openModal('Новый раздел',[],()=>{}, {submitLabel:'Закрыть'});
@@ -1789,8 +1788,8 @@ function sectionBuilder(section=null,templateId='blank'){
   const fields=[{name:'title',label:'Название страницы',required:true,value:section?.title||template.title}];
   for(const [type,label] of Object.entries(SECTION_BLOCKS)){
     const block=section?.blocks.find(b=>b.type===type);
-    fields.push({name:'use_'+type,label,type:'checkbox',value:section?!!block&&!block.hidden:template.blocks.includes(type)});
     fields.push({name:'name_'+type,label:`Название блока «${label}»`,value:block?.title||(templateId==='recipes'&&type==='checklist'?'Купить продукты':label)});
+    fields.push({name:'use_'+type,label,type:'checkbox',value:section?!!block&&!block.hidden:template.blocks.includes(type)});
   }
   openModal(section?'Настроить раздел':'Собрать раздел',fields,async v=>{
     const enabled=Object.keys(SECTION_BLOCKS).filter(type=>v['use_'+type]);
@@ -1815,7 +1814,7 @@ function renderSectionMenu(){
   let previous=count===1?0:count*2+index,recenterTimer;
   const update=()=>{
     const position=wheel.scrollTop/52,nearest=Math.round(position);
-    if(nearest!==previous){previous=nearest;sectionHaptic();}
+    if(nearest!==previous){previous=nearest;}
     for(const button of wheel.querySelectorAll('[data-wheel-index]')){
       const distance=Math.abs(Number(button.dataset.wheelIndex)-position);
       button.style.opacity=String(Math.max(.08,1-distance*.28));
@@ -1921,7 +1920,6 @@ function bindSectionManager(){
     if(el.dataset.customMonth){sectionCalendarMonth=shiftPeriodKey(sectionCalendarMonth,Number(el.dataset.customMonth));renderLife();}
   });
   document.addEventListener('change',async e=>{
-    if(e.target.matches('[data-section-haptics]')){state.settings.sectionHaptics=e.target.checked;await commit();}
     if(e.target.matches('[data-custom-check]')){const section=customSections().find(s=>s.id===lifeSection),block=section.blocks.find(b=>b.id===e.target.dataset.customBlock);block.items.find(x=>x.id===e.target.dataset.customCheck).done=e.target.checked;await commit();}
   });
   document.addEventListener('keydown',async e=>{

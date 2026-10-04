@@ -504,7 +504,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.4.0';
+const APP_BUILD='1.4.1';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -977,8 +977,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.0');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.0');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.1');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.1');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -1291,7 +1291,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.0')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.1')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1711,7 +1711,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.0',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.1',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -2233,7 +2233,7 @@ const SECTION_TEMPLATES={
  learning:{title:'Моя библиотека знаний',description:'Темы для изучения, полезные ссылки и список дел',blocks:['notebooks','links','checklist']},
  blank:{title:'Собрать самостоятельно',description:'Выбери нужные блоки и дай им свои названия',blocks:['notes']}
 };
-let sectionMenuEditing=false,sectionWheelTick=null,sectionPress=null,sectionDrag=null,sectionSuppressUntil=0,sectionCalendarMonth=toISODate(new Date()).slice(0,7);
+let sectionDrag=null,sectionSuppressUntil=0,sectionCalendarMonth=toISODate(new Date()).slice(0,7);
 function customSections(){const data=lifeData();if(!Array.isArray(data.customSections))data.customSections=[];return data.customSections;}
 function sectionCatalog(){
   const names=state.settings.appSectionNames||{};
@@ -2267,7 +2267,7 @@ async function sectionRemove(id){
 function renderSectionSettings(){
   const root=$('#settingsAppSections');if(!root)return;
   const hidden=sectionCatalog().filter(s=>(state.settings.hiddenAppSections||[]).includes(s.id)&&s.id!=='home');
-  root.innerHTML=`<button class="settings-row" data-section-new><span><b>Добавить раздел</b><small>Выбрать шаблон или собрать из блоков</small></span>${icon('plus',22)}</button><button class="settings-row" data-section-organize><span><b>Порядок и названия</b><small>Перетаскивай разделы в списке</small></span>${icon('edit',18)}</button><label class="toggle-field"><input type="checkbox" data-section-haptics ${state.settings.sectionHaptics!==false?'checked':''}><span><b>Отклик при прокрутке</b><small>${(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')?'Короткая вибрация при смене пункта':'В этом браузере вибрация недоступна'}</small></span></label>${visibleSections().map(s=>`<article class="settings-row"><span><b>${esc(s.title)}</b><small>${s.builtin?'Основной раздел':`${s.blocks.filter(b=>!b.hidden).length} блоков`}</small></span><span class="settings-actions"><button class="mini-icon" data-section-config="${s.id}" aria-label="Настроить ${esc(s.title)}">${icon('edit',18)}</button>${s.id!=='home'?`<button class="mini-icon" data-section-remove="${s.id}" aria-label="Убрать раздел">${icon('close',18)}</button>`:''}</span></article>`).join('')}${hidden.length?'<h3>Убраны из меню</h3>':''}${hidden.map(s=>`<button class="settings-row" data-section-restore="${s.id}"><span><b>${esc(s.title)}</b><small>Вернуть вместе с записями</small></span>${icon('plus',18)}</button>`).join('')}`;
+  root.innerHTML=`<button class="settings-row" data-section-new><span><b>Добавить раздел из шаблона</b><small>Блокноты, списки, календарь, рецепты и другие</small></span>${icon('plus',22)}</button><p class="section-menu-hint">Перетаскивай за ⠿ для изменения порядка. Карандаш — название и настройки раздела.</p><label class="toggle-field"><input type="checkbox" data-section-haptics ${state.settings.sectionHaptics!==false?'checked':''}><span><b>Отклик при прокрутке</b><small>${(typeof navigator!=='undefined'&&typeof navigator.vibrate==='function')?'Короткая вибрация при смене пункта':'В этом браузере вибрация недоступна'}</small></span></label><div class="settings-section-order">${visibleSections().map(s=>`<article class="settings-row" data-order-section="${s.id}"><span><b>${esc(s.title)}</b><small>${s.builtin?'Основной раздел':`${s.blocks.filter(b=>!b.hidden).length} блоков`}</small></span><span class="settings-actions"><button type="button" class="section-drag-handle" data-section-drag="${s.id}" aria-label="Перетащить ${esc(s.title)}; стрелки вверх и вниз меняют порядок">⠿</button><button class="mini-icon" data-section-config="${s.id}" aria-label="Настроить ${esc(s.title)}">${icon('edit',18)}</button>${s.id!=='home'?`<button class="mini-icon" data-section-remove="${s.id}" aria-label="Убрать раздел">${icon('close',18)}</button>`:''}</span></article>`).join('')}</div>${hidden.length?'<h3>Убраны из меню</h3>':''}${hidden.map(s=>`<button class="settings-row" data-section-restore="${s.id}"><span><b>${esc(s.title)}</b><small>Вернуть вместе с записями</small></span>${icon('plus',18)}</button>`).join('')}`;
 }
 function sectionTemplatePicker(){
   openModal('Новый раздел',[],()=>{}, {submitLabel:'Закрыть'});
@@ -2299,12 +2299,7 @@ function sectionBuilder(section=null,templateId='blank'){
 function renderSectionMenu(){
   const menu=$('#sectionMenu');if(!menu||menu.hidden)return;
   const items=visibleSections();
-  menu.classList.toggle('section-menu-editing',sectionMenuEditing);
-  if(sectionMenuEditing){
-    menu.innerHTML=`<div class="section-edit-header"><b>Разделы</b><button type="button" data-section-edit-done>Готово</button></div><p class="section-menu-hint">Перетаскивай за ⠿. Нажми название, чтобы изменить.</p><div class="section-order-list">${items.map(s=>`<div class="section-order-row" data-order-section="${s.id}"><button type="button" data-section-rename="${s.id}">${esc(s.title)}</button><button type="button" class="section-drag-handle" data-section-drag="${s.id}" aria-label="Перетащить ${esc(s.title)}; стрелки вверх и вниз меняют порядок">⠿</button></div>`).join('')}</div>`;
-    return;
-  }
-  menu.innerHTML=`<div class="section-wheel" tabindex="0" aria-label="Разделы: прокручивай и нажми нужное название"><div class="section-wheel-spacer"></div>${Array.from({length:items.length===1?1:5},(_,copy)=>items.map((s,index)=>`<button type="button" class="section-wheel-option" data-life-section="${s.id}" data-wheel-index="${copy*items.length+index}" ${items.length>1&&copy!==2?'tabindex="-1" aria-hidden="true"':''}>${esc(s.title)}</button>`).join('')).join('')}<div class="section-wheel-spacer"></div></div><p class="section-menu-hint">Удерживай название 2 секунды для настройки</p>`;
+  menu.innerHTML=`<div class="section-wheel" tabindex="0" aria-label="Разделы: прокручивай и нажми нужное название"><div class="section-wheel-spacer"></div>${Array.from({length:items.length===1?1:5},(_,copy)=>items.map((s,index)=>`<button type="button" class="section-wheel-option" data-life-section="${s.id}" data-wheel-index="${copy*items.length+index}" ${items.length>1&&copy!==2?'tabindex="-1" aria-hidden="true"':''}>${esc(s.title)}</button>`).join('')).join('')}<div class="section-wheel-spacer"></div></div>`;
   const wheel=menu.querySelector('.section-wheel'),count=items.length;
   const index=Math.max(0,items.findIndex(s=>s.id===lifeSection));wheel.scrollTop=(count===1?0:count*2+index)*52;
   let previous=count===1?0:count*2+index,recenterTimer;
@@ -2318,19 +2313,19 @@ function renderSectionMenu(){
       button.classList.toggle('wheel-centered',distance<.5);
     }
     clearTimeout(recenterTimer);recenterTimer=setTimeout(()=>{
-      if(!wheel.isConnected||sectionMenuEditing)return;
+      if(!wheel.isConnected)return;
       const cycle=count*52;
       if(count>1&&(wheel.scrollTop<cycle||wheel.scrollTop>=cycle*4)){const next=cycle*2+((wheel.scrollTop%cycle)+cycle)%cycle;previous=Math.round(next/52);wheel.scrollTop=next;}
     },120);
   };
-  wheel.addEventListener('scroll',()=>{if(sectionPress){clearTimeout(sectionPress.timer);sectionPress=null;}update();},{passive:true});update();
+  wheel.addEventListener('scroll',update,{passive:true});update();
   wheel.addEventListener('keydown',e=>{
     if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();wheel.scrollBy({top:e.key==='ArrowDown'?52:-52,behavior:'smooth'});}
     if(e.key==='Enter'&&e.target===wheel){e.preventDefault();switchLife(items[((Math.round(wheel.scrollTop/52)%count)+count)%count].id);}
   });
 }
-function openSectionMenu(editing=false){
-  sectionMenuEditing=editing;$('#sectionMenu').hidden=false;$('#sectionSwitch').setAttribute('aria-expanded','true');renderSectionMenu();
+function openSectionMenu(){
+  $('#sectionMenu').hidden=false;$('#sectionSwitch').setAttribute('aria-expanded','true');renderSectionMenu();
 }
 function renderCustomSection(section){
   const block=lifeDetail&&section.blocks.find(b=>b.id===lifeDetail.block),book=block?.items.find(x=>x.id===lifeDetail.item);
@@ -2368,44 +2363,45 @@ function customItemEditor(blockId,itemId='',parentId='',date=''){
   },{extraAction:item?{label:'Удалить',handler:async()=>{if(!confirm(parent?'Удалить материал?':'Удалить запись и вложенные материалы?'))return;list.splice(list.indexOf(item),1);await commit();closeModal();}}:null});
 }
 function bindSectionManager(){
+  let dragFrame=0;
+  const scrollDrag=()=>{
+    if(!sectionDrag)return;
+    const y=sectionDrag.y;
+    if(y<110)window.scrollBy(0,-12);else if(y>window.innerHeight-90)window.scrollBy(0,12);
+    dragFrame=requestAnimationFrame(scrollDrag);
+  };
   document.addEventListener('contextmenu',e=>{if(e.target.closest('#sectionMenu'))e.preventDefault();});
   document.addEventListener('pointerdown',e=>{
-    const option=e.target.closest('[data-life-section]'),handle=e.target.closest('[data-section-drag]');
+    const handle=e.target.closest('[data-section-drag]');
     if(handle){
-      const row=handle.closest('[data-order-section]');sectionDrag={row,list:row.parentElement,y:e.clientY,id:e.pointerId};handle.setPointerCapture(e.pointerId);row.classList.add('section-dragging');e.preventDefault();return;
+      const row=handle.closest('[data-order-section]');sectionDrag={row,list:row.parentElement,y:e.clientY,id:e.pointerId};handle.setPointerCapture(e.pointerId);row.classList.add('section-dragging');dragFrame=requestAnimationFrame(scrollDrag);e.preventDefault();return;
     }
-    if(!option||sectionMenuEditing)return;
-    sectionPress={x:e.clientX,y:e.clientY};
-    sectionPress.timer=setTimeout(()=>{sectionSuppressUntil=Date.now()+800;sectionHaptic();openSectionMenu(true);sectionPress=null;},2000);
+
   });
   document.addEventListener('pointermove',e=>{
-    if(sectionPress&&Math.hypot(e.clientX-sectionPress.x,e.clientY-sectionPress.y)>9){clearTimeout(sectionPress.timer);sectionPress=null;}
     if(!sectionDrag)return;
-    e.preventDefault();const {row,list}=sectionDrag;
+    e.preventDefault();sectionDrag.y=e.clientY;const {row,list}=sectionDrag;
     const rect=list.getBoundingClientRect();if(e.clientY<rect.top+35)list.scrollTop-=12;else if(e.clientY>rect.bottom-35)list.scrollTop+=12;
     const target=document.elementsFromPoint(e.clientX,e.clientY).map(el=>el.closest('[data-order-section]')).find(el=>el&&el!==row);
     if(target){const rows=[...list.children],down=rows.indexOf(row)<rows.indexOf(target);list.insertBefore(row,down?target.nextSibling:target);}
   },{passive:false});
   const end=async e=>{
-    if(sectionPress){clearTimeout(sectionPress.timer);sectionPress=null;}
-    if(!sectionDrag)return;const drag=sectionDrag;sectionDrag=null;sectionSuppressUntil=Date.now()+400;
-    if(e.type==='pointercancel'){renderSectionMenu();return;}
+    if(!sectionDrag)return;const drag=sectionDrag;sectionDrag=null;cancelAnimationFrame(dragFrame);sectionSuppressUntil=Date.now()+400;
+    if(e.type==='pointercancel'){renderSectionSettings();return;}
     state.settings.appSectionOrder=[...drag.list.children].map(el=>el.dataset.orderSection);await commit();
   };
   document.addEventListener('pointerup',end);document.addEventListener('pointercancel',end);
   document.addEventListener('click',e=>{
-    if(Date.now()<sectionSuppressUntil&&e.target.closest('#sectionMenu')){e.stopImmediatePropagation();e.preventDefault();}
+    if(Date.now()<sectionSuppressUntil&&e.target.closest('#settingsAppSections')){e.stopImmediatePropagation();e.preventDefault();}
   },true);
   document.addEventListener('click',async e=>{
-    const el=e.target.closest('[data-section-new],[data-section-template],[data-section-config],[data-section-remove],[data-section-restore],[data-section-organize],[data-section-edit-done],[data-section-rename],[data-custom-add],[data-custom-edit],[data-custom-open],[data-custom-back],[data-custom-date],[data-custom-month]');
+    const el=e.target.closest('[data-section-new],[data-section-template],[data-section-config],[data-section-remove],[data-section-restore],[data-section-rename],[data-custom-add],[data-custom-edit],[data-custom-open],[data-custom-back],[data-custom-date],[data-custom-month]');
     if(!el)return;
     if(el.hasAttribute('data-section-new'))sectionTemplatePicker();
     if(el.dataset.sectionTemplate)sectionBuilder(null,el.dataset.sectionTemplate);
     if(el.dataset.sectionConfig){const item=sectionCatalog().find(s=>s.id===el.dataset.sectionConfig);if(item?.builtin)sectionRename(item.id);else if(item)sectionBuilder(item);}
     if(el.dataset.sectionRemove)await sectionRemove(el.dataset.sectionRemove);
     if(el.dataset.sectionRestore){state.settings.hiddenAppSections=(state.settings.hiddenAppSections||[]).filter(id=>id!==el.dataset.sectionRestore);await commit();}
-    if(el.hasAttribute('data-section-organize')){window.scrollTo(0,0);openSectionMenu(true);}
-    if(el.hasAttribute('data-section-edit-done')){sectionMenuEditing=false;renderSectionMenu();}
     if(el.dataset.sectionRename)sectionRename(el.dataset.sectionRename);
     if(el.dataset.customAdd)customItemEditor(el.dataset.customAdd,'',el.dataset.customParent);
     if(el.dataset.customEdit)customItemEditor(el.dataset.customBlock,el.dataset.customEdit,el.dataset.customParent);
@@ -2421,7 +2417,7 @@ function bindSectionManager(){
   document.addEventListener('keydown',async e=>{
     const handle=e.target.closest('[data-section-drag]');if(!handle||!['ArrowUp','ArrowDown'].includes(e.key))return;
     e.preventDefault();const items=visibleSections().map(s=>s.id),i=items.indexOf(handle.dataset.sectionDrag),j=i+(e.key==='ArrowUp'?-1:1);if(j<0||j>=items.length)return;
-    [items[i],items[j]]=[items[j],items[i]];state.settings.appSectionOrder=items;await commit();$('#sectionMenu').querySelector(`[data-section-drag="${handle.dataset.sectionDrag}"]`)?.focus();
+    [items[i],items[j]]=[items[j],items[i]];state.settings.appSectionOrder=items;await commit();$('#settingsAppSections').querySelector(`[data-section-drag="${handle.dataset.sectionDrag}"]`)?.focus();
   });
 }
 

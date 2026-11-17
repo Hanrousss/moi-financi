@@ -372,13 +372,13 @@ test('payment recommendations follow unpaid plans and payments without double su
 test('month category selection preserves funded history and isolates months',async()=>{
  const a=app();
  a.run(`currentPeriod().categoryBudgets.everyday={plan:100,spent:20};currentPeriod().categoryBudgets.pet={plan:0,spent:30};`);
- assert.deepEqual(a.value('monthCategoryIds(currentPeriod())'),['everyday','pet']);
+ assert.deepEqual(a.value('monthCategoryIds(currentPeriod())'),['food','everyday','pet']);
  a.run('monthCategoryPicker();');
  await a.run('modal.submit({sport:true});');
- assert.deepEqual(a.value('monthCategoryIds(currentPeriod())'),['everyday','pet','sport']);
- assert.deepEqual(a.value("monthCategoryIds(ensurePeriod(state,'2026-11'))"),[]);
+ assert.deepEqual(a.value('monthCategoryIds(currentPeriod())'),['food','everyday','pet','sport']);
+ assert.deepEqual(a.value("monthCategoryIds(ensurePeriod(state,'2026-11'))"),['food']);
  a.run('state=cloneState(saved.at(-1));');
- assert.deepEqual(a.value('monthCategoryIds(currentPeriod())'),['everyday','pet','sport']);
+ assert.deepEqual(a.value('monthCategoryIds(currentPeriod())'),['food','everyday','pet','sport']);
  assert.equal(a.value('currentPeriod().categoryBudgets.everyday.spent'),20);
 });
 
@@ -615,4 +615,12 @@ test('envelope allocations and pins survive backup restore without altering chec
  a.run("const p=currentPeriod();p.foodAllocated=250;p.envelopeAllocations={housing:300,payment:200,reserve:50};p.pinnedCategoryIds=['sport'];p.categoryBudgets.sport={plan:100,spent:80,checkpoints:[{id:'a',title:'Зал',amount:80,paid:true}]};const original=cloneState(state);state=migrateBackupState(cloneState(state));");
  assert.deepEqual(a.value('state.periods'),a.value('original.periods'));
  assert.deepEqual(a.value('state.account'),a.value('original.account'));
+});
+
+test('only housing and food have default pins',()=>{
+ const a=app();a.run('monthCategoryIds(currentPeriod());');
+ assert.deepEqual(a.value('currentPeriod().pinnedCategoryIds'),['food']);
+ assert.match(a.run("renderMandatoryCard('Квартира',0,0,'housing')"),/aria-label="Закреплено"/);
+ for(const kind of ['payment','reserve'])assert.doesNotMatch(a.run(`renderMandatoryCard('Категория',0,0,'${kind}')`),/aria-label="Закреплено"/);
+ assert.match(a.run("renderCategorySummary(categoryById('food'),currentPeriod())"),/aria-label="Закреплено"/);
 });

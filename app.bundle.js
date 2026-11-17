@@ -504,7 +504,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.4.36';
+const APP_BUILD='1.4.37';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -968,7 +968,8 @@ Object.assign(THEME_PRESETS,{
   checkerRed:{...THEME_PRESETS.sand,label:'Шахматы · красный',description:'Чёрно-белый и вишнёвый',accent:'#b92d45',onAccent:'#ffffff',bg:'#f4f1ed',card:'#fffefa',ink:'#262422',muted:'#706964',dark:'#242322',onDark:'#fffaf5',line:'#e2dcd6',soft:'#eee7e0',success:'#47633e',checker:true},
   checkerPink:{...THEME_PRESETS.lilac,label:'Шахматы · розовый',description:'Чёрно-белый и bubblegum',accent:'#f2a8ce',bg:'#fbf1f7',card:'#fffafd',ink:'#302730',muted:'#796675',dark:'#29252b',onDark:'#fff7fc',line:'#eadce6',soft:'#f3e1ed',success:'#45644c',checker:true}
 });
-function selectedTheme(){const key=appearanceSettings().preset;return Object.hasOwn(THEME_PRESETS,key)?THEME_PRESETS[key]:THEME_PRESETS.lime;}
+const APPROVED_THEME={label:'Бумажный чек',accent:'#d9d9d9',bg:'#f2f2f2',card:'#ffffff',ink:'#202020',muted:'#747474',dark:'#202020',onDark:'#fafafa',line:'#dddddd',soft:'#ededed',success:'#404040',red:'#333333',redSoft:'#e6e6e6',warning:'#555555',warningSoft:'#eeeeee'};
+function selectedTheme(){return APPROVED_THEME;}
 function applyAppearance(){
   if(!state?.settings)return;
   const a=appearanceSettings(),t=selectedTheme(),root=document.documentElement;
@@ -978,10 +979,10 @@ function applyAppearance(){
     red:t.red,'red-soft':t.redSoft,'red-line':t.red,grey:t.muted,'grey-soft':t.soft,
     'icon-frame':t.soft,'icon-frame-line':t.line,dark:t.dark,'on-dark':t.onDark,'on-accent':t.onAccent||t.ink,'surface-soft':t.soft};
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
-  root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
+  root.dataset.theme='receipt';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.36');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.36');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.37');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.37');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -1434,7 +1435,8 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.36')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppearanceBtn').hidden=true;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.37')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1892,21 +1894,12 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.36',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.37',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
 }
-function appearanceModal(){
-  const a=appearanceSettings();
-  openModal('Цветовая тема',[
-    {name:'preset',label:'Выбери настроение',type:'theme',value:Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime',help:'Палитра меняет фон, карточки, текст, кнопки и цвета состояний во всех разделах.'},
-
-  ],async v=>{
-    a.preset=Object.hasOwn(THEME_PRESETS,v.preset)?v.preset:'lime';
-    await commit();closeModal();
-  },{submitLabel:'Применить тему'});
-}
+function appearanceModal(){return APPROVED_THEME;}
 
 const BACKUP_KIND='moi-dengi-full-backup';
 const BACKUP_VERSION=2;

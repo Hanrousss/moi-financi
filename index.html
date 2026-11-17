@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#f0f6e7">
+  <meta name="theme-color" content="#f2f2f2">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Мои деньги">
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.4.36">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.4.36">
-  <link rel="stylesheet" href="./styles.css?v=1.4.36">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.4.37">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.4.37">
+  <link rel="stylesheet" href="./styles.css?v=1.4.37">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -91,7 +91,7 @@
 
       <section id="settings" class="screen overlay-screen">
         <details class="settings-group settings-fold"><summary>Общие</summary><div class="settings-stack"><button id="editGeneralBtn" class="settings-row"></button><button id="editProfileAvatarBtn" class="settings-row"></button></div></details>
-        <details class="settings-group settings-fold"><summary>Внешний вид</summary><div class="settings-stack"><button id="editAppearanceBtn" class="settings-row"></button><button id="editAppIconBtn" class="settings-row"></button></div></details>
+        <details class="settings-group settings-fold"><summary>Внешний вид</summary><div class="settings-stack"><button id="editAppearanceBtn" class="settings-row" hidden></button><button id="editAppIconBtn" class="settings-row"></button></div></details>
         <details class="settings-group settings-fold"><summary>Разделы приложения</summary><div id="settingsAppSections" class="settings-stack"></div></details>
         <details class="settings-group settings-fold"><summary>Нижнее меню</summary><div id="settingsNavIcons" class="settings-stack"></div></details>
         <details class="settings-group settings-fold"><summary>Категории</summary><div class="section-row"><button id="settingsAddCategory" class="text-button"></button></div><div id="settingsCategories" class="settings-stack"></div></details>
@@ -106,6 +106,6 @@
   <div id="categoryLayer" hidden><section class="category-window" role="dialog" aria-modal="true" aria-labelledby="categoryLayerTitle"><header><h2 id="categoryLayerTitle"></h2><button id="categoryLayerClose" type="button" aria-label="Закрыть окно">×</button></header><div id="categoryLayerBody"></div></section></div>
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.4.36"></script>
+  <script src="./app.bundle.js?v=1.4.37"></script>
 </body>
 </html>

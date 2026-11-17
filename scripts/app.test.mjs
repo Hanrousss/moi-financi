@@ -307,29 +307,15 @@ test('home displays remaining food and category budgets and month highlights spe
   assert.match(a.run("renderCategoryCard(categoryById('pet'),currentPeriod())"),/>Отложено</);
 });
 
-test('appearance presets persist without changing budgets or losing legacy custom settings',async()=>{
-  const a=app();
-  a.run(`currentPeriod().salary=1234.56;state.settings.appearance={primary:'#123456',backgroundImage:'data:image/png;base64,old'};appearanceModal();`);
-  assert.equal(a.value('modal.fields[0].value'),'lime');
-  await a.run(`modal.submit({preset:'lilac'});`);
-  a.run('state=cloneState(saved.at(-1));');
-  assert.equal(a.value('appearanceSettings().preset'),'lilac');
-  assert.equal(a.value('selectedTheme().label'),'Лаванда');
-  assert.equal(a.value('currentPeriod().salary'),1234.56);
-  assert.equal(a.value('appearanceSettings().backgroundImage'),'data:image/png;base64,old');
-  a.run(`appearanceModal();`);
-  assert.equal(a.value('modal.fields[0].value'),'lilac');
-  await a.run(`modal.submit({preset:'not-a-theme'});`);
-  assert.equal(a.value('appearanceSettings().preset'),'lime');
-});
-
-test('theme previews expose all selectable palettes and opening the dialog does not change the theme',()=>{
-  const a=app();
-  a.run(`state.settings.appearance={preset:'sky'};appearanceModal();`);
-  assert.equal(a.value('appearanceSettings().preset'),'sky');
-  const html=a.run('fieldHtml(modal.fields[0])');
-  assert.equal((html.match(/type="radio"/g)||[]).length,14);
-  assert.match(html,/value="sky" checked/);
+test('approved palette is identical for fresh and existing settings without erasing preferences',()=>{
+ const a=app();a.run("currentPeriod().salary=1234.56;state.settings.appearance={preset:'lilac',backgroundImage:'data:image/png;base64,old'};");
+ assert.equal(a.value('selectedTheme().bg'),'#f2f2f2');
+ assert.equal(a.value('selectedTheme().ink'),'#202020');
+ assert.equal(a.value('appearanceSettings().preset'),'lilac');
+ a.run("state.settings.appearance.preset='checkerRed';");
+ assert.equal(a.value('selectedTheme().bg'),'#f2f2f2');
+ assert.equal(a.value('currentPeriod().salary'),1234.56);
+ assert.equal(a.value('appearanceSettings().backgroundImage'),'data:image/png;base64,old');
 });
 
 test('legacy category colors remain selected and dark icon presets keep light foregrounds',()=>{

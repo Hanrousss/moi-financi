@@ -619,3 +619,25 @@ body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-he
 .utility-receipt-action .utility-envelope input{width:20px;height:20px;flex:0 0 20px;margin:0;accent-color:#343330;cursor:pointer}
 .utility-receipt-action .receipt-name{font:500 13px var(--print-font)}
 .utility-receipt-action .utility-envelope:has(input:focus-visible){outline:2px solid var(--muted);outline-offset:3px}
+
+@font-face{font-family:ReceiptHand;src:url('./fonts/Caveat.ttf') format('truetype');font-weight:400 700;font-style:normal;font-display:swap}
+#home .month-receipt #dailyActions{display:grid;grid-template-columns:minmax(0,1fr) 30px;align-items:center;gap:8px;margin:15px 0 0;padding:10px 0 0;border-top:1px dashed var(--muted)}
+#dailyActions .quick-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px}
+#dailyActions .quick-action{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 2px;color:#343330;font:600 22px/1.2 ReceiptHand,cursive;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:5px;text-decoration-color:rgb(52 51 48 / .4)}
+#dailyActions .action-circle{display:none}
+#home .month-receipt #editQuickActionsBtn{width:30px;height:36px;border:0;background:none;color:#343330;padding:5px}
+#dailyActions .quick-action:hover{text-decoration-color:currentColor}
+.account-history-disclosure{margin:16px 0;font:13px/1.5 var(--print-font);color:var(--text)}
+.account-history-disclosure>summary{cursor:pointer;min-height:44px;padding:10px 0;font-weight:600}
+#accountHistory{display:block;counter-reset:account-entry}
+#accountHistory .history-row{counter-increment:account-entry;display:grid;grid-template-columns:20px minmax(0,1fr) 28px;align-items:start;gap:8px;padding:10px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:none;box-shadow:none;font:inherit}
+#accountHistory .history-row::before{content:counter(account-entry) '.';color:var(--muted)}
+#accountHistory .history-icon{display:none}
+#accountHistory .history-row b{font:600 13px/1.5 var(--print-font);overflow-wrap:normal;font-variant-numeric:tabular-nums}
+#accountHistory .history-row small{display:block;margin-top:2px;font:11px/1.5 var(--print-font);word-break:normal;overflow-wrap:normal}
+#accountHistory .mini-icon{width:28px;height:32px;padding:5px;background:none;border:0;border-radius:0}
+#accountHistory .empty-state{background:none;border:0;border-radius:0;padding:10px 0;text-align:left;font:inherit}
+@media(max-width:374px){#dailyActions .quick-actions{gap:2px 8px}#dailyActions .quick-action{font-size:20px}}
+#home .month-receipt #editQuickActionsBtn .pixel-action{color:inherit}
+#dailyActions .quick-action{font-size:20px}
+#dailyActions .quick-actions{column-gap:8px}

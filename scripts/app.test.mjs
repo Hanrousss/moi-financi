@@ -571,10 +571,10 @@ test('checkpoints preserve manual allocation through add, pay, edit, unpay and d
 test('envelope deficit is visible without automatically funding the envelope',()=>{
  const a=app();
  a.run("const p=currentPeriod(),c=categoryById('sport');p.salary=1000;p.categoryBudgets.sport={plan:100,spent:0};changeCheckpoint(p,c,null,{id:'one',title:'Абонемент',amount:80,paid:false});changeCheckpoint(p,c,null,{id:'two',title:'Тренировка',amount:90,paid:false});");
- assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:100,planned:170,spent:0,remaining:-70});
+ assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:100,planned:170,spent:0,remaining:100});
  assert.equal(a.value('liveFreeBalance(state,p)'),900);
  a.run('const row=p.categoryBudgets.sport.checkpoints[0];changeCheckpoint(p,c,row,{...row,paid:true});');
- assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:100,planned:170,spent:80,remaining:-70});
+ assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:100,planned:170,spent:80,remaining:20});
  assert.equal(a.value('liveFreeBalance(state,p)'),900);
  a.run('changeCheckpoint(p,c,p.categoryBudgets.sport.checkpoints[1],null);');
  assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:100,planned:80,spent:80,remaining:20});
@@ -586,17 +586,17 @@ test('food keeps weeks without checkpoints and weekly plans never fund its envel
  const a=app();
  a.run("const p=currentPeriod(),c=categoryById('food');p.salary=1000;p.foodAllocated=200;p.foodWeeks[0].plan=250;p.foodWeeks[0].closed=false;");
  assert.equal(a.run('checkpointList(p,c)'),'');
- assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:200,planned:250,spent:0,remaining:-50});
+ assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:200,planned:250,spent:0,remaining:200});
  assert.equal(a.value('liveFreeBalance(state,p)'),800);
  a.run('p.foodWeeks[0].spent=80;');
- assert.equal(a.value('envelopeSummary(p,c).remaining'),-50);
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),120);
  a.run('setEnvelopeAllocation(p,c,300);');
  assert.equal(a.value('p.foodWeeks[0].plan'),250);
- assert.equal(a.value('envelopeSummary(p,c).remaining'),50);
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),220);
 });
 test('mandatory plans cannot silently increase manually allocated funds',()=>{
  const a=app();a.run("const p=currentPeriod();p.salary=1000;p.mandatory.housingPlan=100;reconcileCheckpointBudgets();p.mandatory.housingPlan=170;");
- assert.equal(a.value("mandatoryEnvelope(p,'housing',170,0).remaining"),-70);
+ assert.equal(a.value("mandatoryEnvelope(p,'housing',170,0).remaining"),100);
  assert.equal(a.value('liveFreeBalance(state,p)'),900);
 });
 
@@ -679,11 +679,11 @@ test('main balance and button depend only on manual envelope allocations',()=>{
 
 test('closed food weeks release unused plans while preserving actual spending',()=>{
  const a=app();a.run("const p=currentPeriod(),c=categoryById('food');p.salary=1000;p.foodAllocated=400;p.foodWeeks=[{plan:100,spent:120,closed:true},{plan:100,spent:50,closed:true},{plan:200,spent:0,closed:false}];");
- assert.equal(a.value('envelopeSummary(p,c).remaining'),30);
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),230);
  assert.equal(a.value('envelopeSummary(p,c).spent'),170);
  assert.equal(a.value('p.foodWeeks[1].plan'),100);
  a.run('p.foodWeeks[2].spent=40;');
- assert.equal(a.value('envelopeSummary(p,c).remaining'),30);
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),190);
  a.run('p.foodWeeks[2].spent=210;');
  assert.equal(a.value('envelopeSummary(p,c).remaining'),20);
  a.run('p.foodAllocated=350;');
@@ -770,4 +770,18 @@ test('reset clears standard pet budget and checklist and permits new plans',asyn
  a.run("changeCheckpoint(currentPeriod(),c,null,{id:'new',title:'Новая трата',amount:25,paid:false});");
  assert.equal(a.value('envelopeSummary(currentPeriod(),c).planned'),25);
  assert.equal(a.value('currentPeriod().categoryBudgets.pet.plan'),0);
+});
+
+test('envelope remainder is allocation minus actual spending, independent of unpaid plans',()=>{
+ const a=app();a.run("const p=currentPeriod(),c=categoryById('sport');p.salary=1000;p.categoryBudgets.sport={plan:268,spent:90,checkpoints:[{id:'a',title:'Занятия',amount:90,paid:true},{id:'b',title:'Занятия',amount:90,paid:false},{id:'c',title:'Абонемент',amount:88,paid:false}]};");
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),178);
+ assert.equal(a.value('freeAfterPlans(p)'),732);
+ a.run('changeCheckpoint(p,c,p.categoryBudgets.sport.checkpoints[2],null);');
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),178);
+ a.run('const row=p.categoryBudgets.sport.checkpoints[1];changeCheckpoint(p,c,row,{...row,paid:true});');
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),88);
+ assert.equal(a.value('freeAfterPlans(p)'),732);
+ a.run('changeCheckpoint(p,c,row,{...row,paid:false});');
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),178);
+ assert.doesNotMatch(a.run('renderCategoryCard(c,p)'),/<span>План<\/span>/);
 });

@@ -659,3 +659,16 @@ test('money action distinguishes free cash, fully planned funds and envelope sho
  a.run('p.categoryBudgets.sport.checkpoints[0].amount=80;');
  assert.equal(a.value('moneyActionTone(p)'),'positive');
 });
+
+test('free amount includes unallocated money and reserves only unpaid checklist costs',()=>{
+ const a=app();a.run("const p=currentPeriod(),c=categoryById('sport');p.salary=1000;p.categoryBudgets.sport={plan:500,spent:0};changeCheckpoint(p,c,null,{id:'a',title:'Зал',amount:80,paid:false});changeCheckpoint(p,c,null,{id:'b',title:'Тренер',amount:220,paid:false});");
+ assert.equal(a.value('freeAfterPlans(p)'),700);
+ a.run('const row=p.categoryBudgets.sport.checkpoints[0];changeCheckpoint(p,c,row,{...row,paid:true});');
+ assert.equal(a.value('freeAfterPlans(p)'),700);
+ a.run('setEnvelopeAllocation(p,c,50);');
+ assert.equal(a.value('freeAfterPlans(p)'),700);
+ a.run('changeCheckpoint(p,c,p.categoryBudgets.sport.checkpoints[1],null);');
+ assert.equal(a.value('freeAfterPlans(p)'),920);
+ a.run('setCategorySpent(p,c,120);');
+ assert.equal(a.value('freeAfterPlans(p)'),880);
+});

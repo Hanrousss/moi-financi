@@ -681,3 +681,9 @@ body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-he
 .bottom-nav .nav-expense-button[data-tone=zero] .nav-symbol{background:#edc28d;box-shadow:0 0 10px rgb(233 172 104 / .15)}
 .bottom-nav .nav-expense-button[data-tone=negative] .nav-symbol{background:#e1a19a;box-shadow:0 0 10px rgb(206 127 118 / .15)}
 @media(max-width:374px){.bottom-nav .nav-expense-button .nav-symbol{width:44px;height:44px}.bottom-nav button small{font-size:8px}}
+
+.receipt-pencil-note{margin:2px 2px 0;text-align:right;color:rgb(73 71 66 / .58);font:500 19px/1.25 ReceiptHand,cursive;transform:rotate(-1.2deg)}
+.receipt-free-total{margin-top:7px}
+.receipt-totals .receipt-total-primary{gap:10px}
+.receipt-totals .receipt-total-primary b{white-space:nowrap;font-variant-numeric:tabular-nums}
+@media(max-width:374px){.receipt-pencil-note{font-size:18px}.receipt-totals .receipt-total-primary{font-size:11px;gap:7px}}

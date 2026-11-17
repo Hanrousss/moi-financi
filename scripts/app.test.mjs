@@ -301,10 +301,9 @@ test('home displays remaining food and category budgets and month highlights spe
     const w=p.foodWeeks[currentWeekIndex(p.key,new Date(),state.settings.salaryDay)];w.plan=100;w.spent=30;
     state.settings.dashboardCards=[dashboardCategoryKey('everyday')];renderHome();renderMonth();`);
   assert.equal(a.value("nodes.get('#weekPlan').textContent"),a.run('formatByn(70)'));
-  assert.match(a.value("nodes.get('#homeCategoryList').innerHTML"),/60/);
-  assert.equal(a.value("nodes.get('#incomeTotal').textContent"),a.run('formatByn(800)'));
-  assert.equal(a.value("nodes.get('#monthFreeValue').textContent"),a.run('formatByn(800)'));
-  assert.equal(a.value("nodes.get('#incomeDetails').textContent"),a.run('`Остаток до планов — ${formatByn(930)}\\nЗапланированные траты — ${formatByn(130)}`'));
+  assert.match(a.value("nodes.get('#categoryList').innerHTML"),/60/);
+  assert.equal(a.value("nodes.get('#freeValue').textContent"),a.run('formatByn(800)'));
+  assert.equal(a.value("nodes.get('#freeMeta').textContent"),a.run('`Осталось по факту: ${formatByn(930)} · Запланированные траты: ${formatByn(130)}`'));
   assert.match(a.run("renderCategoryCard(categoryById('pet'),currentPeriod())"),/>Отложено</);
 });
 
@@ -569,4 +568,15 @@ test('section order and names persist independently from finance and hidden reco
  assert.equal(a.value('state.life.ideas.length'),1);
  assert.deepEqual(a.value('state.periods'),a.value('before.periods'));
  assert.deepEqual(a.value('state.account'),a.value('before.account'));
+});
+
+test('checkpoints update plan and actual once through add, pay, edit, unpay and delete',()=>{
+ const a=app();
+ a.run("const p=currentPeriod(),c=categoryById('sport'),b=p.categoryBudgets.sport;b.plan=100;b.spent=12;const change=(r,n)=>changeCheckpoint(p,c,r,n);change(null,{id:'t',title:'Йога',amount:25,paid:false});");
+ const amounts=()=>a.value('[b.plan,b.spent]');
+ assert.deepEqual(amounts(),[125,12]);
+ a.run('const r=b.checkpoints[0];change(r,{...r,paid:true});change(r,{...r,paid:true})');assert.deepEqual(amounts(),[125,37]);
+ a.run('change(r,{...r,amount:30.5})');assert.deepEqual(amounts(),[130.5,42.5]);
+ a.run('change(r,{...r,paid:false})');assert.deepEqual(amounts(),[130.5,12]);
+ a.run('change(r,{...r,paid:true});change(r,null)');assert.deepEqual(amounts(),[100,12]);assert.equal(a.value('b.checkpoints.length'),0);
 });

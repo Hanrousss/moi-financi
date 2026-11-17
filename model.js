@@ -192,7 +192,7 @@ export function seedState(now=new Date()) {
     account: {balanceByn:0,transactions:[],migratedAt:toISODate(now),monthlyBalancesVersion:1},
     pet: {balanceByn:0,avatarImage:'',transactions:[],needs:[]},
     safety: {amountUsd:0,goalUsd:2000,icon:'shield',iconImage:'',transactions:[]},
-    gifts: {balanceByn:0,transactions:[],plans:[],recipients:['Паше','Маме','Другому']}
+    gifts: {balanceByn:0,transactions:[],plans:[],recipients:['Близким','Семье','Другому']}
   };
 }
 

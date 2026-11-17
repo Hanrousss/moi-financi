@@ -584,7 +584,7 @@ test('envelope deficit is visible without automatically funding the envelope',()
 });
 test('food keeps weeks without checkpoints and weekly plans never fund its envelope',()=>{
  const a=app();
- a.run("const p=currentPeriod(),c=categoryById('food');p.salary=1000;p.foodAllocated=200;p.foodWeeks[0].plan=250;");
+ a.run("const p=currentPeriod(),c=categoryById('food');p.salary=1000;p.foodAllocated=200;p.foodWeeks[0].plan=250;p.foodWeeks[0].closed=false;");
  assert.equal(a.run('checkpointList(p,c)'),'');
  assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:200,planned:250,spent:0,remaining:-50});
  assert.equal(a.value('liveFreeBalance(state,p)'),800);
@@ -671,4 +671,17 @@ test('free amount includes unallocated money and reserves only unpaid checklist 
  assert.equal(a.value('freeAfterPlans(p)'),920);
  a.run('setCategorySpent(p,c,120);');
  assert.equal(a.value('freeAfterPlans(p)'),880);
+});
+
+test('closed food weeks release unused plans while preserving actual spending',()=>{
+ const a=app();a.run("const p=currentPeriod(),c=categoryById('food');p.salary=1000;p.foodAllocated=400;p.foodWeeks=[{plan:100,spent:120,closed:true},{plan:100,spent:50,closed:true},{plan:200,spent:0,closed:false}];");
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),30);
+ assert.equal(a.value('envelopeSummary(p,c).spent'),170);
+ assert.equal(a.value('p.foodWeeks[1].plan'),100);
+ a.run('p.foodWeeks[2].spent=40;');
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),30);
+ a.run('p.foodWeeks[2].spent=210;');
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),20);
+ a.run('p.foodAllocated=350;');
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),-30);
 });

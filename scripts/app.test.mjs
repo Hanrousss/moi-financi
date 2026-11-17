@@ -213,7 +213,7 @@ test('quick gift expenses spend only the already funded gift envelope',async()=>
 
 test('funding the USD safety envelope fulfills its BYN reserve plan exactly once',async()=>{
   const a=app();
-  a.run(`currentPeriod().salary=1000;currentPeriod().mandatory.reservePlan=100;safetyModal();`);
+  a.run(`currentPeriod().salary=1000;currentPeriod().mandatory.sections=['reserve'];currentPeriod().mandatory.reservePlan=100;safetyModal();`);
   await a.run(`modal.submit({amount:30,accountByn:90,goal:2000,icon:'shield'})`);
   assert.equal(a.value('state.safety.amountUsd'),30);
   assert.equal(a.value('currentPeriod().mandatory.reserveAllocated'),90);
@@ -623,4 +623,13 @@ test('only housing and food have default pins',()=>{
  assert.match(a.run("renderMandatoryCard('Квартира',0,0,'housing')"),/aria-label="Закреплено"/);
  for(const kind of ['payment','reserve'])assert.doesNotMatch(a.run(`renderMandatoryCard('Категория',0,0,'${kind}')`),/aria-label="Закреплено"/);
  assert.match(a.run("renderCategorySummary(categoryById('food'),currentPeriod())"),/aria-label="Закреплено"/);
+});
+
+test('new users start without optional envelopes and can add payments from categories',async()=>{
+ const a=app();
+ assert.deepEqual(a.value('currentPeriod().mandatory.sections'),[]);
+ a.run('monthCategoryPicker();');
+ assert.equal(a.value("modal.fields.find(f=>f.name==='pinned-payment').value"),false);
+ await a.run("modal.submit({'pinned-payment':true});");
+ assert.deepEqual(a.value('currentPeriod().mandatory.sections'),['payment']);
 });

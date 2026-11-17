@@ -66,6 +66,7 @@ test('future plans immediately affect the balance and spending is counted only o
 
 test('all scheduled payments and mandatory plans belong to the selected month', () => {
   const state = fresh(), period = ensurePeriod(state,'2027-01');
+  period.mandatory.sections=['payment','reserve'];
   period.salary = 3000.99;
   period.mandatory.housingPlan = 1200.50;
   period.mandatory.housingSpent = 200.25;

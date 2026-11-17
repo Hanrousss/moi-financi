@@ -154,7 +154,7 @@ export function createPeriod(key) {
       reserveAllocated: 0,
       savingsPlanUsd: 0,
       savingsPlanByn: 0,
-      sections: ['payment','reserve'],
+      sections: [],
       categoryIds: ['food']
     },
     categoryBudgets,

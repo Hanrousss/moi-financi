@@ -1175,6 +1175,27 @@ function renderHomeCategories(period){
   $('#weekCard').hidden=!monthCategoryIds(period).some(id=>categoryById(id)?.kind==='food');
 }
 
+function checkpointList(period,category){
+  if(category.kind!=='monthly')return '';
+  const rows=period.categoryBudgets[category.id]?.checkpoints||[];
+  const left=rows.reduce((sum,r)=>sum+(r.paid?0:r.amount),0);
+  return `<details class="checkpoint-list" data-checkpoints="${esc(category.id)}"><summary>Список оплат · ${rows.length?`осталось ${formatByn(left)}`:'добавить'}</summary><p>Личный план: отметки не меняют сумму расходов.</p>${rows.map(r=>`<div class="checkpoint-row"><label><input type="checkbox" data-check-paid="${esc(r.id)}" ${r.paid?'checked':''}><span>${esc(r.title)}</span></label><button type="button" class="text-button" data-check-edit="${esc(r.id)}" aria-label="Изменить оплату: ${esc(r.title)}">${formatByn(r.amount)} ✎</button></div>`).join('')}<button type="button" data-check-add class="text-button">+ Добавить оплату</button></details>`;
+}
+function bindCheckpoints(){
+  const list=$('#categoryList');
+  function context(el){const id=el.closest('[data-checkpoints]')?.dataset.checkpoints;return categoryById(id)?.kind==='monthly'?selectedPeriod().categoryBudgets[id]:null;}
+  async function save(el){const id=el.closest('[data-checkpoints]').dataset.checkpoints;await commit();const d=[...list.querySelectorAll('[data-checkpoints]')].find(x=>x.dataset.checkpoints===id);if(d)d.open=true;}
+  list.addEventListener('change',async e=>{const el=e.target.closest('[data-check-paid]');if(!el)return;const row=context(el)?.checkpoints?.find(r=>r.id===el.dataset.checkPaid);if(row){row.paid=el.checked;await save(el);}});
+  list.addEventListener('click',e=>{const el=e.target.closest('[data-check-add],[data-check-edit]');if(!el)return;const b=context(el);if(!b)return;
+    const row=b.checkpoints?.find(r=>r.id===el.dataset.checkEdit);
+    openModal(row?'Изменить оплату':'Добавить оплату',[{name:'title',label:'Что оплатить',required:true,value:row?.title||''},{name:'amount',label:'Стоимость, BYN',type:'money',min:0.01,required:true,value:row?.amount??''}],async v=>{
+      if(!v.title.trim()||!Number.isFinite(v.amount)||v.amount<=0){toast('Введи название и стоимость больше нуля');return;}
+      if(row)Object.assign(row,{title:v.title.trim(),amount:v.amount});else (b.checkpoints??=[]).push({id:uid(),title:v.title.trim(),amount:v.amount,paid:false});
+      await save(el);closeModal();
+    },{extraAction:row?{label:'Удалить пункт',handler:async()=>{if(!confirm('Удалить этот пункт списка оплат?'))return;b.checkpoints=b.checkpoints.filter(r=>r.id!==row.id);await save(el);closeModal();}}:null});
+  });
+}
+
 function renderCategoryCard(category,period,{mandatory=false}={}){
   const b=categoryBudget(period,category);
   const food=category.kind==='food', pet=category.kind==='pet', gift=category.kind==='gift';
@@ -1185,6 +1206,7 @@ function renderCategoryCard(category,period,{mandatory=false}={}){
   return `<article class="category-card ${categoryFinished(period,category)?'category-finished':''}" data-month-category="${esc(category.id)}" data-category="${category.id}"${detailAttr}>
     <div class="category-head"><span class="category-icon" style="${categoryColorStyle(category.color)}">${categoryIconHtml(category)}</span><div><b>${esc(category.name)}</b><small>${mandatory?'обязательное этого месяца':category.kind==='food'?'по неделям':category.kind==='pet'?'переводы в конверт питомца':category.kind==='gift'?'переводы в конверт подарков':'месячная сумма'}</small></div>${actions}</div>
     <div class="category-budget-fields"><div class="category-budget-field"><span>План</span>${planInput}</div><div class="category-budget-field"><span>${pet||gift?'Отложено':'Потрачено'}</span>${spentInput}</div></div>
+    ${checkpointList(period,category)}
   </article>`;
 }
 function renderMonth(){
@@ -1869,6 +1891,7 @@ function bindCategoryDragging(){
 }
 
 function bindStaticEvents(){
+  bindCheckpoints();
   $('#editPaymentRemainingBtn').addEventListener('click',paymentRemainingModal);
   $('#editAppIconBtn').addEventListener('click',appIconModal);
   $('#profileAvatarBtn').addEventListener('click',profileAvatarModal);$('#editProfileAvatarBtn').addEventListener('click',profileAvatarModal);

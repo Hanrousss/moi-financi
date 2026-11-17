@@ -257,3 +257,5 @@ button:active:not(:disabled){transform:scale(.97)}
 .hero-orbit svg{display:block}
 .hero-card>.balance-breakdown{grid-column:1/-1;grid-row:4;margin-top:14px}
 .hero-orbit:focus-visible{outline:2px solid var(--on-dark);outline-offset:5px}
+
+.checkpoint-list{margin-top:14px;border-top:1px solid var(--line);padding-top:10px;font-size:13px}.checkpoint-list summary{cursor:pointer;padding:5px 0;font-weight:600}.checkpoint-list p{font-size:11px;color:var(--muted)}.checkpoint-row,.checkpoint-row label{display:flex;align-items:center;gap:8px}.checkpoint-row{justify-content:space-between;min-height:42px}.checkpoint-row label{min-width:0;overflow-wrap:anywhere}.checkpoint-row input:checked+span{text-decoration:line-through;color:var(--muted)}.checkpoint-row button{white-space:nowrap}

@@ -304,7 +304,7 @@ test('home displays remaining food and category budgets and month highlights spe
   assert.match(a.value("nodes.get('#categoryList').innerHTML"),/60/);
   assert.equal(a.value("nodes.get('#freeValue').textContent"),a.run('formatByn(800)'));
   assert.equal(a.value("nodes.get('#freeMeta').textContent"),a.run('`Осталось по факту: ${formatByn(930)} · Запланированные траты: ${formatByn(130)}`'));
-  assert.match(a.run("renderCategoryCard(categoryById('pet'),currentPeriod())"),/>Отложено</);
+  assert.match(a.run("renderCategoryCard(categoryById('pet'),currentPeriod())"),/>Всего отложено</);
 });
 
 test('approved palette is identical for fresh and existing settings without erasing preferences',()=>{
@@ -632,4 +632,19 @@ test('new users start without optional envelopes and can add payments from categ
  assert.equal(a.value("modal.fields.find(f=>f.name==='pinned-payment').value"),false);
  await a.run("modal.submit({'pinned-payment':true});");
  assert.deepEqual(a.value('currentPeriod().mandatory.sections'),['payment']);
+});
+
+test('expense picker category prefills expense and mandatory payment is recorded once',async()=>{
+ const a=app();a.run("quickExpenseModal('sport');");
+ assert.equal(a.value("modal.fields.find(f=>f.name==='category').value"),'sport');
+ a.run("currentPeriod().salary=1000;mandatoryExpenseModal('housing');");
+ await a.run('modal.submit({amount:25.50});');
+ assert.equal(a.value('currentPeriod().mandatory.housingSpent'),25.50);
+ assert.equal(a.value('accountBalanceAfterSpending(state,currentPeriod())'),974.50);
+ a.run('deleteAccountOperation(state.account.transactions.at(-1).id);');
+ assert.equal(a.value('currentPeriod().mandatory.housingSpent'),0);
+ a.run("mandatoryExpenseModal('payment');");await a.run('modal.submit({amount:10});');
+ assert.equal(a.value('periodPaymentsPaid(state,currentPeriod().key)'),10);
+ a.run('deleteAccountOperation(state.account.transactions.at(-1).id);');
+ assert.equal(a.value('periodPaymentsPaid(state,currentPeriod().key)'),0);
 });

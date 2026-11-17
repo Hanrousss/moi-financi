@@ -504,7 +504,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.4.42';
+const APP_BUILD='1.4.43';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -989,8 +989,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme='receipt';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.42');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.42');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.43');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.43');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -1008,11 +1008,33 @@ function quickActionIds(){
   return defaults.map((fallback,index)=>quickActionOptions.some(o=>o.value===state.settings.quickActions?.[index])?state.settings.quickActions[index]:fallback);
 }
 function renderQuickActions(){
-  $('#homeQuickActions').innerHTML=quickActionIds().map(id=>{
-    const label=quickActionOptions.find(o=>o.value===id).label;
-    const symbol=id==='expense'?icon('minus',24):id==='gifts'?sharedSectionIconHtml('gifts',29):sharedSectionIconHtml(id,29);
-    return `<button type="button" class="quick-action" data-shortcut="${id}"><span class="action-circle ${id==='expense'?'accent':''}">${symbol}</span><span>${label}</span></button>`;
-  }).join('');
+  $('#homeQuickActions').innerHTML=`<button type="button" class="expense-launcher" data-expense-picker aria-label="Записать расход или отложить деньги">${icon('minus',26)}</button>`;
+  $('#editQuickActionsBtn').hidden=true;
+}
+function expensePickerModal(){
+  const period=currentPeriod(),categories=orderedMonthCategories(period);
+  openModal('Деньги',[],null);
+  $('#modalBackdrop').classList.add('expense-picker-modal');
+  const mandatory=[{id:'housing',name:mandatoryLabel('housing')},...mandatorySections(period).map(id=>({id,name:id==='payment'?sectionLabel('payments'):mandatoryLabel('reserve')}))];
+  $('#modalBody').innerHTML=`<button type="button" class="money-menu-button save-money-choice" data-picker-save><span>Отложить</span></button><h3 class="expense-picker-label">− Траты</h3><div class="expense-picker-list" role="group" aria-label="Категории трат">${mandatory.map(c=>`<button type="button" class="money-menu-button" data-picker-mandatory="${c.id}">${esc(c.name)}</button>`).join('')}${categories.map(c=>`<button type="button" class="money-menu-button" data-picker-category="${esc(c.id)}">${categoryIconHtml(c,22)}<span>${esc(c.name)}</span></button>`).join('')}</div>`;
+  $('#modalBody').onclick=e=>{
+    if(e.target.closest('[data-picker-save]')){savingsModal('deposit');return;}
+    const category=e.target.closest('[data-picker-category]');if(category){quickExpenseModal(category.dataset.pickerCategory);return;}
+    const mandatory=e.target.closest('[data-picker-mandatory]');if(mandatory)mandatoryExpenseModal(mandatory.dataset.pickerMandatory);
+  };
+  $('#modalBody [data-picker-save]').focus();
+}
+function mandatoryExpenseModal(kind){
+  const period=currentPeriod(),name=kind==='payment'?sectionLabel('payments'):mandatoryLabel(kind);
+  openModal('Трата · '+name,[{name:'amount',label:'Сумма, BYN',type:'money',min:0.01,required:true}],async values=>{
+    const amount=roundMoney(num(values.amount));if(amount<=0){toast('Введи сумму расхода');return;}
+    let linkedId='';
+    if(kind==='housing')period.mandatory.housingSpent=roundMoney(num(period.mandatory.housingSpent)+amount);
+    else if(kind==='reserve')period.mandatory.reserveAllocated=roundMoney(num(period.mandatory.reserveAllocated)+amount);
+    else{let payment=state.payments.find(item=>item.periodKey===period.key&&num(item.paid)<num(item.planned))||state.payments.find(item=>item.periodKey===period.key);if(!payment){payment={id:uid(),periodKey:period.key,planned:0,paid:0};state.payments.push(payment);}payment.paid=roundMoney(num(payment.paid)+amount);linkedId='payment:'+payment.id;}
+    recordAccountDelta(-amount,{type:kind==='reserve'?'transfer_out':'expense',date:todayISO(),periodKey:period.key,categoryId:'mandatory:'+kind,linkedId,note:name});
+    await commit();closeModal();
+  },{submitLabel:'Учесть расход'});
 }
 function quickActionsModal(){
   const ids=quickActionIds();
@@ -1148,7 +1170,7 @@ function mandatoryEnvelope(period,kind,plan,spent){
 }
 function renderMandatoryCard(name,plan,spent,kind){
   const action=kind==='payment'?'data-payment-card':`data-edit-mandatory="${kind}"`,e=mandatoryEnvelope(selectedPeriod(),kind,plan,spent);
-  return `<article class="receipt-item"><div class="receipt-row"><button class="receipt-name text-button" ${action}>${kind==='housing'?envelopePin:''}<b class="${plan>0&&roundMoney(plan-spent)<=0?'paid-in-ink':''}">${esc(name)}</b></button><span class="receipt-number"><input class="receipt-allocation" data-mandatory-allocation="${kind}" ${moneyInputAttributes(0)} value="${e.allocated}" aria-label="Отложено: ${esc(name)}"></span><span class="receipt-number">${num(plan).toLocaleString('ru-RU')}</span><span class="receipt-number ${e.remaining<0?'negative-number':''}">${e.remaining.toLocaleString('ru-RU')}</span></div></article>`;
+  return `<article class="receipt-item"><div class="receipt-row"><button class="receipt-name text-button" ${action}>${kind==='housing'?envelopePin:''}<b class="${plan>0&&roundMoney(plan-spent)<=0?'paid-in-ink':''}">${esc(name)}</b></button><span class="receipt-number"><input class="receipt-allocation" data-mandatory-allocation="${kind}" ${moneyInputAttributes(0)} value="${e.allocated}" aria-label="Отложено: ${esc(name)}"></span><span class="receipt-number ${e.remaining<0?'negative-number':''}">${e.remaining.toLocaleString('ru-RU')}</span></div></article>`;
 }
 function renderUtilityEnvelope(period){
   const utility=period.passThroughs?.[0];
@@ -1334,12 +1356,12 @@ function bindCheckpoints(list=$('#categoryList')){
 
 function renderCategorySummary(category,period){
   const id=esc(category.id),e=envelopeSummary(period,category),pinned=(period.pinnedCategoryIds||[]).includes(category.id);
-  const allocated=`<input class="receipt-allocation" data-category-plan="${id}" ${moneyInputAttributes(0)} value="${e.allocated}" aria-label="Отложено: ${esc(category.name)}">`;
-  return `<article class="receipt-item" data-month-category="${id}" data-category="${id}"><div class="receipt-row"><button type="button" class="receipt-name text-button" data-layer-title>${pinned?envelopePin:''}<b>${esc(category.name)}</b></button><span class="receipt-number">${allocated}</span>${[e.planned,e.remaining].map(v=>`<span class="receipt-number ${v<0?'negative-number':''}">${num(v).toLocaleString('ru-RU',{maximumFractionDigits:2})}</span>`).join('')}</div>${categoryDragHandle(category.id)}</article>`;
+  const allocated=`<input class="receipt-allocation" data-category-plan="${id}" ${moneyInputAttributes(0)} value="${e.allocated}" aria-label="Всего отложено: ${esc(category.name)}">`;
+  return `<article class="receipt-item" data-month-category="${id}" data-category="${id}"><div class="receipt-row"><button type="button" class="receipt-name text-button" data-layer-title>${pinned?envelopePin:''}<b>${esc(category.name)}</b></button><span class="receipt-number">${allocated}</span>${[e.remaining].map(v=>`<span class="receipt-number ${v<0?'negative-number':''}">${num(v).toLocaleString('ru-RU',{maximumFractionDigits:2})}</span>`).join('')}</div>${categoryDragHandle(category.id)}</article>`;
 }
 function renderCategoryCard(category,period){
   const e=envelopeSummary(period,category);
-  return `<article class="category-card"><div class="category-budget-fields"><div class="category-budget-field"><span>Отложено</span><label class="inline-money-input"><input class="number-field compact" data-category-plan="${esc(category.id)}" ${moneyInputAttributes(0)} value="${e.allocated}" aria-label="Отложено"><span>BYN</span></label></div><div class="category-budget-field"><span>План</span><strong>${formatByn(e.planned)}</strong></div></div><div class="category-remaining"><span>Осталось</span><strong class="${e.remaining<0?'negative-number':''}">${formatByn(e.remaining)}</strong></div><div class="category-remaining"><span>Потрачено</span><strong>${formatByn(e.spent)}</strong></div>${checkpointList(period,category)}</article>`;
+  return `<article class="category-card"><div class="category-budget-fields"><div class="category-budget-field"><span>Всего отложено</span><label class="inline-money-input"><input class="number-field compact" data-category-plan="${esc(category.id)}" ${moneyInputAttributes(0)} value="${e.allocated}" aria-label="Отложено"><span>BYN</span></label></div><div class="category-budget-field"><span>План</span><strong>${formatByn(e.planned)}</strong></div></div><div class="category-remaining"><span>Осталось</span><strong class="${e.remaining<0?'negative-number':''}">${formatByn(e.remaining)}</strong></div><div class="category-remaining"><span>Потрачено</span><strong>${formatByn(e.spent)}</strong></div>${checkpointList(period,category)}</article>`;
 }
 function renderMonth(){
   const opened=[...document.querySelectorAll('[data-receipt-category][open]')].map(el=>el.dataset.receiptCategory);
@@ -1450,7 +1472,7 @@ function renderPayments(){
 
 function renderSettings(){
   $('#editAppearanceBtn').hidden=true;
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.42')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.43')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1524,8 +1546,9 @@ function fieldHtml(field){
 }
 let modalSubmitHandler=null, modalExtraHandler=null, modalSubmitting=false;
 function openModal(title,fields,onSubmit,{submitLabel='Сохранить',extraAction=null}={}){
+  $('#modalBackdrop').classList.remove('expense-picker-modal');$('#modalBody').onclick=null;
   $('#modalTitle').textContent=title;$('#modalBody').innerHTML=fields.map(fieldHtml).join('')+(extraAction?`<button type="button" id="modalExtra" class="danger-button">${esc(extraAction.label)}</button>`:'');$('#modalSubmit').textContent=submitLabel;$('#modalBackdrop').hidden=false;document.body.classList.add('modal-open');modalSubmitHandler=onSubmit;modalExtraHandler=extraAction?.handler||null;setTimeout(()=>$('#modalBody input:not([type="checkbox"]), #modalBody select')?.focus(),40);}
-function closeModal(){if(diaryDirty&&!confirm('Закрыть запись без сохранения изменений?'))return;diaryDirty=false;$('#modalBackdrop').classList.remove('diary-modal');$('#modalBackdrop').hidden=true;document.body.classList.remove('modal-open');modalSubmitHandler=null;modalExtraHandler=null;}
+function closeModal(){if(diaryDirty&&!confirm('Закрыть запись без сохранения изменений?'))return;diaryDirty=false;$('#modalBackdrop').classList.remove('diary-modal','expense-picker-modal');$('#modalBackdrop').hidden=true;document.body.classList.remove('modal-open');modalSubmitHandler=null;modalExtraHandler=null;}
 function formValues(form){const result={};form.querySelectorAll('[name]').forEach(el=>{if(el.type==='radio'){if(el.checked)result[el.name]=el.value;return;}result[el.name]=el.hasAttribute('data-money')?parseMoney(el.value):el.type==='checkbox'?el.checked:el.type==='file'?el.files?.[0]||null:el.value;});form.querySelectorAll('[data-rich-editor]').forEach(el=>{result[el.dataset.richEditor]=cleanDiaryHtml(el.innerHTML);});return result;}
 async function updateCropPreview(root,name){
   const preview=root.querySelector(`[data-crop-preview="${name}"]`);
@@ -1623,12 +1646,12 @@ function openBalanceEditor(){
     {name:'note',label:'Комментарий',value:'Сверка свободного остатка'}
   ],async v=>{syncPeriodAutoClosedWeeks(p);p.cashNow=num(v.cash);reconcileFreeBalance(state,p,v.balance,{date:todayISO(),note:v.note.trim()||'Корректировка свободного остатка'});await commit();closeModal();});
 }
-function quickExpenseModal(){
+function quickExpenseModal(categoryId=null){
   const categories=[...state.categories].sort((a,b)=>a.order-b.order);
   if(!categories.length){toast('Сначала добавь категорию');return;}
-  openModal('Новый расход',[
+  openModal(categoryId?'Трата · '+(categoryById(categoryId)?.name||'Категория'):'Новый расход',[
     {name:'amount',label:'Сумма, BYN',type:'money',min:0.01,required:true},
-    {name:'category',label:'Категория',type:'select',value:categories[0].id,options:categories.map(category=>({value:category.id,label:category.kind==='pet'||category.kind==='gift'?`${category.name} — из конверта`:category.name}))}
+    {name:'category',label:'Категория',type:'select',value:categoryId||categories[0].id,options:categories.map(category=>({value:category.id,label:category.kind==='pet'||category.kind==='gift'?`${category.name} — из конверта`:category.name}))}
   ],async values=>{
     const amount=roundMoney(num(values.amount));
     const category=categoryById(values.category);
@@ -1908,7 +1931,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.42',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.43',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -2155,6 +2178,7 @@ function bindDelegatedEvents(){
   $('#receiptBalanceInput').addEventListener('input',e=>{e.currentTarget.style.setProperty('--balance-width',(e.currentTarget.value.length+1)+'ch');fitReceiptAmounts();});
 
   document.addEventListener('click',async e=>{
+    if(e.target.closest('[data-expense-picker]')){expensePickerModal();return;}
     const shortcut=e.target.closest('[data-shortcut]');if(shortcut){if(shortcut.dataset.shortcut==='expense')quickExpenseModal();else if(shortcut.dataset.shortcut==='savings')savingsModal('deposit');else if(shortcut.dataset.shortcut==='month')openPeriodEditor();else{if(shortcut.dataset.shortcut==='food')foodPeriodKey=currentPeriod().key;setScreen(shortcut.dataset.shortcut);}return;}
     const dashboard=e.target.closest('[data-dashboard]');if(dashboard){const id=dashboard.dataset.dashboard,category=categoryById(dashboardCategoryId(id));if(category){showCategoryLayer(category,currentPeriod());return;}if(id==='payments')openOverlay('payments');else setScreen(id);return;}
     const nav=e.target.closest('[data-nav-to]');if(nav){setScreen(nav.dataset.navTo);return;}

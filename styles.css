@@ -706,3 +706,10 @@ body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-he
 #giftEnvelopeContent{margin-bottom:16px}
 
 .food-plan-total{grid-column:1/-1;padding:12px 4px;font:12px var(--print-font);color:var(--muted);font-variant-numeric:tabular-nums}
+
+.envelope-spent-toggle{display:inline-flex;align-items:center;gap:9px;cursor:pointer;min-height:36px}
+.envelope-spent-toggle input{width:21px;height:21px;flex:0 0 21px;margin:0;accent-color:#343330;cursor:pointer}
+.spent-all-card .checkpoint-list{display:none}
+#foodWeeks[hidden]{display:none!important}
+#categoryLayer:has(.payment-envelope-card.spent-all-card) #payments{display:none}
+#gifts:has(.spent-all-card) #giftPlans,#gifts:has(.spent-all-card) #addGiftPlan{display:none}

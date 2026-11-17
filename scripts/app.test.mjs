@@ -832,3 +832,37 @@ test('all envelope names cross out when actual spending exhausts funding and rec
  a.run("p.categoryBudgets.pet={plan:100,spent:100};");
  assert.match(a.run("renderCategorySummary(categoryById('pet'),p)"),/class="paid-in-ink"/);
 });
+
+test('whole-envelope checkbox is reversible and never spends funds twice or changes the main allocation',()=>{
+ const a=app();a.run("const p=currentPeriod(),c=categoryById('sport');p.salary=1000;p.categoryBudgets.sport={plan:200,spent:50,checkpoints:[{id:'a',title:'Оплачено',amount:50,paid:true},{id:'b',title:'План',amount:60,paid:false}]};const budgetBefore=cloneState(p.categoryBudgets.sport),ledgerBefore=cloneState(state.account);setEnvelopeFullySpent(p,c.id,true);");
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),0);
+ assert.equal(a.value('envelopeSummary(p,c).spent'),200);
+ assert.equal(a.value('freeAfterPlans(p)'),800);
+ assert.match(a.run('renderCategorySummary(c,p)'),/paid-in-ink/);
+ assert.deepEqual(a.value('p.categoryBudgets.sport'),a.value('budgetBefore'));
+ assert.deepEqual(a.value('state.account'),a.value('ledgerBefore'));
+ a.run('setEnvelopeFullySpent(p,c.id,true);setEnvelopeAllocation(p,c,250);');
+ assert.equal(a.value('envelopeSummary(p,c).spent'),250);
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),0);
+ a.run('setEnvelopeFullySpent(p,c.id,false);');
+ assert.equal(a.value('envelopeSummary(p,c).spent'),50);
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),200);
+ assert.equal(a.value('p.categoryBudgets.sport.checkpoints.length'),2);
+});
+test('food and payments support the whole-envelope flag without modifying detailed expenses',()=>{
+ const a=app();a.run("const p=currentPeriod();p.foodAllocated=300;p.foodWeeks[0].spent=80;p.envelopeAllocations={housing:0,reserve:0,payment:700};state.payments=[{id:'p',periodKey:p.key,planned:1500,paid:40}];setEnvelopeFullySpent(p,'food',true);setEnvelopeFullySpent(p,'mandatory:payment',true);");
+ assert.equal(a.value("envelopeSummary(p,categoryById('food')).spent"),300);
+ assert.equal(a.value("mandatoryEnvelope(p,'payment',1500,40).spent"),700);
+ assert.equal(a.value('p.foodWeeks[0].spent'),80);
+ assert.equal(a.value('state.payments[0].paid'),40);
+ a.run('state=migrateBackupState(cloneState(state));');
+ assert.equal(a.value("isEnvelopeFullySpent(currentPeriod(),'food')"),true);
+ a.run("setEnvelopeFullySpent(currentPeriod(),'food',false);");
+ assert.equal(a.value("envelopeSummary(currentPeriod(),categoryById('food')).spent"),80);
+});
+test('marking an empty envelope spent never applies the recommended amount',()=>{
+ const a=app();a.run("const p=currentPeriod(),c=categoryById('sport');p.salary=1000;p.categoryBudgets.sport={plan:0,spent:0,checkpoints:[{id:'a',title:'План',amount:100,paid:false}]};setEnvelopeFullySpent(p,c.id,true);");
+ assert.equal(a.value('envelopeSummary(p,c).spent'),0);
+ assert.equal(a.value('freeAfterPlans(p)'),1000);
+ assert.equal(a.value('p.categoryBudgets.sport.plan'),0);
+});

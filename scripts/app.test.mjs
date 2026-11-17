@@ -818,3 +818,17 @@ test('mandatory editors read the same allocation as receipt and save it back',as
  assert.equal(a.value('p.envelopeAllocations.housing'),800);
  assert.equal(a.value("mandatoryEnvelope(p,'housing',1000,50).remaining"),750);
 });
+
+test('all envelope names cross out when actual spending exhausts funding and recover on corrections',()=>{
+ const a=app();a.run("const p=currentPeriod(),c=categoryById('sport');p.categoryBudgets.sport={plan:268,spent:90};");
+ const crossed=()=>/class="paid-in-ink"/.test(a.run('renderCategorySummary(c,p)'));
+ assert.equal(crossed(),false);
+ a.run('p.categoryBudgets.sport.spent=268;');assert.equal(crossed(),true);
+ a.run('setEnvelopeAllocation(p,c,300);');assert.equal(crossed(),false);
+ a.run('p.categoryBudgets.sport.spent=310;');assert.equal(crossed(),true);
+ a.run('p.categoryBudgets.sport.plan=0;');assert.equal(crossed(),false);
+ a.run("p.foodAllocated=100;p.foodWeeks[0].spent=100;");
+ assert.match(a.run("renderCategorySummary(categoryById('food'),p)"),/class="paid-in-ink"/);
+ a.run("p.categoryBudgets.pet={plan:100,spent:100};");
+ assert.match(a.run("renderCategorySummary(categoryById('pet'),p)"),/class="paid-in-ink"/);
+});

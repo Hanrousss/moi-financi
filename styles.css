@@ -591,3 +591,25 @@ body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-he
  background-size:100% 1.35em;background-repeat:repeat-y;
  -webkit-box-decoration-break:clone;box-decoration-break:clone;
 }
+
+.receipt-category-heading{display:flex;align-items:center;gap:5px;min-width:0}
+#home .month-receipt .receipt-category-heading #addCategoryBtn{flex:0 0 24px;transform:none}
+#home .month-receipt .receipt-category-heading #addCategoryBtn::before{display:none}
+/* Envelope receipt: common columns, unbroken words and fully visible amounts. */
+.receipt-columns,.receipt-row{grid-template-columns:minmax(105px,1.6fr) repeat(3,minmax(0,1fr));column-gap:6px}
+.receipt-columns{font-size:11px}
+.receipt-name,.receipt-name b,.receipt-name span,.receipt-content .checkpoint-title{word-break:normal;overflow-wrap:normal;hyphens:none}
+.receipt-name{min-width:0;text-align:left;white-space:normal;padding:0;font-weight:inherit;justify-content:flex-start}
+.receipt-name b{font-size:inherit;font-weight:600}
+.receipt-number{min-width:0;white-space:nowrap;overflow-wrap:normal;font-variant-numeric:tabular-nums}
+.receipt-allocation{display:block;width:100%;min-width:0;min-height:36px;padding:0;border:0;border-radius:4px;background:transparent;text-align:right;font:inherit;line-height:inherit;color:inherit;box-shadow:none;font-variant-numeric:tabular-nums}
+.receipt-allocation:focus{outline:1px solid var(--muted);outline-offset:2px}
+#categoryList.editing-order .receipt-row{touch-action:none;user-select:none;-webkit-user-select:none}
+#categoryList .receipt-name{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.row-edit-tools{flex-wrap:wrap}
+.receipt-balance-input{max-width:100%;min-width:0;gap:5px;font-size:clamp(18px,6vw,27px)}
+.receipt-balance-input input{field-sizing:fixed;width:var(--balance-width,8ch)!important;max-width:100%;flex:0 1 auto;padding:0;overflow:visible}
+#home .month-receipt #freeCard{grid-template-columns:minmax(0,1fr) auto}
+@media(max-width:374px){.receipt-columns,.receipt-row{grid-template-columns:minmax(96px,1.6fr) repeat(3,minmax(0,1fr));column-gap:4px}.receipt-columns{font-size:9px}.receipt-name{font-size:11px}.receipt-number{font-size:11px}.utility-envelope .receipt-name{font-size:10px}.receipt-category-heading{gap:1px}#home .month-receipt .receipt-category-heading #addCategoryBtn{flex-basis:20px;width:20px}}
+
+.receipt-number.negative-number{background:linear-gradient(177deg,transparent 16%,rgb(218 113 103 / .23) 20%,rgb(218 113 103 / .32) 80%,transparent 84%);color:var(--text)}

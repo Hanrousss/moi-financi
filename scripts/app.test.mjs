@@ -396,15 +396,15 @@ test('month category selection preserves funded history and isolates months',asy
  assert.equal(a.value('currentPeriod().categoryBudgets.everyday.spent'),20);
 });
 
-test('completed categories sink to the bottom and become active again after a plan increase',()=>{
+test('pinned categories stay first and manual order survives payments and reload',()=>{
  const a=app();
- a.run(`currentPeriod().selectedCategoryIds=['everyday','sport','pet'];currentPeriod().categoryBudgets.everyday={plan:100,spent:100};currentPeriod().categoryBudgets.sport={plan:200,spent:20};`);
+ a.run(`currentPeriod().selectedCategoryIds=['everyday','sport','pet'];currentPeriod().pinnedCategoryIds=['sport'];currentPeriod().categoryBudgets.everyday={plan:100,spent:100};`);
+ assert.deepEqual(a.value('orderedMonthCategories(currentPeriod()).map(c=>c.id)'),['sport','everyday','pet']);
+ assert.equal(a.run("moveMonthCategory(currentPeriod(),'pet','everyday')"),true);
  assert.deepEqual(a.value('orderedMonthCategories(currentPeriod()).map(c=>c.id)'),['sport','pet','everyday']);
- assert.equal(a.run("moveMonthCategory(currentPeriod(),'pet','sport')"),true);
- assert.deepEqual(a.value('orderedMonthCategories(currentPeriod()).map(c=>c.id)'),['pet','sport','everyday']);
- assert.equal(a.run("moveMonthCategory(currentPeriod(),'everyday','pet')"),false);
- a.run('currentPeriod().categoryBudgets.everyday.plan=120;');
- assert.deepEqual(a.value('orderedMonthCategories(currentPeriod()).map(c=>c.id)'),['everyday','pet','sport']);
+ assert.equal(a.run("moveMonthCategory(currentPeriod(),'pet','sport')"),false);
+ a.run('state=cloneState(state);');
+ assert.deepEqual(a.value('orderedMonthCategories(currentPeriod()).map(c=>c.id)'),['sport','pet','everyday']);
 });
 
 test('deleted September payment stays deleted after rendering and reloading',async()=>{
@@ -570,13 +570,63 @@ test('section order and names persist independently from finance and hidden reco
  assert.deepEqual(a.value('state.account'),a.value('before.account'));
 });
 
-test('checkpoints update plan and actual once through add, pay, edit, unpay and delete',()=>{
+test('checkpoints preserve manual allocation through add, pay, edit, unpay and delete',()=>{
  const a=app();
  a.run("const p=currentPeriod(),c=categoryById('sport'),b=p.categoryBudgets.sport;b.plan=100;b.spent=12;const change=(r,n)=>changeCheckpoint(p,c,r,n);change(null,{id:'t',title:'Йога',amount:25,paid:false});");
  const amounts=()=>a.value('[b.plan,b.spent]');
- assert.deepEqual(amounts(),[125,12]);
- a.run('const r=b.checkpoints[0];change(r,{...r,paid:true});change(r,{...r,paid:true})');assert.deepEqual(amounts(),[125,37]);
- a.run('change(r,{...r,amount:30.5})');assert.deepEqual(amounts(),[130.5,42.5]);
- a.run('change(r,{...r,paid:false})');assert.deepEqual(amounts(),[130.5,12]);
+ assert.deepEqual(amounts(),[100,12]);
+ a.run('const r=b.checkpoints[0];change(r,{...r,paid:true});change(r,{...r,paid:true})');assert.deepEqual(amounts(),[100,37]);
+ a.run('change(r,{...r,amount:30.5})');assert.deepEqual(amounts(),[100,42.5]);
+ a.run('change(r,{...r,paid:false})');assert.deepEqual(amounts(),[100,12]);
  a.run('change(r,{...r,paid:true});change(r,null)');assert.deepEqual(amounts(),[100,12]);assert.equal(a.value('b.checkpoints.length'),0);
+});
+
+
+test('envelope deficit is visible without automatically funding the envelope',()=>{
+ const a=app();
+ a.run("const p=currentPeriod(),c=categoryById('sport');p.salary=1000;p.categoryBudgets.sport={plan:100,spent:0};changeCheckpoint(p,c,null,{id:'one',title:'Абонемент',amount:80,paid:false});changeCheckpoint(p,c,null,{id:'two',title:'Тренировка',amount:90,paid:false});");
+ assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:100,planned:170,spent:0,remaining:-70});
+ assert.equal(a.value('liveFreeBalance(state,p)'),900);
+ a.run('const row=p.categoryBudgets.sport.checkpoints[0];changeCheckpoint(p,c,row,{...row,paid:true});');
+ assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:100,planned:170,spent:80,remaining:-70});
+ assert.equal(a.value('liveFreeBalance(state,p)'),900);
+ a.run('changeCheckpoint(p,c,p.categoryBudgets.sport.checkpoints[1],null);');
+ assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:100,planned:80,spent:80,remaining:20});
+ a.run('const before=cloneState(state);reconcileCheckpointBudgets();state=cloneState(state);reconcileCheckpointBudgets();');
+ assert.equal(a.value('p.categoryBudgets.sport.plan'),100);
+ assert.deepEqual(a.value('state.account'),a.value('before.account'));
+});
+test('food keeps weeks without checkpoints and weekly plans never fund its envelope',()=>{
+ const a=app();
+ a.run("const p=currentPeriod(),c=categoryById('food');p.salary=1000;p.foodAllocated=200;p.foodWeeks[0].plan=250;");
+ assert.equal(a.run('checkpointList(p,c)'),'');
+ assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:200,planned:250,spent:0,remaining:-50});
+ assert.equal(a.value('liveFreeBalance(state,p)'),800);
+ a.run('p.foodWeeks[0].spent=80;');
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),-50);
+ a.run('setEnvelopeAllocation(p,c,300);');
+ assert.equal(a.value('p.foodWeeks[0].plan'),250);
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),50);
+});
+test('mandatory plans cannot silently increase manually allocated funds',()=>{
+ const a=app();a.run("const p=currentPeriod();p.salary=1000;p.mandatory.housingPlan=100;reconcileCheckpointBudgets();p.mandatory.housingPlan=170;");
+ assert.equal(a.value("mandatoryEnvelope(p,'housing',170,0).remaining"),-70);
+ assert.equal(a.value('liveFreeBalance(state,p)'),900);
+});
+
+test('pet envelope distinguishes transfers from expenses and preserves carried cash',()=>{
+ const a=app();
+ a.run("const p=currentPeriod(),c=categoryById('pet');p.categoryBudgets.pet={plan:100,spent:100};state.pet.balanceByn=130;state.pet.transactions=[{id:'in',type:'topup',amountByn:100,date:'2026-10-10',budgetPeriodKey:p.key},{id:'out',type:'spend',amountByn:20,date:'2026-10-11'}];state.pet.needs=[{id:'need',name:'Корм',costByn:150,completed:false}];");
+ assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:150,planned:150,spent:20,carry:50,remaining:-20});
+ a.run('setEnvelopeAllocation(p,c,200);');
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),30);
+ assert.equal(a.value('p.categoryBudgets.pet.plan'),150);
+ assert.equal(a.value('state.pet.balanceByn'),130);
+});
+
+test('envelope allocations and pins survive backup restore without altering checkpoint records',()=>{
+ const a=app();
+ a.run("const p=currentPeriod();p.foodAllocated=250;p.envelopeAllocations={housing:300,payment:200,reserve:50};p.pinnedCategoryIds=['sport'];p.categoryBudgets.sport={plan:100,spent:80,checkpoints:[{id:'a',title:'Зал',amount:80,paid:true}]};const original=cloneState(state);state=migrateBackupState(cloneState(state));");
+ assert.deepEqual(a.value('state.periods'),a.value('original.periods'));
+ assert.deepEqual(a.value('state.account'),a.value('original.account'));
 });

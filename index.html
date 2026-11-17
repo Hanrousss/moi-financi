@@ -10,9 +10,9 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.4.34">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.4.34">
-  <link rel="stylesheet" href="./styles.css?v=1.4.34">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.4.36">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.4.36">
+  <link rel="stylesheet" href="./styles.css?v=1.4.36">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -35,8 +35,7 @@
           <div class="hero-card-head"><span>Можно потратить</span><span class="hero-card-actions"><button id="undoLastBtn" class="mini-icon undo-action-button" type="button" aria-label="Отменить последнее действие" title="Отменить последнее действие"></button><button id="editBalanceBtn" class="mini-icon" aria-label="Изменить сумму «Можно потратить»"></button></span></div>
           <strong id="freeValue" hidden>0 BYN</strong><label class="receipt-balance-input"><input id="receiptBalanceInput" inputmode="decimal" aria-label="Можно потратить, BYN" autocomplete="off"><span>BYN</span></label><p class="hero-caption">После всех запланированных расходов</p><details class="balance-breakdown"><summary>Как считается</summary><small id="freeMeta"></small></details>
         </article>
-<div class="section-row categories-heading"><h2>Категории · BYN</h2><button id="addCategoryBtn" class="text-button"></button></div>
-        <div class="receipt-columns"><span>Категория</span><span>План</span><span>Траты</span><span>Осталось</span></div><div id="categoryList" class="category-list"></div>
+<div class="receipt-columns"><span class="receipt-category-heading">Категория<button id="addCategoryBtn" class="text-button" type="button" aria-label="Добавить категорию"></button></span><span>Отложено</span><span>План</span><span>Осталось</span></div><div id="categoryList" class="category-list"></div>
         <div id="receiptTotals" class="receipt-totals"></div></div><div id="dailyActions">        <div id="homeQuickActions" class="quick-actions" aria-label="Быстрые действия"></div>
         <button id="editQuickActionsBtn" type="button" class="mini-icon" aria-label="Настроить кружки"></button>
 </div><div id="dailySummary">        <div class="section-row home-section-title"><h2>Сейчас</h2><span class="section-hint">Текущий период</span></div>
@@ -107,6 +106,6 @@
   <div id="categoryLayer" hidden><section class="category-window" role="dialog" aria-modal="true" aria-labelledby="categoryLayerTitle"><header><h2 id="categoryLayerTitle"></h2><button id="categoryLayerClose" type="button" aria-label="Закрыть окно">×</button></header><div id="categoryLayerBody"></div></section></div>
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.4.34"></script>
+  <script src="./app.bundle.js?v=1.4.36"></script>
 </body>
 </html>

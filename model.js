@@ -307,11 +307,11 @@ export function accountBalanceAfterSpending(state,period){
 export function remainingPlannedOutflows(state,period){
   const saved=periodSavingsDepositedByn(state,period.key),savingsPlanByn=Number(period.mandatory.savingsPlanByn||0);
   const sections=Array.isArray(period.mandatory.sections)?period.mandatory.sections:['payment','reserve'];
-  const remainingPayment=sections.includes('payment')?state.payments.filter(payment=>payment.periodKey===period.key).reduce((sum,payment)=>sum+Math.max(0,Number(payment.planned||0)-Number(payment.paid||0)),0):0;
-  const remainingReserve=sections.includes('reserve')?Math.max(0,Number(period.mandatory.reservePlan||0)-Number(period.mandatory.reserveAllocated||0)):0;
-  const remainingMandatory=Math.max(0,Number(period.mandatory.housingPlan||0)-Number(period.mandatory.housingSpent||0))+remainingPayment+remainingReserve+Math.max(0,savingsPlanByn-saved);
+  const remainingPayment=sections.includes('payment')?(period.envelopeAllocations?.payment!=null?Math.max(0,Number(period.envelopeAllocations.payment)-periodPaymentsPaid(state,period.key)):state.payments.filter(payment=>payment.periodKey===period.key).reduce((sum,payment)=>sum+Math.max(0,Number(payment.planned||0)-Number(payment.paid||0)),0)):0;
+  const remainingReserve=sections.includes('reserve')?Math.max(0,Number(period.envelopeAllocations?.reserve??period.mandatory.reservePlan??0)-Number(period.mandatory.reserveAllocated||0)):0;
+  const remainingMandatory=Math.max(0,Number(period.envelopeAllocations?.housing??period.mandatory.housingPlan??0)-Number(period.mandatory.housingSpent||0))+remainingPayment+remainingReserve+Math.max(0,savingsPlanByn-saved);
   const remainingCategories=state.categories.reduce((sum,c)=>{
-    if(c.kind==='food') return sum+period.foodWeeks.reduce((s,w)=>s+(w.closed?0:Math.max(0,Number(w.plan||0)-Number(w.spent||0))),0);
+    if(c.kind==='food') return sum+(period.foodAllocated==null?period.foodWeeks.reduce((s,w)=>s+(w.closed?0:Math.max(0,Number(w.plan||0)-Number(w.spent||0))),0):Math.max(0,Number(period.foodAllocated)-foodBudget(period).spent));
     const b=categoryBudget(period,c);return sum+Math.max(0,Number(b.plan||0)-Number(b.spent||0));
   },0);
   return roundMoney(remainingMandatory+remainingCategories);
@@ -415,7 +415,7 @@ export function validateState(v){
   if(v.settings.salaryDay!=null&&(!Number.isInteger(Number(v.settings.salaryDay))||Number(v.settings.salaryDay)<1||Number(v.settings.salaryDay)>28))return false;
   if(new Set(v.categories.map(c=>c?.id)).size!==v.categories.length||!v.categories.every(c=>object(c)&&typeof c.id==='string'&&c.id.length>0))return false;
   if(v.categories.filter(c=>c.kind==='food').length!==1)return false;
-  if(!Object.entries(v.periods).every(([key,p])=>/^\d{4}-(0[1-9]|1[0-2])$/.test(key)&&moneyFields(p,['salary','extraIncome','cashNow','accountOpeningAdjustmentByn'])&&moneyFields(p.mandatory,['housingPlan','housingSpent','reservePlan','reserveAllocated','savingsPlanUsd','savingsPlanByn'])&&object(p.categoryBudgets)&&Object.values(p.categoryBudgets).every(b=>moneyFields(b,['plan','spent']))&&Array.isArray(p.foodWeeks)&&p.foodWeeks.every(w=>moneyFields(w,['plan','spent']))))return false;
+  if(!Object.entries(v.periods).every(([key,p])=>/^\d{4}-(0[1-9]|1[0-2])$/.test(key)&&moneyFields(p,['salary','extraIncome','cashNow','accountOpeningAdjustmentByn','foodAllocated'])&&moneyFields(p.mandatory,['housingPlan','housingSpent','reservePlan','reserveAllocated','savingsPlanUsd','savingsPlanByn'])&&(p.envelopeAllocations==null||object(p.envelopeAllocations)&&moneyFields(p.envelopeAllocations,['housing','payment','reserve']))&&object(p.categoryBudgets)&&Object.values(p.categoryBudgets).every(b=>moneyFields(b,['plan','spent','envelopeAllocated']))&&Array.isArray(p.foodWeeks)&&p.foodWeeks.every(w=>moneyFields(w,['plan','spent']))))return false;
   if(!money(v.account.balanceByn)||!Array.isArray(v.account.transactions)||!v.account.transactions.every(t=>moneyFields(t,['deltaByn'])&&date(t.date)))return false;
   if(!v.payments.every(p=>moneyFields(p,['planned','paid'])&&/^\d{4}-(0[1-9]|1[0-2])$/.test(p.periodKey)))return false;
   if(!v.savings.every(t=>moneyFields(t,['amountUsd','amountByn','accountAmountByn'])&&date(t.date)))return false;

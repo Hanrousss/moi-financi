@@ -741,3 +741,16 @@ test('the money button and balance editor use the same spendable total as the re
  assert.equal(a.value('p.categoryBudgets.sport.plan'),100);
  assert.equal(a.value('p.categoryBudgets.sport.checkpoints[0].amount'),200);
 });
+
+test('clearing legacy spending preserves checked payments and allows recording actual separate costs',()=>{
+ const a=app();a.run("const p=currentPeriod(),c=categoryById('health');p.categoryBudgets.health={plan:1000,spent:150};changeCheckpoint(p,c,null,{id:'one',title:'Первая оплата',amount:300,paid:true});const before=cloneState(p.categoryBudgets.health.checkpoints);setOutsideChecklistSpent(p,c,0);");
+ assert.equal(a.value('p.categoryBudgets.health.spent'),300);
+ assert.deepEqual(a.value('p.categoryBudgets.health.checkpoints'),a.value('before'));
+ a.run("changeCheckpoint(p,c,null,{id:'two',title:'Вторая оплата',amount:200,paid:true});");
+ assert.equal(a.value('p.categoryBudgets.health.spent'),500);
+ a.run('setOutsideChecklistSpent(p,c,0);');
+ assert.equal(a.value('p.categoryBudgets.health.spent'),500);
+ a.run('setOutsideChecklistSpent(p,c,25);');
+ assert.equal(a.value('p.categoryBudgets.health.spent'),525);
+ assert.throws(()=>a.run('setOutsideChecklistSpent(p,c,-1)'));
+});

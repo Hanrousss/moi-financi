@@ -421,7 +421,7 @@ function validateState(v){
   if(v.settings.salaryDay!=null&&(!Number.isInteger(Number(v.settings.salaryDay))||Number(v.settings.salaryDay)<1||Number(v.settings.salaryDay)>28))return false;
   if(new Set(v.categories.map(c=>c?.id)).size!==v.categories.length||!v.categories.every(c=>object(c)&&typeof c.id==='string'&&c.id.length>0))return false;
   if(v.categories.filter(c=>c.kind==='food').length!==1)return false;
-  if(!Object.entries(v.periods).every(([key,p])=>/^\d{4}-(0[1-9]|1[0-2])$/.test(key)&&moneyFields(p,['salary','extraIncome','cashNow','accountOpeningAdjustmentByn','foodAllocated'])&&moneyFields(p.mandatory,['housingPlan','housingSpent','reservePlan','reserveAllocated','savingsPlanUsd','savingsPlanByn'])&&(p.envelopeAllocations==null||object(p.envelopeAllocations)&&moneyFields(p.envelopeAllocations,['housing','payment','reserve']))&&object(p.categoryBudgets)&&Object.values(p.categoryBudgets).every(b=>moneyFields(b,['plan','spent','envelopeAllocated']))&&Array.isArray(p.foodWeeks)&&p.foodWeeks.every(w=>moneyFields(w,['plan','spent']))))return false;
+  if(!Object.entries(v.periods).every(([key,p])=>/^\d{4}-(0[1-9]|1[0-2])$/.test(key)&&moneyFields(p,['salary','extraIncome','cashNow','accountOpeningAdjustmentByn','foodAllocated'])&&moneyFields(p.mandatory,['housingPlan','housingSpent','reservePlan','reserveAllocated','savingsPlanUsd','savingsPlanByn'])&&(p.envelopeAllocations==null||object(p.envelopeAllocations)&&moneyFields(p.envelopeAllocations,['housing','payment','reserve']))&&object(p.categoryBudgets)&&Object.values(p.categoryBudgets).every(b=>moneyFields(b,['plan','spent','envelopeAllocated'])&&(b.checkpoints==null||Array.isArray(b.checkpoints)&&new Set(b.checkpoints.map(r=>r?.id)).size===b.checkpoints.length&&b.checkpoints.every(r=>object(r)&&typeof r.id==='string'&&typeof r.title==='string'&&moneyFields(r,['amount','bookedPlan','bookedSpent'])&&Number(r.amount)>0&&typeof r.paid==='boolean')))&&Array.isArray(p.foodWeeks)&&p.foodWeeks.every(w=>moneyFields(w,['plan','spent']))))return false;
   if(!money(v.account.balanceByn)||!Array.isArray(v.account.transactions)||!v.account.transactions.every(t=>moneyFields(t,['deltaByn'])&&date(t.date)))return false;
   if(!v.payments.every(p=>moneyFields(p,['planned','paid'])&&/^\d{4}-(0[1-9]|1[0-2])$/.test(p.periodKey)))return false;
   if(!v.savings.every(t=>moneyFields(t,['amountUsd','amountByn','accountAmountByn'])&&date(t.date)))return false;
@@ -504,7 +504,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.4.50';
+const APP_BUILD='1.4.51';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -806,6 +806,7 @@ function rollbackAccountCategory(transaction){
   // An older expense can have a later manual reduction that depends on it.
   // Silently clamping its inverse to zero would make history and totals disagree.
   if(changes.some(change=>change.value<0)){toast('Сначала удали более позднюю корректировку расходов этой категории или платежа.');return false;}
+  if(changes.some(change=>change.key==='spent'&&Array.isArray(change.target.checkpoints)&&change.value<checkpointTotal(change.target.checkpoints,true))){toast('Оплата связана со списком трат. Сначала сними галочку у соответствующей траты в конверте.');return false;}
   for(const change of changes)change.target[change.key]=change.value;
   return true;
 }
@@ -813,6 +814,27 @@ function deleteAccountOperation(id){
   const transaction=state.account.transactions.find(item=>item.id===id);
   if(!transaction)return false;
   const [owner,linkedId]=String(transaction.linkedId||'').split(':');
+  if(transaction.checkpointId){
+    const period=state.periods[accountTransactionPeriodKey(state,transaction)],budget=period?.categoryBudgets?.[transaction.categoryId];
+    const row=budget?.checkpoints?.find(row=>row.id===transaction.checkpointId);
+    const linked=state.account.transactions.filter(t=>t.checkpointId===transaction.checkpointId&&t.categoryId===transaction.categoryId&&accountTransactionPeriodKey(state,t)===period?.key);
+    const paid=roundMoney(-linked.reduce((sum,t)=>sum+num(t.deltaByn),0));
+    if(row&&roundMoney(row.paid?num(row.amount):0)!==paid){toast('Эта операция связана со старой оплатой. Измени её через список трат в конверте.');return false;}
+    if(budget&&roundMoney(num(budget.spent)-paid)<0){toast('Сначала отмени более позднюю корректировку расходов.');return false;}
+    if(budget)budget.spent=roundMoney(num(budget.spent)-paid);
+    if(row){row.paid=false;row.bookedSpent=0;}
+    for(const item of linked)deleteAccountTransaction(state,item.id);
+    return true;
+  }
+  if(owner==='savings'&&!canRemoveSavings([linkedId]))return false;
+  if(owner==='pet'){
+    const item=state.pet.transactions.find(t=>t.id===linkedId);
+    if(item?.type==='topup'&&num(item.amountByn)>petBalanceByn(state)){toast('Это пополнение уже потрачено. Сначала отмени связанные траты питомца.');return false;}
+  }
+  if(owner==='gifts'){
+    const item=state.gifts.transactions.find(t=>t.id===linkedId);
+    if(item?.type==='topup'&&num(item.amountByn)>giftBalanceByn()){toast('Это пополнение уже потрачено. Сначала отмени связанные траты подарков.');return false;}
+  }
   if(owner==='safety'){
     const item=state.safety.transactions.find(tx=>tx.id===linkedId);
     if(item?.type==='topup'&&roundMoney(num(state.safety.amountUsd)-num(item.amountUsd))<0){toast('Сначала отмени более поздние траты или возвраты из подушки безопасности.');return false;}
@@ -989,8 +1011,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme='receipt';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.50');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.50');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.51');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.51');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -1017,14 +1039,9 @@ function freeAfterPlans(period){
   // then reserve only outstanding plans; never count an overspend a second time.
   return roundMoney(liveFreeBalance(state,period)+envelopes.reduce((sum,e)=>sum+e.remaining-Math.min(0,e.allocated-e.spent),0));
 }
-function moneyActionTone(period){
-  const free=liveFreeBalance(state,period),envelopes=orderedMonthCategories(period).map(c=>envelopeSummary(period,c));
-  const mandatory=mandatorySections(period);
-  const deficits=[mandatoryEnvelope(period,'housing',num(period.mandatory.housingPlan),num(period.mandatory.housingSpent)).remaining];
-  if(mandatory.includes('reserve'))deficits.push(mandatoryEnvelope(period,'reserve',num(period.mandatory.reservePlan),num(period.mandatory.reserveAllocated)).remaining);
-  if(mandatory.includes('payment'))deficits.push(mandatoryEnvelope(period,'payment',state.payments.filter(p=>p.periodKey===period.key).reduce((sum,p)=>sum+num(p.planned),0),periodPaymentsPaid(state,period.key)).remaining);
-  if(free<0||[...envelopes.map(e=>e.remaining),...deficits].some(value=>value<0))return 'negative';
-  return roundMoney(free+envelopes.reduce((sum,e)=>sum+e.remaining,0))>0?'positive':'zero';
+function moneyActionTone(period){const free=freeAfterPlans(period);return free<0?'negative':free>0?'positive':'zero';}
+function reconcileSpendable(period,target,options){
+  return reconcileFreeBalance(state,period,roundMoney(liveFreeBalance(state,period)+num(target)-freeAfterPlans(period)),options);
 }
 function renderQuickActions(){
   $('#homeQuickActions').innerHTML='';
@@ -1125,7 +1142,7 @@ function closeOverlay(){setScreen(lifeSection==='home'?'home':'life');}
 function statusClass(value){return value<0?'negative':value===0?'neutral':'positive';}
 function budgetToneClass(plan,available){return available<0?'card-negative':num(plan)>0&&available<=num(plan)*0.2?'card-warning':'';}
 function budgetValueClass(plan,available){return available<0?'negative-number':num(plan)>0&&available<=num(plan)*0.2?'warning-number':'';}
-function editableAccountBalance(){return liveFreeBalance(state,currentPeriod());}
+function editableAccountBalance(){return freeAfterPlans(currentPeriod());}
 function periodSpentDigest(period){
   const rows=[];
   const add=(name,spent)=>{const value=roundMoney(num(spent));if(value>0)rows.push({name,spent:value});};
@@ -1144,7 +1161,7 @@ function periodSpentDigest(period){
 }
 function renderHome(){
   const p=selectedPeriod(),isCurrent=p.key===currentPeriod().key;
-  const free=liveFreeBalance(state,p);
+  const free=freeAfterPlans(p);
   const wi=currentWeekIndex(p.key,new Date(),state.settings.salaryDay);
   const week=p.foodWeeks[wi]||p.foodWeeks[0];
   const weekPlan=roundMoney(num(week.plan)-num(week.spent));
@@ -1238,7 +1255,7 @@ function renderHomeInfo(period){
   const mode=state.settings.homeInfo||'salary';
   const rows={
     salary:['До зарплаты',pluralDays(daysToNextSalary(new Date(),state.settings.salaryDay)),`Новый период с ${state.settings.salaryDay}-го числа`],
-    free:['Можно потратить',formatByn(liveFreeBalance(state,period)),'После запланированных расходов'],
+    free:['Можно потратить',formatByn(freeAfterPlans(period)),'После запланированных расходов'],
     planned:['Запланированные траты',formatByn(remainingPlannedOutflows(state,period)),'Ещё предстоит потратить'],
     spent:['Потрачено за месяц',formatByn(periodSpentTotal(state,period)),'Включая отложенные деньги']
   };
@@ -1353,7 +1370,10 @@ function changeCheckpoint(period,category,row,next){
     if(next)next.foodDate=date;
   }else{
 
-    if(newSpent!==oldSpent)setCategorySpent(period,category,roundMoney(num(b.spent)+newSpent-oldSpent));
+    if(newSpent!==oldSpent){
+      const transaction=setCategorySpent(period,category,roundMoney(num(b.spent)+newSpent-oldSpent));
+      if(transaction){transaction.checkpointId=next?.id||row.id;transaction.note=next?.title||row.title;}
+    }
   }
   if(next){
     const updated={...next,bookedPlan:newPlan,bookedSpent:newSpent};
@@ -1384,7 +1404,8 @@ function renderCategorySummary(category,period){
 }
 function renderCategoryCard(category,period){
   const e=envelopeSummary(period,category);
-  return `<article class="category-card"><div class="category-budget-fields"><div class="category-budget-field"><span>Потратить в этом месяце</span><label class="inline-money-input"><input class="number-field compact" data-category-plan="${esc(category.id)}" ${moneyInputAttributes(0)} value="${e.allocated}" aria-label="Потратить в этом месяце"><span>BYN</span></label></div><div class="category-budget-field"><span>План</span><strong>${formatByn(e.planned)}</strong></div></div><div class="category-remaining"><span>Осталось</span><strong class="${e.remaining<0?'negative-number':''}">${formatByn(e.remaining)}</strong></div><div class="category-remaining"><span>Потрачено</span><strong>${formatByn(e.spent)}</strong></div>${checkpointList(period,category)}</article>`;
+  const otherSpent=category.kind==='monthly'?Math.max(0,roundMoney(e.spent-checkpointTotal(period.categoryBudgets[category.id]?.checkpoints||[],true))):0;
+  return `<article class="category-card"><div class="category-budget-fields"><div class="category-budget-field"><span>Потратить в этом месяце</span><label class="inline-money-input"><input class="number-field compact" data-category-plan="${esc(category.id)}" ${moneyInputAttributes(0)} value="${e.allocated}" aria-label="Потратить в этом месяце"><span>BYN</span></label></div><div class="category-budget-field"><span>План</span><strong>${formatByn(e.planned)}</strong></div></div><div class="category-remaining"><span>Осталось</span><strong class="${e.remaining<0?'negative-number':''}">${formatByn(e.remaining)}</strong></div><div class="category-remaining"><span>Потрачено</span><strong>${formatByn(e.spent)}</strong></div>${otherSpent>0?`<div class="category-other-spent"><span>Расходы вне списка</span><span>${formatByn(otherSpent)}</span></div>`:''}${checkpointList(period,category)}</article>`;
 }
 function renderMonth(){
   const opened=[...document.querySelectorAll('[data-receipt-category][open]')].map(el=>el.dataset.receiptCategory);
@@ -1495,7 +1516,7 @@ function renderPayments(){
 
 function renderSettings(){
   $('#editAppearanceBtn').hidden=true;
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.50')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.51')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1668,7 +1689,7 @@ function openBalanceEditor(){
     {name:'balance',label:'Можно потратить, BYN',type:'money',min:null,required:true,value:editableAccountBalance(),help:'Это сумма после оставшихся планов. На главной появится именно введенное число; приложение запишет корректировку на разницу.'},
     {name:'cash',label:'Отдельно отложено / наличные, BYN',type:'money',value:p.cashNow},
     {name:'note',label:'Комментарий',value:'Сверка свободного остатка'}
-  ],async v=>{syncPeriodAutoClosedWeeks(p);p.cashNow=num(v.cash);reconcileFreeBalance(state,p,v.balance,{date:todayISO(),note:v.note.trim()||'Корректировка свободного остатка'});await commit();closeModal();});
+  ],async v=>{syncPeriodAutoClosedWeeks(p);p.cashNow=num(v.cash);reconcileSpendable(p,v.balance,{date:todayISO(),note:v.note.trim()||'Корректировка свободного остатка'});await commit();closeModal();});
 }
 function quickExpenseModal(categoryId=null){
   const categories=[...state.categories].sort((a,b)=>a.order-b.order);
@@ -1683,10 +1704,10 @@ function quickExpenseModal(categoryId=null){
     if(!category){toast('Выбери категорию');return;}
     const period=currentPeriod();
     if(category.kind==='pet'||category.kind==='gift'){
-      if(category.kind==='gift')state.gifts.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),note:'Быстрый расход'});
+      if(category.kind==='gift')state.gifts.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),periodKey:period.key,note:'Быстрый расход'});
       else{
       state.pet.balanceByn=roundMoney(petBalanceByn(state)-amount);
-      state.pet.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),note:'Быстрый расход'});
+      state.pet.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),periodKey:period.key,note:'Быстрый расход'});
       }
       await commit();closeModal();toast(`${formatByn(amount)} · ${category.name}`);return;
     }
@@ -1791,14 +1812,22 @@ function exchangeSavingsBynModal(){
     await commit();closeModal();toast('BYN обменяны в USD');
   });
 }
+function canRemoveSavings(ids){
+  const candidate={...state,savings:state.savings.filter(t=>!ids.includes(t.id))};
+  if(savingsBalanceUsd(candidate)<Math.min(0,savingsBalanceUsd(state))||savingsBalanceByn(candidate)<Math.min(0,savingsBalanceByn(state))){toast('Эти накопления уже потрачены или обменены. Сначала отмени связанные траты или обмен.');return false;}
+  return true;
+}
 function deleteSavingsOperation(id){
   const transaction=state.savings.find(t=>t.id===id);
-  if(!transaction)return;
+  if(!transaction)return false;
+  const ids=state.savings.filter(t=>transaction.exchangeId?t.exchangeId===transaction.exchangeId:t.id===id).map(t=>t.id);
+  if(!canRemoveSavings(ids))return false;
+  if(transaction.accountTransactionId){if(!deleteAccountOperation(transaction.accountTransactionId))return false;}
+  else state.savings=state.savings.filter(t=>!ids.includes(t.id));
   if(transaction.purchaseId){const purchase=state.purchases.find(item=>item.id===transaction.purchaseId);if(purchase){purchase.completed=false;delete purchase.completedAt;delete purchase.paidFrom;}}
-  if(transaction.accountTransactionId)deleteAccountOperation(transaction.accountTransactionId);
-  else state.savings=state.savings.filter(t=>transaction.exchangeId?t.exchangeId!==transaction.exchangeId:t.id!==id);
+  return true;
 }
-function petTransactionModal(type){openModal(type==='topup'?'Перевести питомцу':'Потратить из баланса питомца',[{name:'amount',label:'Сумма, BYN',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const tx={id:uid(),type,amountByn:amount,date,note:v.note.trim()};state.pet.balanceByn=roundMoney(petBalanceByn(state)+(type==='topup'?amount:-amount));if(type==='topup'){const key=accountPeriodKey(date),p=ensurePeriod(state,key);p.categoryBudgets.pet=p.categoryBudgets.pet||{plan:0,spent:0};p.categoryBudgets.pet.spent=roundMoney(num(p.categoryBudgets.pet.spent)+amount);tx.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'pet',note:tx.note||sectionLabel('pet'),linkedId:`pet:${tx.id}`});tx.accountTransactionId=accountTransaction?.id||'';}state.pet.transactions.push(tx);await commit();closeModal();});}
+function petTransactionModal(type){openModal(type==='topup'?'Перевести питомцу':'Потратить из баланса питомца',[{name:'amount',label:'Сумма, BYN',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const tx={id:uid(),type,amountByn:amount,date,periodKey:accountPeriodKey(date),note:v.note.trim()};state.pet.balanceByn=roundMoney(petBalanceByn(state)+(type==='topup'?amount:-amount));if(type==='topup'){const key=accountPeriodKey(date),p=ensurePeriod(state,key);p.categoryBudgets.pet=p.categoryBudgets.pet||{plan:0,spent:0};p.categoryBudgets.pet.spent=roundMoney(num(p.categoryBudgets.pet.spent)+amount);tx.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'pet',note:tx.note||sectionLabel('pet'),linkedId:`pet:${tx.id}`});tx.accountTransactionId=accountTransaction?.id||'';}state.pet.transactions.push(tx);await commit();closeModal();});}
 function rollbackCompletedNeed(item){
   const transactions=state.pet.transactions.filter(t=>t.needId===item.id);
   state.pet.balanceByn=roundMoney(petBalanceByn(state)+transactions.reduce((sum,t)=>sum+num(t.amountByn),0));
@@ -1806,7 +1835,7 @@ function rollbackCompletedNeed(item){
   item.completed=false;
 }
 function needModal(item=null){openModal(item?'План питомца':'Добавить для питомца',[{name:'name',label:'Что нужно',value:item?.name||'',required:true},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'due',label:'Срок',type:'date',value:item?.dueDate||''},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){if(item.completed&&num(v.cost)!==num(item.costByn))rollbackCompletedNeed(item);item.name=v.name;item.costByn=num(v.cost);item.dueDate=v.due;item.note=v.note}else state.pet.needs.push({id:uid(),name:v.name,costByn:num(v.cost),dueDate:v.due,note:v.note,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{rollbackCompletedNeed(item);state.pet.needs=state.pet.needs.filter(n=>n.id!==item.id);await commit();closeModal();}}:null});}
-function giftTransactionModal(type){openModal(type==='topup'?'Перевести в конверт подарков':'Потратить из конверта подарков',[{name:'amount',label:'Сумма, BYN',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const transaction={id:uid(),type,amountByn:amount,date,note:v.note.trim()};if(type==='topup'){const key=accountPeriodKey(date),period=ensurePeriod(state,key);period.categoryBudgets.gifts=period.categoryBudgets.gifts||{plan:0,spent:0};period.categoryBudgets.gifts.spent=roundMoney(num(period.categoryBudgets.gifts.spent)+amount);transaction.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'gifts',note:transaction.note||'Конверт подарков',linkedId:`gifts:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';}state.gifts.transactions.push(transaction);await commit();closeModal();});}
+function giftTransactionModal(type){openModal(type==='topup'?'Перевести в конверт подарков':'Потратить из конверта подарков',[{name:'amount',label:'Сумма, BYN',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const transaction={id:uid(),type,amountByn:amount,date,periodKey:accountPeriodKey(date),note:v.note.trim()};if(type==='topup'){const key=accountPeriodKey(date),period=ensurePeriod(state,key);period.categoryBudgets.gifts=period.categoryBudgets.gifts||{plan:0,spent:0};period.categoryBudgets.gifts.spent=roundMoney(num(period.categoryBudgets.gifts.spent)+amount);transaction.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'gifts',note:transaction.note||'Конверт подарков',linkedId:`gifts:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';}state.gifts.transactions.push(transaction);await commit();closeModal();});}
 function rollbackCompletedGift(item){
   state.gifts.transactions=state.gifts.transactions.filter(t=>t.giftPlanId!==item.id);
   item.completed=false;
@@ -1955,7 +1984,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.50',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.51',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -2190,14 +2219,14 @@ function bindStaticEvents(){
 function bindDelegatedEvents(){
   $('#receiptBalanceInput').addEventListener('change',async e=>{
     const input=e.currentTarget,amount=parseMoney(input.value),p=selectedPeriod();
-    if(!Number.isFinite(amount)||!input.value.trim()){input.value=String(liveFreeBalance(state,p));toast('Введи сумму с точностью до копеек');return;}
-    if(amount===roundMoney(liveFreeBalance(state,p)))return;
-    reconcileFreeBalance(state,p,amount,{date:periodOperationDate(p),note:'Корректировка свободного остатка'});
+    if(!Number.isFinite(amount)||!input.value.trim()){input.value=String(freeAfterPlans(p));toast('Введи сумму с точностью до копеек');return;}
+    if(amount===roundMoney(freeAfterPlans(p)))return;
+    reconcileSpendable(p,amount,{date:periodOperationDate(p),note:'Корректировка свободного остатка'});
     await commit();
   });
   $('#receiptBalanceInput').addEventListener('keydown',e=>{
     if(e.key==='Enter'){e.preventDefault();e.currentTarget.blur();}
-    if(e.key==='Escape'){e.currentTarget.value=String(liveFreeBalance(state,selectedPeriod()));e.currentTarget.blur();}
+    if(e.key==='Escape'){e.currentTarget.value=String(freeAfterPlans(selectedPeriod()));e.currentTarget.blur();}
   });
   $('#receiptBalanceInput').addEventListener('input',e=>{e.currentTarget.style.setProperty('--balance-width',(e.currentTarget.value.length+1)+'ch');fitReceiptAmounts();});
 
@@ -2218,16 +2247,16 @@ function bindDelegatedEvents(){
     const navIcon=e.target.closest('[data-edit-nav-icon]');if(navIcon){navIconModal(navIcon.dataset.editNavIcon);return;}
     const accountDelete=e.target.closest('[data-delete-account-tx]');if(accountDelete){if(!confirm('Удалить операцию и отменить ее влияние на деньги?'))return;deleteAccountOperation(accountDelete.dataset.deleteAccountTx);await commit();return;}
     const savingDelete=e.target.closest('[data-delete-saving]');if(savingDelete){if(!confirm('Удалить операцию и отменить перевод или обмен?'))return;deleteSavingsOperation(savingDelete.dataset.deleteSaving);await commit();return;}
-    const petDelete=e.target.closest('[data-delete-pet-tx]');if(petDelete){if(!confirm('Удалить операцию и отменить ее влияние на баланс?'))return;const transaction=state.pet.transactions.find(t=>t.id===petDelete.dataset.deletePetTx);if(transaction?.needId){const need=state.pet.needs.find(item=>item.id===transaction.needId);if(need)need.completed=false;}if(transaction?.accountTransactionId)deleteAccountOperation(transaction.accountTransactionId);else if(transaction){state.pet.balanceByn=roundMoney(petBalanceByn(state)+(transaction.type==='topup'?-num(transaction.amountByn):num(transaction.amountByn)));state.pet.transactions=state.pet.transactions.filter(t=>t.id!==transaction.id)}await commit();return;}
+    const petDelete=e.target.closest('[data-delete-pet-tx]');if(petDelete){if(!confirm('Удалить операцию и отменить ее влияние на баланс?'))return;const transaction=state.pet.transactions.find(t=>t.id===petDelete.dataset.deletePetTx);if(transaction?.needId){const need=state.pet.needs.find(item=>item.id===transaction.needId);if(need)need.completed=false;}if(transaction?.accountTransactionId)deleteAccountOperation(transaction.accountTransactionId);else if(transaction){if(transaction.type==='topup'&&num(transaction.amountByn)>petBalanceByn(state)){toast('Сначала отмени связанные траты питомца.');return;}state.pet.balanceByn=roundMoney(petBalanceByn(state)+(transaction.type==='topup'?-num(transaction.amountByn):num(transaction.amountByn)));state.pet.transactions=state.pet.transactions.filter(t=>t.id!==transaction.id)}await commit();return;}
     if(e.target.closest('[data-edit-safety]')){safetyModal();return;}
-    const completeNeed=e.target.closest('[data-complete-need]');if(completeNeed){const n=state.pet.needs.find(x=>x.id===completeNeed.dataset.completeNeed);if(n){n.completed=true;const amount=num(n.costByn);if(amount>0){state.pet.balanceByn=roundMoney(petBalanceByn(state)-amount);state.pet.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),note:`Покупка: ${n.name}`,needId:n.id})}await commit()}return;}
+    const completeNeed=e.target.closest('[data-complete-need]');if(completeNeed){const n=state.pet.needs.find(x=>x.id===completeNeed.dataset.completeNeed);if(n&&!n.completed){n.completed=true;const amount=num(n.costByn);if(amount>0){state.pet.balanceByn=roundMoney(petBalanceByn(state)-amount);state.pet.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),periodKey:currentPeriod().key,note:`Покупка: ${n.name}`,needId:n.id})}await commit()}return;}
     if(e.target.closest('[data-edit-pet-avatar]')){petAvatarModal();return;}
     const editNeed=e.target.closest('[data-edit-need]');if(editNeed){needModal(state.pet.needs.find(n=>n.id===editNeed.dataset.editNeed));return;}
     const completePurchase=e.target.closest('[data-complete-purchase]');if(completePurchase){const p=state.purchases.find(x=>x.id===completePurchase.dataset.completePurchase);if(p)completePurchaseModal(p);return;}
     const editPurchase=e.target.closest('[data-edit-purchase]');if(editPurchase){purchaseModal(state.purchases.find(p=>p.id===editPurchase.dataset.editPurchase));return;}
-    const completeGift=e.target.closest('[data-complete-gift]');if(completeGift){const g=state.gifts.plans.find(x=>x.id===completeGift.dataset.completeGift);if(g){g.completed=true;const amount=num(g.costByn);if(amount>0)state.gifts.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),note:`Подарок: ${g.name}`,giftPlanId:g.id});await commit()}return;}
+    const completeGift=e.target.closest('[data-complete-gift]');if(completeGift){const g=state.gifts.plans.find(x=>x.id===completeGift.dataset.completeGift);if(g&&!g.completed){g.completed=true;const amount=num(g.costByn);if(amount>0)state.gifts.transactions.push({id:uid(),type:'spend',amountByn:amount,date:todayISO(),periodKey:currentPeriod().key,note:`Подарок: ${g.name}`,giftPlanId:g.id});await commit()}return;}
     const editGift=e.target.closest('[data-edit-gift]');if(editGift){giftModal(state.gifts.plans.find(g=>g.id===editGift.dataset.editGift));return;}
-    const giftDelete=e.target.closest('[data-delete-gift-tx]');if(giftDelete){if(!confirm('Удалить операцию и отменить ее влияние на баланс?'))return;const transaction=state.gifts.transactions.find(t=>t.id===giftDelete.dataset.deleteGiftTx);if(transaction?.giftPlanId){const gift=state.gifts.plans.find(item=>item.id===transaction.giftPlanId);if(gift)gift.completed=false;}if(transaction?.accountTransactionId)deleteAccountOperation(transaction.accountTransactionId);else state.gifts.transactions=state.gifts.transactions.filter(t=>t.id!==giftDelete.dataset.deleteGiftTx);await commit();return;}
+    const giftDelete=e.target.closest('[data-delete-gift-tx]');if(giftDelete){if(!confirm('Удалить операцию и отменить ее влияние на баланс?'))return;const transaction=state.gifts.transactions.find(t=>t.id===giftDelete.dataset.deleteGiftTx);if(transaction?.giftPlanId){const gift=state.gifts.plans.find(item=>item.id===transaction.giftPlanId);if(gift)gift.completed=false;}if(transaction?.accountTransactionId)deleteAccountOperation(transaction.accountTransactionId);else{if(transaction?.type==='topup'&&num(transaction.amountByn)>giftBalanceByn()){toast('Сначала отмени связанные траты подарков.');return;}state.gifts.transactions=state.gifts.transactions.filter(t=>t.id!==giftDelete.dataset.deleteGiftTx);}await commit();return;}
     const editPayment=e.target.closest('[data-edit-payment]');if(editPayment){const payment=state.payments.find(p=>String(p.id)===editPayment.dataset.editPayment);if(payment)paymentModal(payment);return;}
     if(e.target.closest('[data-exchange-savings-byn]')){exchangeSavingsBynModal();return;}
   });

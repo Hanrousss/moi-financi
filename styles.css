@@ -687,3 +687,5 @@ body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-he
 .receipt-totals .receipt-total-primary{gap:10px}
 .receipt-totals .receipt-total-primary b{white-space:nowrap;font-variant-numeric:tabular-nums}
 @media(max-width:374px){.receipt-pencil-note{font-size:18px}.receipt-totals .receipt-total-primary{font-size:11px;gap:7px}}
+
+.category-other-spent{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted);padding:0 0 10px}.category-other-spent>span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}

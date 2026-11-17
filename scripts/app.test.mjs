@@ -31,12 +31,12 @@ function app() {
 test('free balance editor saves the entered amount, preserves plans, and survives reload', async () => {
   const a=app();
   a.run(`const p=currentPeriod(); p.salary=1000; p.categoryBudgets.everyday.plan=700; openBalanceEditor();`);
-  assert.equal(a.value(`modal.fields.find(f=>f.name==='balance').value`),300);
+  assert.equal(a.value(`modal.fields.find(f=>f.name==='balance').value`),1000);
   await a.run(`modal.submit({balance:125.56,cash:0,note:''})`);
-  assert.equal(a.value('liveFreeBalance(state,currentPeriod())'),125.56);
+  assert.equal(a.value('freeAfterPlans(currentPeriod())'),125.56);
   assert.equal(a.value('currentPeriod().categoryBudgets.everyday.plan'),700);
   a.run('state=cloneState(saved.at(-1));');
-  assert.equal(a.value('liveFreeBalance(state,currentPeriod())'),125.56);
+  assert.equal(a.value('freeAfterPlans(currentPeriod())'),125.56);
 });
 
 test('deleting one of multiple payments rolls back that payment only', async () => {
@@ -302,7 +302,7 @@ test('home displays remaining food and category budgets and month highlights spe
     state.settings.dashboardCards=[dashboardCategoryKey('everyday')];renderHome();renderMonth();`);
   assert.equal(a.value("nodes.get('#weekPlan').textContent"),a.run('formatByn(70)'));
   assert.match(a.value("nodes.get('#categoryList').innerHTML"),/60/);
-  assert.equal(a.value("nodes.get('#freeValue').textContent"),a.run('formatByn(800)'));
+  assert.equal(a.value("nodes.get('#freeValue').textContent"),a.run('formatByn(860)'));
   assert.equal(a.value("nodes.get('#freeMeta').textContent"),a.run('`Осталось по факту: ${formatByn(930)} · Запланированные траты: ${formatByn(130)}`'));
   assert.match(a.run("renderCategoryCard(categoryById('pet'),currentPeriod())"),/>Потратить в этом месяце</);
 });
@@ -684,4 +684,60 @@ test('closed food weeks release unused plans while preserving actual spending',(
  assert.equal(a.value('envelopeSummary(p,c).remaining'),20);
  a.run('p.foodAllocated=350;');
  assert.equal(a.value('envelopeSummary(p,c).remaining'),-30);
+});
+
+test('deleting a checkpoint payment clears the checkbox and related edits exactly once',()=>{
+ const a=app();a.run("const p=currentPeriod(),c=categoryById('sport');p.categoryBudgets.sport={plan:200,spent:15};changeCheckpoint(p,c,null,{id:'x',title:'Зал',amount:80,paid:false});const row=p.categoryBudgets.sport.checkpoints[0];changeCheckpoint(p,c,row,{...row,paid:true});changeCheckpoint(p,c,row,{...row,amount:90});const tx=state.account.transactions.at(-1).id;");
+ assert.equal(a.value('p.categoryBudgets.sport.spent'),105);
+ assert.equal(a.run('deleteAccountOperation(tx)'),true);
+ assert.equal(a.value('row.paid'),false);
+ assert.equal(a.value('p.categoryBudgets.sport.spent'),15);
+ assert.equal(a.value('state.account.transactions.length'),0);
+ assert.equal(a.run('deleteAccountOperation(tx)'),false);
+ a.run('changeCheckpoint(p,c,row,{...row,paid:true});');
+ assert.equal(a.value('p.categoryBudgets.sport.spent'),105);
+});
+test('legacy spending remains visible and unrelated expenses are not erased',()=>{
+ const a=app();a.run("const p=currentPeriod(),c=categoryById('health');p.categoryBudgets.health={plan:400,spent:70};changeCheckpoint(p,c,null,{id:'x',title:'Аптека',amount:400,paid:true});");
+ assert.equal(a.value('p.categoryBudgets.health.spent'),470);
+ assert.equal(a.value('envelopeSummary(p,c).remaining'),-70);
+ assert.match(a.run('renderCategoryCard(c,p)'),/Расходы вне списка/);
+ assert.match(a.run('renderCategoryCard(c,p)'),/70 BYN/);
+ a.run('changeCheckpoint(p,c,p.categoryBudgets.health.checkpoints[0],{...p.categoryBudgets.health.checkpoints[0],paid:false});');
+ assert.equal(a.value('p.categoryBudgets.health.spent'),70);
+});
+test('deleting an old unlinked payment cannot leave paid checklist totals above spending',()=>{
+ const a=app();a.run("const p=currentPeriod();p.categoryBudgets.health={plan:100,spent:100,checkpoints:[{id:'x',title:'Аптека',amount:100,paid:true}]};const tx=recordAccountDelta(-100,{categoryId:'health',periodKey:p.key,type:'expense'});const before=cloneState(state);");
+ assert.equal(a.run('deleteAccountOperation(tx.id)'),false);
+ assert.deepEqual(a.value('state'),a.value('before'));
+});
+test('spent savings and pet topups cannot be deleted into a negative balance',async()=>{
+ const a=app();a.run("currentPeriod().salary=1000;savingsModal('deposit');");
+ await a.run("modal.submit({currency:'usd',amount:100,accountByn:300,date:'2026-10-10',note:''});");
+ a.run("const deposit=state.savings[0];state.savings.push({id:'spent',type:'withdraw',currency:'usd',amountUsd:80,amountByn:0,date:'2026-10-11',periodKey:'2026-10'});const before=cloneState(state);");
+ assert.equal(a.run('deleteSavingsOperation(deposit.id)'),false);
+ assert.deepEqual(a.value('state'),a.value('before'));
+ assert.equal(a.run('deleteAccountOperation(deposit.accountTransactionId)'),false);
+ assert.deepEqual(a.value('state'),a.value('before'));
+ a.run("petTransactionModal('topup');");await a.run("modal.submit({amount:50,date:'2026-10-10',note:''});");
+ a.run("state.pet.balanceByn=10;const petTx=state.pet.transactions[0];const petBefore=cloneState(state);");
+ assert.equal(a.run('deleteAccountOperation(petTx.accountTransactionId)'),false);
+ assert.deepEqual(a.value('state'),a.value('petBefore'));
+});
+test('malformed checkpoint amounts and duplicate ids are rejected on restore',()=>{
+ for(const rows of ["[{id:'x',title:'Трата',amount:'NaN',paid:false}]","[{id:'x',title:'Трата',amount:5,paid:true},{id:'x',title:'Дубль',amount:5,paid:true}]"]){
+  const a=app();a.run(`currentPeriod().categoryBudgets.sport.checkpoints=${rows};`);
+  assert.throws(()=>a.run('migrateBackupState(state)'));
+ }
+});
+
+test('the money button and balance editor use the same spendable total as the receipt',async()=>{
+ const a=app();a.run("const p=currentPeriod();p.salary=1000;p.selectedCategoryIds=['sport'];p.categoryBudgets.sport={plan:100,spent:0,checkpoints:[{id:'x',title:'Зал',amount:200,paid:false}]};openBalanceEditor();");
+ assert.equal(a.value("modal.fields.find(f=>f.name==='balance').value"),800);
+ assert.equal(a.value('moneyActionTone(p)'),'positive');
+ await a.run("modal.submit({balance:0,cash:0,note:''});");
+ assert.equal(a.value('freeAfterPlans(p)'),0);
+ assert.equal(a.value('moneyActionTone(p)'),'zero');
+ assert.equal(a.value('p.categoryBudgets.sport.plan'),100);
+ assert.equal(a.value('p.categoryBudgets.sport.checkpoints[0].amount'),200);
 });

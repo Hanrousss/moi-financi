@@ -785,3 +785,14 @@ test('envelope remainder is allocation minus actual spending, independent of unp
  assert.equal(a.value('envelopeSummary(p,c).remaining'),178);
  assert.doesNotMatch(a.run('renderCategoryCard(c,p)'),/<span>План<\/span>/);
 });
+
+test('payment envelope shows manual funding separately from the schedule',()=>{
+ const a=app();a.run("const p=currentPeriod();p.salary=2000;p.mandatory.sections=['payment'];p.envelopeAllocations={payment:700,housing:0,reserve:0};state.payments=[{id:'pay',periodKey:p.key,planned:1500,paid:50}];");
+ assert.match(a.run('renderPaymentEnvelopeCard(p)'),/value="700"/);
+ assert.match(a.run('renderPaymentEnvelopeCard(p)'),/650 BYN/);
+ assert.equal(a.value('freeAfterPlans(p)'),1300);
+ a.run('p.envelopeAllocations.payment=800;');
+ assert.match(a.run('renderPaymentEnvelopeCard(p)'),/value="800"/);
+ assert.equal(a.value('freeAfterPlans(p)'),1200);
+ assert.equal(a.value('state.payments[0].planned'),1500);
+});

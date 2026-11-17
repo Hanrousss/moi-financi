@@ -697,3 +697,5 @@ body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-he
 #petLegacyContent[hidden]{display:none!important}.pet-envelope-avatar{display:flex;justify-content:center;margin:0 0 18px}.pet-envelope-avatar .pet-avatar-button{width:76px;height:76px}.pet-envelope-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
 
 .category-card .category-budget-fields{grid-template-columns:minmax(0,1fr)}
+
+.payment-envelope-card{margin-bottom:16px}

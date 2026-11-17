@@ -10,9 +10,9 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.4.44">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.4.44">
-  <link rel="stylesheet" href="./styles.css?v=1.4.44">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.4.45">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.4.45">
+  <link rel="stylesheet" href="./styles.css?v=1.4.45">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -36,7 +36,7 @@
           <strong id="freeValue" hidden>0 BYN</strong><label class="receipt-balance-input"><input id="receiptBalanceInput" inputmode="decimal" aria-label="Можно потратить, BYN" autocomplete="off"><span>BYN</span></label><p class="hero-caption">После всех запланированных расходов</p><details class="balance-breakdown"><summary>Как считается</summary><small id="freeMeta"></small></details>
         </article>
 <div class="receipt-columns"><span class="receipt-category-heading">Категория<button id="addCategoryBtn" class="text-button" type="button" aria-label="Добавить категорию"></button></span><span>Всего отложено</span><span>Осталось</span></div><div id="categoryList" class="category-list"></div>
-        <div id="receiptTotals" class="receipt-totals"></div><p id="receiptSalaryNote" class="receipt-salary-note"></p></div><div id="dailyActions">        <div id="homeQuickActions" class="quick-actions" aria-label="Быстрые действия"></div>
+        <div id="receiptTotals" class="receipt-totals"></div><p id="receiptSalaryNote" class="receipt-salary-note"></p></div><details class="account-history-disclosure"><summary>История операций</summary><div id="accountHistory" class="history-list"></div></details><div id="dailyActions">        <div id="homeQuickActions" class="quick-actions" aria-label="Быстрые действия"></div>
         <button id="editQuickActionsBtn" type="button" class="mini-icon" aria-label="Настроить быстрые действия"></button>
 </div><div id="dailySummary">        <div class="section-row home-section-title"><h2>Сейчас</h2><span class="section-hint">Текущий период</span></div>
         <div class="home-summary-list">
@@ -46,7 +46,7 @@
         <div id="spendDigest" class="spend-digest" aria-live="polite"></div>
 </div>
 
-        <details class="account-history-disclosure"><summary>Операции по счёту</summary><div id="accountHistory" class="history-list"></div></details>
+        
         <button id="resetMonthBtn" class="text-button danger-row" type="button">Сбросить месяц полностью</button>
       </section>
 
@@ -99,12 +99,12 @@
       </section>
     </main>
 
-    <nav class="bottom-nav" aria-label="Основная навигация"><button data-nav="home" class="active"></button><button data-nav="month"></button><button data-nav="food"></button><button data-nav="savings"></button><button data-nav="payments"></button><button data-nav="pet"></button><button data-nav="purchases"></button></nav>
+    <nav class="bottom-nav" aria-label="Основная навигация"><button data-nav="home" class="active"></button><button data-nav="month"></button><button data-nav="food"></button><button data-nav="savings"></button><button data-nav="payments"></button><button data-nav="pet"></button><button data-nav="purchases"></button><button type="button" id="navExpenseBtn" class="nav-expense-button" data-expense-picker aria-label="Записать расход или отложить деньги"></button></nav>
   </div>
 
   <div id="categoryLayer" hidden><section class="category-window" role="dialog" aria-modal="true" aria-labelledby="categoryLayerTitle"><header><h2 id="categoryLayerTitle"></h2><button id="categoryLayerClose" type="button" aria-label="Закрыть окно">×</button></header><div id="categoryLayerBody"></div></section></div>
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.4.44"></script>
+  <script src="./app.bundle.js?v=1.4.45"></script>
 </body>
 </html>

@@ -648,3 +648,14 @@ test('expense picker category prefills expense and mandatory payment is recorded
  a.run('deleteAccountOperation(state.account.transactions.at(-1).id);');
  assert.equal(a.value('periodPaymentsPaid(state,currentPeriod().key)'),0);
 });
+
+test('money action distinguishes free cash, fully planned funds and envelope shortfalls',()=>{
+ const a=app();a.run('const p=currentPeriod();p.salary=100;p.selectedCategoryIds=[];');
+ assert.equal(a.value('moneyActionTone(p)'),'positive');
+ a.run("p.categoryBudgets.sport={plan:100,spent:0,checkpoints:[{id:'a',amount:100,paid:false}]};p.selectedCategoryIds=['sport'];");
+ assert.equal(a.value('moneyActionTone(p)'),'zero');
+ a.run('p.categoryBudgets.sport.checkpoints[0].amount=110;');
+ assert.equal(a.value('moneyActionTone(p)'),'negative');
+ a.run('p.categoryBudgets.sport.checkpoints[0].amount=80;');
+ assert.equal(a.value('moneyActionTone(p)'),'positive');
+});

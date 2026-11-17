@@ -669,3 +669,15 @@ body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-he
 .receipt-columns,.receipt-row{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);column-gap:10px}
 .receipt-columns>span:not(:first-child){text-align:right;white-space:normal;word-break:normal;overflow-wrap:normal;hyphens:none}
 @media(max-width:374px){.receipt-columns,.receipt-row{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);column-gap:7px}.receipt-columns{font-size:10px}.receipt-number{font-size:12px}}
+
+#dailyActions{display:none!important}
+.account-history-disclosure{margin:16px 0;color:#808080}
+.account-history-disclosure>summary{font-weight:400;color:#808080}
+#accountHistory .history-row b,#accountHistory .history-row small{color:#808080}
+.bottom-nav{grid-template-columns:repeat(var(--nav-count,5),minmax(0,1fr));overflow-x:auto}
+.bottom-nav button{min-width:44px}
+.bottom-nav .nav-expense-button .nav-symbol{width:48px;height:48px;color:#343330;font:400 33px/1 -apple-system,BlinkMacSystemFont,sans-serif;border:1px solid rgb(255 255 255 / .12)}
+.bottom-nav .nav-expense-button[data-tone=positive] .nav-symbol{background:#c8dca2;box-shadow:0 0 10px rgb(178 206 134 / .15)}
+.bottom-nav .nav-expense-button[data-tone=zero] .nav-symbol{background:#edc28d;box-shadow:0 0 10px rgb(233 172 104 / .15)}
+.bottom-nav .nav-expense-button[data-tone=negative] .nav-symbol{background:#e1a19a;box-shadow:0 0 10px rgb(206 127 118 / .15)}
+@media(max-width:374px){.bottom-nav .nav-expense-button .nav-symbol{width:44px;height:44px}.bottom-nav button small{font-size:8px}}

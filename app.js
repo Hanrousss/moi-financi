@@ -14,7 +14,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.4.26';
+const APP_BUILD='1.4.32';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -132,7 +132,7 @@ const iconPaths = {
   undo:'<path d="M3 7v6h6"/><path d="M5.5 17.5A8 8 0 1 0 5 8l-2 5"/>',
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'
 };
-function icon(name,size=22){if(PACK_ICONS[name])return `<img class="pack-icon" src="${PACK_ICONS[name]}" width="${size}" height="${size}" alt="" aria-hidden="true">`;return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name]||iconPaths.wallet}</svg>`}
+function icon(name,size=22){if(PACK_ICONS[name])return `<img class="pack-icon" src="${PACK_ICONS[name]}" width="${size}" height="${size}" alt="" aria-hidden="true">`;return `<svg class="icon pixel-action" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name]||iconPaths.wallet}</svg>`}
 function petAvatar(){return `<button class="pet-avatar-button" data-edit-pet-avatar aria-label="Изменить аватар питомца"><img src="${esc(state.pet?.avatarImage||'./icons/universal/04-avatar/pet-avatar.png')}" alt="Сэмми" loading="lazy"></button>`}
 function migrateUniversalIcons(){
   if(state.settings.universalIconPackVersion===1)return false;
@@ -145,6 +145,10 @@ function migrateUniversalIcons(){
   return true;
 }
 function normalizeState(){
+  if(!state.settings.plansSectionIntroduced){
+    state.settings.hiddenAppSections=[...new Set([...(state.settings.hiddenAppSections||[]),'diary'])];
+    state.settings.plansSectionIntroduced=true;
+  }
   state.settings.navItems=Array.isArray(state.settings.navItems)?state.settings.navItems:['home','month','savings','pet','purchases'];
   for(const id of ['home'])if(!state.settings.navItems.includes(id))state.settings.navItems.unshift(id);
   state.settings.navItems=state.settings.navItems.filter((id,index,arr)=>navDefaults.some(item=>item.id===id)&&arr.indexOf(id)===index);
@@ -486,8 +490,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme=Object.hasOwn(THEME_PRESETS,a.preset)?a.preset:'lime';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.26');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.26');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.32');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.32');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -557,6 +561,7 @@ function toast(message){const el=$('#toast');el.textContent=message;el.hidden=fa
 
 let paymentViewPeriod='';
 function setScreen(id){
+  document.querySelector('.order-done')?.click();
   if(id==='month')id='home';
   if(!['life','settings'].includes(id))lifeSection='home';
   activeScreen=id;
@@ -605,6 +610,7 @@ function renderHome(){
   $('#editBalanceBtn').hidden=!isCurrent;
   $('#freeValue').textContent=formatByn(free);
   const balanceInput=$('#receiptBalanceInput');
+  $('#freeCard').setAttribute?.('data-balance-tone',free>0?'positive':free<0?'negative':'zero');
   balanceInput.value=String(roundMoney(free)).replace('.',',');
   balanceInput.style.width=Math.max(3,balanceInput.value.length)+'.5ch';
   $('#freeMeta').textContent=`Осталось по факту: ${formatByn(account)} · Запланированные траты: ${formatByn(reserved)}`;
@@ -657,7 +663,9 @@ function moveMonthCategory(period,id,targetId){
   if(from<0||to<0||from===to||categoryFinished(period,categoryById(id))!==categoryFinished(period,categoryById(targetId)))return false;
   ids.splice(from,1);ids.splice(to,0,id);return true;
 }
-function categoryDragHandle(id){return `<button type="button" class="category-drag-handle" data-drag-category="${esc(id)}" aria-label="Перетащить категорию; стрелки вверх и вниз меняют порядок" title="Перетащить">⠿</button>`;}
+function categoryDragHandle(id){
+  return `<div class="row-edit-tools"><button type="button" class="text-button" data-rename-budget-category="${esc(id)}">Переименовать</button><button type="button" class="category-drag-handle" data-drag-category="${esc(id)}" aria-label="Перетащить категорию; стрелки вверх и вниз меняют порядок">⠿</button></div>`;
+}
 function monthCategoryPicker(){
   const period=selectedPeriod(),selected=monthCategoryIds(period),sections=mandatorySections(period);
   const available=[...state.categories].filter(c=>!selected.includes(c.id)).sort((a,b)=>a.order-b.order);
@@ -837,7 +845,7 @@ function renderMonth(){
   const opened=[...document.querySelectorAll('[data-receipt-category][open]')].map(el=>el.dataset.receiptCategory);
   const p=selectedPeriod();
   const sections=mandatorySections(p);
-  $('#monthTitle').textContent=periodTitle(p.key);$('#monthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
+  $('#monthTitle').textContent=periodTitle(p.key);
   $('#categoryList').innerHTML=[
     renderMandatoryCard(mandatoryLabel('housing'),num(p.mandatory.housingPlan),num(p.mandatory.housingSpent),'housing'),
     sections.includes('payment')?renderMandatoryCard(sectionLabel('payments'),roundMoney(state.payments.filter(item=>item.periodKey===p.key).reduce((sum,item)=>sum+num(item.planned),0)),periodPaymentsPaid(state,p.key),'payment'):null,
@@ -939,7 +947,7 @@ function renderPayments(){
 }
 
 function renderSettings(){
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.26')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.32')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1020,6 +1028,28 @@ async function updateCropPreview(root,name){
   preview.style.backgroundPosition='center';
 }
 
+function openMonthCalendar(){
+  const key=selectedPeriod().key;
+  let startDay=state.settings.salaryDay;
+  openModal('Даты периода · '+periodTitle(key),[],async ()=>{
+    state.settings.salaryDay=startDay;
+    await commit();closeModal();
+  });
+  const body=$('#modalBody');
+  function draw(){
+    const first=periodStart(key,1);
+    const offset=(first.getDay()+6)%7;
+    const days=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();
+    body.innerHTML=`<p class="period-calendar-label">Начало каждого бюджетного месяца</p><div class="period-calendar">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(day=>`<small>${day}</small>`).join('')}${'<span></span>'.repeat(offset)}${Array.from({length:days},(_,i)=>`<button type="button" data-period-day="${i+1}" aria-pressed="${i+1===startDay}" ${i>=28?'disabled':''}>${i+1}</button>`).join('')}</div><p aria-live="polite">${formatPeriodRange(key,startDay)}</p>`;
+    body.querySelector('.period-calendar').onclick=event=>{
+      const button=event.target.closest('[data-period-day]');
+      if(!button||button.disabled)return;
+      startDay=Number(button.dataset.periodDay);draw();
+      body.querySelector('[aria-pressed="true"]').focus();
+    };
+  }
+  draw();
+}
 function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0]||{amount:120};openModal(`Параметры · ${periodTitle(p.key)}`,[
   {name:'salary',label:'Зарплата, BYN',type:'money',value:p.salary},
   {name:'extra',label:'Дополнительный доход, BYN',type:'money',value:p.extraIncome},
@@ -1360,7 +1390,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.26',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.32',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -1486,6 +1516,57 @@ async function importBackup(file){
   }
 }
 
+function bindOrderEditing(){
+  let pending=null,heldRow=null;
+  const container=row=>row.closest('#categoryList,#settingsAppSections');
+  const stop=()=>{if(pending)clearTimeout(pending.timer);pending=null;};
+  function start(row){
+    const list=container(row);
+    if(!list)return;
+    list.classList.add('editing-order');
+    if(!list.previousElementSibling?.hasAttribute('data-finish-order')){
+      const done=document.createElement('button');
+      done.type='button';done.className='order-done';done.dataset.finishOrder='';done.textContent='Готово';
+      list.before(done);
+      done.onclick=()=>{list.classList.remove('editing-order');done.remove();};
+    }
+  }
+  document.addEventListener('pointerdown',e=>{
+    stop();heldRow=null;
+    if(!e.isPrimary||e.button!==0)return;
+    const row=e.target.closest('[data-month-category],[data-order-section]');
+    if(!row||container(row)?.classList.contains('editing-order'))return;
+    if(row.hasAttribute('data-month-category')&&!e.target.closest('.receipt-row'))return;
+    if(e.target.closest('.settings-actions'))return;
+    pending={x:e.clientX,y:e.clientY,id:e.pointerId,timer:setTimeout(()=>{
+      start(row);heldRow=row;stop();
+    },2000)};
+  });
+  document.addEventListener('pointermove',e=>{
+    if(pending&&(Math.hypot(e.clientX-pending.x,e.clientY-pending.y)>8||e.pointerId!==pending.id))stop();
+  },{passive:true});
+  for(const type of ['pointerup','pointercancel','scroll'])document.addEventListener(type,stop,true);
+  document.addEventListener('contextmenu',e=>{if(pending||heldRow)e.preventDefault();});
+  document.addEventListener('click',e=>{
+    if(heldRow?.contains(e.target)){e.preventDefault();e.stopImmediatePropagation();heldRow=null;return;}
+    const rename=e.target.closest('[data-rename-budget-category]');
+    if(rename){
+      const category=categoryById(rename.dataset.renameBudgetCategory);
+      openModal('Название категории',[{name:'name',label:'Название',required:true,value:category.name}],async values=>{
+        const name=values.name.trim();
+        if(!name)return;
+        category.name=name;
+        if(['food','pet'].includes(category.kind))setSectionLabel(category.id,name);
+        await commit();closeModal();
+      });
+    }
+  },true);
+  document.addEventListener('keydown',e=>{
+    const row=e.target.closest('[data-month-category],[data-order-section]');
+    if(row&&e.key==='F2'){e.preventDefault();start(row);}
+    if(e.key==='Escape'&&$('#modalBackdrop').hidden)document.querySelector('.order-done')?.click();
+  });
+}
 function bindCategoryDragging(){
   let drag=null,frame=0;
   const scroll=()=>{if(!drag)return;const y=drag.y;let step=y<110?-12:y>window.innerHeight-125?12:0;if(step)window.scrollBy(0,step);frame=requestAnimationFrame(scroll);};
@@ -1525,7 +1606,7 @@ function bindStaticEvents(){
   $('#settingsBtn').addEventListener('click',()=>openOverlay('settings'));$('#closeOverlayBtn').addEventListener('click',closeOverlay);
   $('#editHomeInfoBtn').addEventListener('click',homeInfoModal);$('#editQuickActionsBtn').addEventListener('click',quickActionsModal);$('#undoLastBtn').addEventListener('click',undoLastAction);
   $('#editBalanceBtn').addEventListener('click',openBalanceEditor);$('#weekCard').addEventListener('click',()=>showCategoryLayer(state.categories.find(c=>c.kind==='food'),currentPeriod()));
-  $('#prevMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,-1);ensurePeriod(state,selectedPeriodKey);renderAll()});$('#nextMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,1);ensurePeriod(state,selectedPeriodKey);renderAll()});
+  $('#monthTitle').addEventListener('click',openMonthCalendar);$('#prevMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,-1);ensurePeriod(state,selectedPeriodKey);renderAll()});$('#nextMonth').addEventListener('click',()=>{selectedPeriodKey=shiftPeriodKey(selectedPeriodKey,1);ensurePeriod(state,selectedPeriodKey);renderAll()});
   $('#foodPrevMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,-1);ensurePeriod(state,foodPeriodKey);renderFood()});$('#foodNextMonth').addEventListener('click',()=>{foodPeriodKey=shiftPeriodKey(foodPeriodKey,1);ensurePeriod(state,foodPeriodKey);renderFood()});
   $('#resetMonthBtn').addEventListener('click',resetSelectedMonth);$('#editPeriodBtn').addEventListener('click',openPeriodEditor);$('#addCategoryBtn').addEventListener('click',monthCategoryPicker);$('#settingsAddCategory').addEventListener('click',openNewCategory);
   $('#depositSavings').addEventListener('click',()=>savingsModal('deposit'));$('#withdrawSavings').addEventListener('click',()=>savingsModal('withdraw'));
@@ -1606,7 +1687,7 @@ function bindDelegatedEvents(){
 }
 
 // Personal sections keep their records together in the existing full backup.
-const LIFE_SECTIONS={home:'Финанси',ideas:'Для дома',activity:'Активность',learning:'Изучение',media:'Книги, кино и игры',places:'Места',blog:'Блог',portfolio:'Портфолио',diary:'Дневник'};
+const LIFE_SECTIONS={home:'Финанси',plans:'Планы',ideas:'Для дома',activity:'Активность',learning:'Изучение',media:'Книги, кино и игры',places:'Места',blog:'Блог',portfolio:'Портфолио',diary:'Дневник'};
 let lifeSection='home',lifeDetail=null,activityMonth=toISODate(new Date()).slice(0,7);
 function validLifeData(data){
   if(data==null)return true;
@@ -1622,7 +1703,7 @@ function validLifeData(data){
 }
 function lifeData(){
   state.life??={};
-  for(const key of ['ideas','learning','media','places','blog','portfolio','preparation','activities','weights','diary'])if(!Array.isArray(state.life[key]))state.life[key]=[];
+  for(const key of ['ideas','learning','media','places','blog','portfolio','preparation','activities','weights','diary','plans'])if(!Array.isArray(state.life[key]))state.life[key]=[];
   return state.life;
 }
 function lifeUrl(value){try{const u=new URL(value);return ['https:','http:'].includes(u.protocol)?u.href:'';}catch{return '';}}
@@ -1631,19 +1712,21 @@ function lifePicture(src){return typeof src==='string'&&/^data:image\/(png|jpeg|
 function switchLife(section){
   if(!visibleSections().some(s=>s.id===section))return;
   lifeSection=section;lifeDetail=null;
-  $('#sectionMenu').hidden=true;$('#sectionSwitch').setAttribute('aria-expanded','false');
   setScreen(section==='home'?'home':'life');
 }
 function renderLife(){
   if(!$('#lifeContent'))return;
   const isLife=activeScreen==='life';
-  $('#sectionSwitch').setAttribute('aria-label','Разделы приложения');
   $('#screenTitle').textContent=sectionName(lifeSection);
   $('.bottom-nav').hidden=isLife||lifeSection!=='home';
   renderSectionMenu();renderSectionSettings();
   if(!isLife)return;
   const data=lifeData();
   const custom=customSections().find(s=>s.id===lifeSection);if(custom){renderCustomSection(custom);return;}
+  if(lifeSection==='plans'){
+    $('#lifeContent').innerHTML=`<form class="plan-entry"><input name="title" required aria-label="Новый план" placeholder="Что запланировать?" autocomplete="off"><button class="mini-icon" type="submit" aria-label="Добавить план">${icon('plus',20)}</button></form><div class="life-stack">${data.plans.map(plan=>`<div class="life-check-row"><label><input type="checkbox" data-plan-check="${esc(plan.id)}" ${plan.done?'checked':''}><span class="${plan.done?'life-done':''}">${esc(plan.title)}</span></label></div>`).join('')}</div>`;
+    return;
+  }
   if(lifeSection==='diary'){renderDiary();return;}
   if(lifeSection==='activity'){renderLifeActivity();return;}
   const container=$('#lifeContent'),collection=data[lifeSection];
@@ -1728,10 +1811,24 @@ function lifeWeightEditor(item=null){
   },{extraAction:item?{label:'Удалить запись',handler:async()=>{if(!confirm('Удалить запись веса?'))return;state.life.weights=state.life.weights.filter(x=>x.id!==item.id);await commit();closeModal();}}:null});
 }
 function bindLife(){
-  $('#sectionSwitch').addEventListener('click',()=>{const menu=$('#sectionMenu');if(menu.hidden)openSectionMenu();else{menu.hidden=true;$('#sectionSwitch').setAttribute('aria-expanded','false');}});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#sectionMenu').hidden=true;$('#sectionSwitch').setAttribute('aria-expanded','false');}});
+  const content=$('#lifeContent');
+  content.addEventListener('submit',async event=>{
+    if(!event.target.matches('.plan-entry'))return;
+    event.preventDefault();
+    const input=event.target.elements.title,title=input.value.trim();
+    if(!title){input.focus();return;}
+    input.value='';
+    lifeData().plans.push({id:uid(),title,done:false});
+    await commit();
+    content.querySelector('.plan-entry input')?.focus();
+  });
+  content.addEventListener('change',async event=>{
+    const input=event.target.closest('[data-plan-check]');
+    if(!input)return;
+    const plan=lifeData().plans.find(item=>item.id===input.dataset.planCheck);
+    if(plan){plan.done=input.checked;await commit();}
+  });
   document.addEventListener('click',e=>{
-    if(!e.target.closest('.section-selector')){$('#sectionMenu').hidden=true;$('#sectionSwitch').setAttribute('aria-expanded','false');}
     const find=key=>e.target.closest('['+key+']');
     if(find('data-life-section')){switchLife(find('data-life-section').dataset.lifeSection);return;}
     if(activeScreen!=='life')return;
@@ -1928,7 +2025,7 @@ async function sectionRemove(id){
 function renderSectionSettings(){
   const root=$('#settingsAppSections');if(!root)return;
   const hidden=sectionCatalog().filter(s=>(state.settings.hiddenAppSections||[]).includes(s.id)&&s.id!=='home');
-  root.innerHTML=`<button class="settings-row" data-section-new><span><b>Добавить раздел из шаблона</b><small>Блокноты, списки, календарь, рецепты и другие</small></span>${icon('plus',22)}</button><p class="section-menu-hint">Перетаскивай за ⠿ для изменения порядка. Карандаш — название и настройки раздела.</p><div class="settings-section-order">${visibleSections().map(s=>`<article class="settings-row" data-order-section="${s.id}"><span><b>${esc(s.title)}</b><small>${s.builtin?'Основной раздел':`${s.blocks.filter(b=>!b.hidden).length} блоков`}</small></span><span class="settings-actions"><button type="button" class="section-drag-handle" data-section-drag="${s.id}" aria-label="Перетащить ${esc(s.title)}; стрелки вверх и вниз меняют порядок">⠿</button><button class="mini-icon" data-section-config="${s.id}" aria-label="Настроить ${esc(s.title)}">${icon('edit',18)}</button>${s.id!=='home'?`<button class="mini-icon" data-section-remove="${s.id}" aria-label="Убрать раздел">${icon('close',18)}</button>`:''}</span></article>`).join('')}</div>${hidden.length?'<h3>Скрыты</h3>':''}${hidden.map(s=>`<button class="settings-row" data-section-restore="${s.id}"><span><b>${esc(s.title)}</b><small>Вернуть вместе с записями</small></span>${icon('plus',18)}</button>`).join('')}`;
+  root.innerHTML=`<button class="settings-row" data-section-new><span><b>Добавить раздел из шаблона</b><small>Блокноты, списки, календарь, рецепты и другие</small></span>${icon('plus',22)}</button><p class="section-menu-hint">Удерживай раздел, чтобы изменить порядок.</p><div class="settings-section-order">${visibleSections().map(s=>`<article class="settings-row" data-order-section="${s.id}"><span><b>${esc(s.title)}</b><small>${s.builtin?'Основной раздел':`${s.blocks.filter(b=>!b.hidden).length} блоков`}</small></span><span class="settings-actions"><button type="button" class="section-drag-handle" data-section-drag="${s.id}" aria-label="Перетащить ${esc(s.title)}; стрелки вверх и вниз меняют порядок">⠿</button><button class="mini-icon" data-section-config="${s.id}" aria-label="Настроить ${esc(s.title)}">${icon('edit',18)}</button>${s.id!=='home'?`<button class="mini-icon" data-section-remove="${s.id}" aria-label="Убрать раздел">${icon('close',18)}</button>`:''}</span></article>`).join('')}</div>${hidden.length?'<h3>Скрыты</h3>':''}${hidden.map(s=>`<button class="settings-row" data-section-restore="${s.id}"><span><b>${esc(s.title)}</b><small>Вернуть вместе с записями</small></span>${icon('plus',18)}</button>`).join('')}`;
 }
 function sectionTemplatePicker(){
   openModal('Новый раздел',[],()=>{}, {submitLabel:'Закрыть'});
@@ -1962,10 +2059,10 @@ function renderSectionMenu(){
   const items=visibleSections();
   menu.innerHTML=`<div class="section-wheel" tabindex="0" aria-label="Разделы: прокручивай влево или вправо и нажми название"><div class="section-wheel-spacer"></div>${Array.from({length:items.length===1?1:5},(_,copy)=>items.map((s,index)=>`<button type="button" class="section-wheel-option ${s.id===lifeSection?'wheel-selected':''}" data-life-section="${s.id}" data-wheel-index="${copy*items.length+index}" ${items.length>1&&copy!==2?'tabindex="-1" aria-hidden="true"':''}>${esc(s.title)}</button>`).join('')).join('')}<div class="section-wheel-spacer"></div></div>`;
   const wheel=menu.querySelector('.section-wheel'),count=items.length;
-  const index=Math.max(0,items.findIndex(s=>s.id===lifeSection));wheel.scrollLeft=(count===1?0:count*2+index)*160;
+  const index=Math.max(0,items.findIndex(s=>s.id===lifeSection));wheel.scrollLeft=(count===1?0:count*2+index)*116;
   let previous=count===1?0:count*2+index,recenterTimer;
   const update=()=>{
-    const position=wheel.scrollLeft/160,nearest=Math.round(position);
+    const position=wheel.scrollLeft/116,nearest=Math.round(position);
     if(nearest!==previous){previous=nearest;}
     for(const button of wheel.querySelectorAll('[data-wheel-index]')){
       const distance=Math.abs(Number(button.dataset.wheelIndex)-position);
@@ -1976,8 +2073,8 @@ function renderSectionMenu(){
     }
     clearTimeout(recenterTimer);recenterTimer=setTimeout(()=>{
       if(!wheel.isConnected)return;
-      const cycle=count*160;
-      if(count>1&&(wheel.scrollLeft<cycle||wheel.scrollLeft>=cycle*4)){const next=cycle*2+((wheel.scrollLeft%cycle)+cycle)%cycle;previous=Math.round(next/160);wheel.scrollLeft=next;}
+      const cycle=count*116;
+      if(count>1&&(wheel.scrollLeft<cycle||wheel.scrollLeft>=cycle*4)){const next=cycle*2+((wheel.scrollLeft%cycle)+cycle)%cycle;previous=Math.round(next/116);wheel.scrollLeft=next;}
     },120);
   };
   wheel.addEventListener('scroll',update,{passive:true});
@@ -1986,12 +2083,9 @@ function renderSectionMenu(){
   },{passive:false});
   update();
   wheel.addEventListener('keydown',e=>{
-    if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();wheel.scrollBy({left:e.key==='ArrowRight'?160:-160,behavior:'smooth'});}
-    if(e.key==='Enter'&&e.target===wheel){e.preventDefault();switchLife(items[((Math.round(wheel.scrollLeft/160)%count)+count)%count].id);}
+    if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();wheel.scrollBy({left:e.key==='ArrowRight'?116:-116,behavior:'smooth'});}
+    if(e.key==='Enter'&&e.target===wheel){e.preventDefault();switchLife(items[((Math.round(wheel.scrollLeft/116)%count)+count)%count].id);}
   });
-}
-function openSectionMenu(){
-  $('#sectionMenu').hidden=false;$('#sectionSwitch').setAttribute('aria-expanded','true');renderSectionMenu();
 }
 function renderCustomSection(section){
   const block=lifeDetail&&section.blocks.find(b=>b.id===lifeDetail.block),book=block?.items.find(x=>x.id===lifeDetail.item);
@@ -2095,7 +2189,7 @@ async function init(){
   if(syncAllAutoClosedWeeks()||iconsCentered||migrated||monthlyBalancesMigrated)await saveState(state);
   selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;ensurePeriod(state,selectedPeriodKey);
   committedState=cloneState(state);
-  bindStaticEvents();bindDelegatedEvents();bindCategoryDragging();bindLife();bindDiary();bindSectionManager();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
+  bindStaticEvents();bindDelegatedEvents();bindOrderEditing();bindCategoryDragging();bindLife();bindDiary();bindSectionManager();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
   scheduleAutoWeekClose();
   registerServiceWorker();
   await maybeAskCarryover();

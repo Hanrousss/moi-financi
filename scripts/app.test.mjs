@@ -296,7 +296,7 @@ test('carryover starts next period, waits for other dialogs and remembers confir
 
 test('home displays remaining food and category budgets and month highlights spendable money with a budget breakdown',()=>{
   const a=app();
-  a.run(`globalThis.nodes=new Map();document={querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{textContent:'',innerHTML:'',style:{},classList:{toggle(){},remove(){}},querySelector(){return {dataset:{}};}});return nodes.get(selector);}};
+  a.run(`globalThis.nodes=new Map();document={querySelectorAll:()=>[],querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{textContent:'',innerHTML:'',style:{},classList:{toggle(){},remove(){}},querySelector(){return {dataset:{}};}});return nodes.get(selector);}};
     const p=currentPeriod();p.salary=1000;p.categoryBudgets.everyday={plan:100,spent:40};
     const w=p.foodWeeks[currentWeekIndex(p.key,new Date(),state.settings.salaryDay)];w.plan=100;w.spent=30;
     state.settings.dashboardCards=[dashboardCategoryKey('everyday')];renderHome();renderMonth();`);
@@ -411,7 +411,7 @@ test('deleted September payment stays deleted after rendering and reloading',asy
   const a=app();
   a.run(`selectedPeriodKey='2026-09';ensurePeriod(state,selectedPeriodKey);
     state.payments=[{id:'september',periodKey:'2026-09',planned:600,paid:0,note:''}];
-    globalThis.nodes=new Map();document={querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{textContent:'',innerHTML:'',style:{},classList:{toggle(){},remove(){}},querySelector(){return {dataset:{}};}});return nodes.get(selector);}};
+    globalThis.nodes=new Map();document={querySelectorAll:()=>[],querySelector:selector=>{if(!nodes.has(selector))nodes.set(selector,{textContent:'',innerHTML:'',style:{},classList:{toggle(){},remove(){}},querySelector(){return {dataset:{}};}});return nodes.get(selector);}};
     renderAll=()=>{renderHome();renderMonth();renderPayments();};
     paymentModal(state.payments[0]);`);
   await a.run('modal.options.extraAction.handler()');

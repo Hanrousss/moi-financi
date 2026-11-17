@@ -327,7 +327,7 @@ html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 80px)}
 /* Monthly journal printed as a receipt, using the selected color preset. */
 .month-receipt{position:relative;margin:0 0 30px;padding:22px 16px;background:color-mix(in srgb,var(--card) 91%,var(--surface-soft));color:var(--text);border-radius:8px 8px 0 0;box-shadow:0 7px 18px #0000000b;font-family:"Courier New",monospace}
 .month-receipt::after{content:"";position:absolute;inset:auto 0 -10px;height:11px;background:inherit;clip-path:polygon(0 0,100% 0,100% 0,98% 100%,96% 0,94% 100%,92% 0,90% 100%,88% 0,86% 100%,84% 0,82% 100%,80% 0,78% 100%,76% 0,74% 100%,72% 0,70% 100%,68% 0,66% 100%,64% 0,62% 100%,60% 0,58% 100%,56% 0,54% 100%,52% 0,50% 100%,48% 0,46% 100%,44% 0,42% 100%,40% 0,38% 100%,36% 0,34% 100%,32% 0,30% 100%,28% 0,26% 100%,24% 0,22% 100%,20% 0,18% 100%,16% 0,14% 100%,12% 0,10% 100%,8% 0,6% 100%,4% 0,2% 100%)}
-.receipt-title{text-align:center;font-family:Georgia,serif;font-size:32px;margin:0 0 12px}
+.receipt-title{text-align:center;font-family:var(--print-font);font-size:32px;margin:0 0 12px}
 #home .month-receipt #freeCard{background:transparent;color:var(--text);border:0;border-bottom:1px dashed var(--muted);border-radius:0;box-shadow:none;padding:8px 0 18px;min-height:0}
 #home .month-receipt #freeCard::before,#home .month-receipt #freeCard::after{display:none}
 .month-receipt #freeValue{font:700 36px "Courier New",monospace}
@@ -381,18 +381,18 @@ html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 80px)}
 html:has(#home.active),body:has(#home.active){background:color-mix(in srgb,var(--green-dark) 56%,var(--surface-soft))}
 body:has(#home.active) .app-shell{max-width:570px;padding-inline:14px}
 body:has(#home.active) .topbar{background:color-mix(in srgb,var(--green-dark) 56%,var(--surface-soft));border-color:transparent;border-radius:0;color:var(--on-dark)}
-body:has(#home.active) #sectionSwitch{color:var(--on-dark);font-family:Georgia,serif;font-size:29px}
+body:has(#home.active) #sectionSwitch{color:var(--on-dark);font-family:var(--print-font);font-size:29px}
 body:has(#home.active) .month-switcher{color:var(--on-dark);margin:18px 0 22px}
-body:has(#home.active) .month-switcher strong{font:700 24px Georgia,serif}
+body:has(#home.active) .month-switcher strong{font:700 24px var(--print-font)}
 body:has(#home.active) .month-switcher small{color:var(--on-dark);opacity:.85;font-size:13px}
-.month-receipt{background:color-mix(in srgb,var(--card) 45%,var(--orange-soft));padding:20px 14px 16px;box-shadow:0 10px 18px #00000015;font-family:Georgia,serif}
+.month-receipt{background:color-mix(in srgb,var(--card) 45%,var(--orange-soft));padding:20px 14px 16px;box-shadow:0 10px 18px #00000015;font-family:var(--print-font)}
 .receipt-title{font-size:40px;font-weight:700;line-height:1.05;margin:0 0 8px;letter-spacing:-1.5px}
 #home .month-receipt #freeCard{display:flex;flex-direction:column;align-items:center;padding:0 0 17px;gap:5px;overflow:visible}
-.month-receipt .hero-card-head{display:block;margin:0;font:16px Georgia,serif;color:var(--text)}
+.month-receipt .hero-card-head{display:block;margin:0;font:16px var(--print-font);color:var(--text)}
 .month-receipt .hero-card-actions{position:absolute;right:0;top:-8px;display:flex;gap:2px}
 .month-receipt .hero-card-actions .mini-icon{width:25px;height:25px;background:transparent}
 .month-receipt .hero-card-actions .undo-action-button{display:none}
-#home .month-receipt #freeValue{background:color-mix(in srgb,var(--green) 25%,var(--surface-soft));border-radius:40px;padding:0 18px;font:700 42px Georgia,serif;line-height:1.3;margin:0;color:var(--text)}
+#home .month-receipt #freeValue{background:color-mix(in srgb,var(--green) 25%,var(--surface-soft));border-radius:40px;padding:0 18px;font:700 42px var(--print-font);line-height:1.3;margin:0;color:var(--text)}
 #home .month-receipt .hero-caption{display:none}
 #home .month-receipt .hero-orbit{position:absolute;left:0;right:auto;top:-9px;width:28px;height:28px;background:transparent;color:var(--muted);font-size:0}
 #home .month-receipt .hero-orbit::after{content:'⚙';font-size:19px}
@@ -400,10 +400,10 @@ body:has(#home.active) .month-switcher small{color:var(--on-dark);opacity:.85;fo
 #home .month-receipt .categories-heading{justify-content:flex-end;height:22px;margin:6px 0 -22px;position:relative;z-index:1}
 .month-receipt .categories-heading h2{display:none}
 #home .month-receipt #addCategoryBtn{width:24px;height:24px;background:transparent;margin:0;color:var(--text);transform:translateY(-2px)}
-.receipt-columns{grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,1fr));padding:10px 0 9px;font:700 12px Georgia,serif;color:var(--text);border-bottom:1px solid var(--muted);margin-top:12px}
+.receipt-columns{grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,1fr));padding:10px 0 9px;font:700 12px var(--print-font);color:var(--text);border-bottom:1px solid var(--muted);margin-top:12px}
 .receipt-row{grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,1fr));padding:9px 0;min-height:44px}
 .receipt-name{font-size:15px;gap:3px;flex-wrap:nowrap}
-.receipt-number{font:17px Georgia,serif}
+.receipt-number{font:17px var(--print-font)}
 .receipt-item{border-color:color-mix(in srgb,var(--text) 18%,transparent)}
 .receipt-name .envelope-pin svg{width:12px;height:12px}
 .receipt-category[open]{background:transparent}
@@ -411,14 +411,14 @@ body:has(#home.active) .month-switcher small{color:var(--on-dark);opacity:.85;fo
 .receipt-content .checkpoint-list{border:0;margin:0;padding:0}
 .receipt-content .checkpoint-list>summary{display:none}
 .receipt-content .checkpoint-row{grid-template-columns:20px minmax(0,1fr) 78px;gap:6px;padding:3px 0;min-height:34px}
-.receipt-content .checkpoint-title{font:15px Georgia,serif}
+.receipt-content .checkpoint-title{font:15px var(--print-font)}
 .receipt-content .checkpoint-row .inline-money-input{padding:0;border:0;border-radius:0;background:transparent;gap:3px}
-.receipt-content .checkpoint-row .number-field{background:transparent;border:0;padding:0;min-height:28px;height:28px;font:15px Georgia,serif;text-align:right}
+.receipt-content .checkpoint-row .number-field{background:transparent;border:0;padding:0;min-height:28px;height:28px;font:15px var(--print-font);text-align:right}
 .receipt-content .checkpoint-row .inline-money-input>span{font-size:11px}
-.receipt-content [data-check-add]{font:14px Georgia,serif;color:var(--green-dark);padding:5px 0}
+.receipt-content [data-check-add]{font:14px var(--print-font);color:var(--green-dark);padding:5px 0}
 .receipt-content input[type=checkbox]{accent-color:var(--green-dark);width:17px;height:17px}
 .receipt-item>.category-drag-handle{left:-13px;top:11px;opacity:.45}
-.receipt-totals{font:14px Georgia,serif;padding-top:11px;margin-top:15px}
+.receipt-totals{font:14px var(--print-font);padding-top:11px;margin-top:15px}
 .receipt-totals>div{margin:7px 0}
 .receipt-totals .receipt-total-primary{font-weight:700;font-size:17px}
 .receipt-totals .receipt-total-divider{border-top:1px solid var(--muted);padding-top:11px;margin-top:12px}
@@ -449,7 +449,7 @@ body:has(#home.active) .month-switcher button{width:32px;height:32px}
 .month-receipt .hero-card-head{grid-column:1;grid-row:1;margin:0;font-size:14px;line-height:1.2}
 #home .month-receipt #freeValue{grid-column:2;grid-row:1;align-self:center;justify-self:end;font-size:25px;line-height:1.3;letter-spacing:-.7px;padding:1px 10px}
 .month-receipt .hero-card-actions{position:static;display:inline-flex;vertical-align:middle;margin-left:4px}
-#home .month-receipt .hero-orbit{position:static;grid-column:2;grid-row:2;justify-self:end;width:auto;height:22px;font:11px Georgia,serif;display:block}
+#home .month-receipt .hero-orbit{position:static;grid-column:2;grid-row:2;justify-self:end;width:auto;height:22px;font:11px var(--print-font);display:block}
 #home .month-receipt .hero-orbit::after{content:none}
 #home .month-receipt .categories-heading{height:20px;margin:3px 0 -20px}
 .receipt-columns{margin-top:7px}
@@ -483,14 +483,14 @@ body:has(#home.active) .topbar>div:not(.header-period){flex:1;min-width:0}
 body:has(#home.active) #sectionSwitch{font-size:23px}
 body:has(#home.active) .month-receipt .receipt-period{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:30px;margin:0 0 12px;padding:3px 5px;background:color-mix(in srgb,var(--green) 12%,var(--surface-soft));border-radius:7px;color:var(--text)}
 body:has(#home.active) .receipt-period>div{display:flex;align-items:baseline;justify-content:center;flex-wrap:wrap;gap:2px 7px;min-width:0}
-body:has(#home.active) .receipt-period strong{font:500 13px Georgia,serif;white-space:nowrap}
-body:has(#home.active) .receipt-period small{font:11px Georgia,serif;color:var(--muted);margin:0;white-space:nowrap}
+body:has(#home.active) .receipt-period strong{font:500 13px var(--print-font);white-space:nowrap}
+body:has(#home.active) .receipt-period small{font:11px var(--print-font);color:var(--muted);margin:0;white-space:nowrap}
 body:has(#home.active) .receipt-period button{width:22px;height:26px;flex:0 0 22px;color:var(--text)}
 body:has(#home.active) .receipt-period button svg{width:14px;height:14px;color:var(--text)}
 #home .month-receipt #freeCard{grid-template-columns:minmax(0,1fr) auto;padding-bottom:11px;gap:0}
 .month-receipt .hero-card-head{display:none}
-#home .month-receipt .hero-orbit{grid-row:1;grid-column:2;font:15px Georgia,serif;color:var(--muted);height:32px;padding:0 4px}
-.receipt-balance-input{grid-row:1;grid-column:1;justify-self:start;display:flex;align-items:baseline;gap:5px;max-width:100%;background:color-mix(in srgb,var(--green) 25%,var(--surface-soft));border-radius:12px;padding:1px 10px;font:700 27px Georgia,serif;line-height:1.3}
+#home .month-receipt .hero-orbit{grid-row:1;grid-column:2;font:15px var(--print-font);color:var(--muted);height:32px;padding:0 4px}
+.receipt-balance-input{grid-row:1;grid-column:1;justify-self:start;display:flex;align-items:baseline;gap:5px;max-width:100%;background:color-mix(in srgb,var(--green) 25%,var(--surface-soft));border-radius:12px;padding:1px 10px;font:700 27px var(--print-font);line-height:1.3}
 .receipt-balance-input input{border:0;border-radius:0;box-shadow:none;min-width:0;max-width:calc(100% - 2.5em);padding:0;background:transparent;color:var(--text);font:inherit;line-height:inherit}
 .receipt-balance-input input:focus{outline:none;box-shadow:0 1px 0 var(--green-dark)}
 .receipt-balance-input span{white-space:nowrap}
@@ -567,9 +567,27 @@ button .pixel-action{color:#292825}
 .plan-entry button{width:44px;height:44px}
 .plan-entry+.life-stack .life-check-row label{min-width:0;overflow-wrap:anywhere}
 
-body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-height:32px;flex:auto;padding:2px 8px;font:600 14px Georgia,serif;color:var(--text)}
+body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-height:32px;flex:auto;padding:2px 8px;font:600 14px var(--print-font);color:var(--text)}
 .period-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;text-align:center}
 .period-calendar button{min-height:38px;border:0;border-radius:10px;background:var(--surface-soft)}
 .period-calendar button[aria-pressed=true]{color:var(--on-dark);background:var(--dark)}
 .period-calendar small{padding-bottom:5px}
 .period-calendar-label{margin-top:0}
+
+:root{--print-font:ui-monospace,"SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace}
+.month-receipt{font-family:var(--print-font)}
+.receipt-columns,.receipt-row{grid-template-columns:minmax(0,2.55fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.17fr)}
+.receipt-name,.receipt-name b,.receipt-content .checkpoint-title{word-break:normal;overflow-wrap:break-word;hyphens:manual}
+.receipt-name b{min-width:0}
+.receipt-name{font-size:14px;line-height:1.35}
+.receipt-number{font-size:14px;font-variant-numeric:tabular-nums}
+.receipt-totals .receipt-total-primary{font-size:14px}
+.receipt-totals>div>span{min-width:0;text-wrap:pretty}
+.utility-envelope .receipt-name{font-size:12px}
+@media(max-width:374px){.receipt-name,.receipt-number{font-size:12px}.receipt-columns{font-size:10px}.receipt-totals .receipt-total-primary{font-size:12px}.utility-envelope .receipt-name{font-size:11px}}
+
+.receipt-name .paid-in-ink{
+ background-image:linear-gradient(178deg,transparent calc(50% - .8px),rgb(45 43 40 / .78) 50%,rgb(45 43 40 / .67) calc(50% + .65px),transparent calc(50% + 1.2px));
+ background-size:100% 1.35em;background-repeat:repeat-y;
+ -webkit-box-decoration-break:clone;box-decoration-break:clone;
+}

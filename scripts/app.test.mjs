@@ -591,7 +591,7 @@ test('food keeps weeks without checkpoints and weekly plans never fund its envel
  a.run('p.foodWeeks[0].spent=80;');
  assert.equal(a.value('envelopeSummary(p,c).remaining'),120);
  a.run('setEnvelopeAllocation(p,c,300);');
- assert.equal(a.value('p.foodWeeks[0].plan'),250);
+ assert.equal(a.value('p.foodWeeks[0].plan'),80);
  assert.equal(a.value('envelopeSummary(p,c).remaining'),220);
 });
 test('mandatory plans cannot silently increase manually allocated funds',()=>{
@@ -795,4 +795,26 @@ test('payment envelope shows manual funding separately from the schedule',()=>{
  assert.match(a.run('renderPaymentEnvelopeCard(p)'),/value="800"/);
  assert.equal(a.value('freeAfterPlans(p)'),1200);
  assert.equal(a.value('state.payments[0].planned'),1500);
+});
+
+
+test('food historical actuals stay in their own week and do not affect manual month funding',()=>{
+ const a=app();a.run("const p=currentPeriod();p.salary=1000;p.foodAllocated=800;p.foodAllocationEntered=true;const before=cloneState(p.foodWeeks.map(w=>w.spent));setFoodWeekSpent(p,0,100);setFoodWeekSpent(p,1,50);");
+ assert.equal(a.value('p.foodAllocated'),800);
+ assert.equal(a.value('freeAfterPlans(p)'),200);
+ assert.equal(a.value('p.foodWeeks[0].spent'),100);
+ assert.equal(a.value('p.foodWeeks[1].spent'),50);
+ assert.equal(a.value('foodBudget(p).plan'),800);
+ a.run('const tx=state.account.transactions.at(-1);deleteAccountOperation(tx.id);');
+ assert.equal(a.value('p.foodWeeks[1].spent'),0);
+ assert.equal(a.value('p.foodWeeks[0].spent'),100);
+ assert.equal(a.value('foodBudget(p).plan'),800);
+ assert.equal(a.value('freeAfterPlans(p)'),200);
+});
+test('mandatory editors read the same allocation as receipt and save it back',async()=>{
+ const a=app();a.run("const p=currentPeriod();p.envelopeAllocations={housing:700,reserve:120,payment:0};p.mandatory.housingPlan=1000;openMandatoryEditor('housing');");
+ assert.equal(a.value("modal.fields.find(f=>f.name==='plan').value"),700);
+ await a.run("modal.submit({name:'Квартира',plan:800,spent:50});");
+ assert.equal(a.value('p.envelopeAllocations.housing'),800);
+ assert.equal(a.value("mandatoryEnvelope(p,'housing',1000,50).remaining"),750);
 });

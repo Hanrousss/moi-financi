@@ -2,7 +2,7 @@ import {
   VERSION, MONTHS_RU, uid, roundMoney, parseMoney, formatByn, formatUsd,
   periodKeyForDate, shiftPeriodKey, periodTitle, formatPeriodRange,
   periodStart, periodEnd, currentWeekIndex, daysToNextSalary,
-  seedState, createPeriod, ensurePeriod, foodBudget, distributeFoodPlan, categoryBudget, periodIncome,
+  seedState, createPeriod, ensurePeriod, foodBudget, distributeFoodPlan, rebalanceFoodPlan, categoryBudget, periodIncome,
   periodPayment, savingsBalanceUsd, savingsBalanceByn, petBalanceByn, paymentsPaidTotal, periodPaymentsPaid,
   debtRemaining, liveFreeBalance, reconcileFreeBalance, savingsTransactionPeriodKey,
   accountBalanceAfterSpending, accountTransactionPeriodKey, addAccountTransaction, deleteAccountTransaction, migrateLegacyAccount, migrateMonthlyBalances, remainingPlannedOutflows,
@@ -14,7 +14,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.4.58';
+const APP_BUILD='1.4.59';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -210,6 +210,15 @@ function normalizeState(){
   const giftsCategory=state.categories?.find(c=>c.id==='gifts');
   if(giftsCategory)giftsCategory.kind='gift';
   const iconsMigrated=migrateUniversalIcons();
+  let manualFoodMigrated=false;
+  for(const period of Object.values(state.periods)){
+    if(period.foodManualWeeksVersion!==1){
+      for(const week of period.foodWeeks)week.closed=!!week.manualClosed;
+      period.foodManualWeeksVersion=1;
+      if(period.key===periodKeyForDate(new Date(),state.settings.salaryDay)&&period.foodAllocated!=null)rebalanceFoodPlan(period);
+      manualFoodMigrated=true;
+    }
+  }
   const petStandardized=standardizePetEnvelope();
   let resetPlansRepaired=false;
   for(const p of Object.values(state.periods)){
@@ -220,7 +229,7 @@ function normalizeState(){
       p.resetPlansRepaired=true;resetPlansRepaired=true;
     }
   }
-  return reconcileCheckpointBudgets()||monthlyBalancesMigrated||savingsPeriodsPinned||iconsMigrated||resetPlansRepaired||petStandardized;
+  return reconcileCheckpointBudgets()||monthlyBalancesMigrated||savingsPeriodsPinned||iconsMigrated||resetPlansRepaired||petStandardized||manualFoodMigrated;
 }
 
 async function centerStoredIconImages(){
@@ -246,7 +255,6 @@ let selectedPeriodKey=periodKeyForDate(new Date(),5);
 let foodPeriodKey=selectedPeriodKey;
 let purchaseTab='required';
 let saveQueue=Promise.resolve();
-let autoCloseTimer=null;
 let committedState=null;
 let undoState=null;
 let undoing=false;
@@ -257,29 +265,17 @@ function currentPeriod(){const p=ensurePeriod(state,periodKeyForDate(new Date(),
 function selectedPeriod(){const p=ensurePeriod(state,selectedPeriodKey);syncPeriodAutoClosedWeeks(p);return p;}
 function categoryById(id){return state.categories.find(c=>c.id===id);}
 function periodSavingsDeposited(key){return roundMoney(state.savings.filter(t=>t.type==='deposit'&&savingsTransactionPeriodKey(state,t)===key).reduce((s,t)=>s+num(t.amountUsd),0));}
-function foodWeekAutoClosed(week,now=new Date()){
-  const [y,m,d]=String(week.end).split('-').map(Number);
-  return Number.isFinite(y)&&now>=new Date(y,m-1,d+1);
-}
-function syncPeriodAutoClosedWeeks(period,now=new Date()){
-  let changed=false;
-  for(const week of period?.foodWeeks||[]){
-    const closed=foodWeekAutoClosed(week,now);
-    if(week.closed!==closed){week.closed=closed;changed=true;}
-  }
-  return changed;
-}
-function syncAllAutoClosedWeeks(){
-  return Object.keys(state.periods||{}).reduce((changed,key)=>{
-    const previousLayoutVersion=state.periods[key]?.foodPlanLayoutVersion;
-    const period=ensurePeriod(state,key);
-    return syncPeriodAutoClosedWeeks(period)||previousLayoutVersion!==period.foodPlanLayoutVersion||changed;
-  },false);
-}
-function scheduleAutoWeekClose(){
-  clearTimeout(autoCloseTimer);
-  const now=new Date(), nextMidnight=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,1);
-  autoCloseTimer=setTimeout(async()=>{if(syncAllAutoClosedWeeks())await commit(true,{undoable:false});else renderAll();await maybeAskCarryover();scheduleAutoWeekClose();},Math.max(1000,nextMidnight-now));
+function syncPeriodAutoClosedWeeks(){return false;}
+function syncAllAutoClosedWeeks(){return false;}
+function setFoodWeekSpent(period,index,amount){
+  const week=period.foodWeeks[index],value=parseMoney(amount);
+  if(!week||!Number.isFinite(value)||value<0)throw new Error('Некорректная сумма недели');
+  const difference=roundMoney(value-num(week.spent));
+  if(!difference)return;
+  week.spent=value;
+  const transaction=recordAccountDelta(-difference,{type:'expense',date:week.start,periodKey:period.key,categoryId:'food',note:`Еда · неделя ${index+1}`});
+  if(transaction)transaction.foodChanges=[{weekId:week.id,start:week.start,deltaSpent:difference}];
+  rebalanceFoodPlan(period);
 }
 function categoryAvailable(period,category){const b=categoryBudget(period,category);return roundMoney(num(b.plan)-num(b.spent));}
 function accountPeriodKey(date=todayISO()){return periodKeyForDate(new Date(`${date}T12:00:00`),state.settings.salaryDay);}
@@ -309,6 +305,7 @@ function setCategorySpent(period,category,targetSpent){
     period.categoryBudgets[category.id]=period.categoryBudgets[category.id]||{plan:0,spent:0};
     period.categoryBudgets[category.id].spent=target;
   }
+  if(category.kind==='food')rebalanceFoodPlan(period);
   const transaction=recordAccountDelta(-difference,{type:'expense',date,periodKey:period.key,categoryId:category.id,note:`Корректировка расходов · ${category.name}`});
   if(transaction&&foodBefore)transaction.foodChanges=period.foodWeeks.map((week,index)=>({weekId:week.id,start:week.start,deltaSpent:roundMoney(num(week.spent)-foodBefore[index])})).filter(change=>change.deltaSpent!==0);
   return transaction;
@@ -345,6 +342,7 @@ function rollbackAccountCategory(transaction){
   if(changes.some(change=>change.value<0)){toast('Сначала удали более позднюю корректировку расходов этой категории или платежа.');return false;}
   if(changes.some(change=>change.key==='spent'&&Array.isArray(change.target.checkpoints)&&change.value<checkpointTotal(change.target.checkpoints,true))){toast('Оплата связана со списком трат. Сначала сними галочку у соответствующей траты в конверте.');return false;}
   for(const change of changes)change.target[change.key]=change.value;
+  if(categoryById(transaction.categoryId)?.kind==='food')rebalanceFoodPlan(period);
   return true;
 }
 function deleteAccountOperation(id){
@@ -548,8 +546,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme='receipt';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.58');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.58');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.59');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.59');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -905,7 +903,7 @@ function envelopeSummary(period,category){
   return {allocated:num(b.plan),planned,spent,remaining:roundMoney(num(b.plan)-spent)};
 }
 function setEnvelopeAllocation(period,category,amount){
-  if(category.kind==='food')period.foodAllocated=amount;
+  if(category.kind==='food'){period.foodAllocated=amount;period.foodAllocationEntered=true;rebalanceFoodPlan(period);}
   else if(category.kind==='gift'){const b=period.categoryBudgets[category.id]??={plan:0,spent:0};b.envelopeAllocated=amount;b.plan=amount;}
   else (period.categoryBudgets[category.id]??={plan:0,spent:0}).plan=amount;
 }
@@ -961,7 +959,7 @@ function renderCategorySummary(category,period){
 }
 function renderCategoryCard(category,period){
   const e=envelopeSummary(period,category);
-  return `<article class="category-card">${category.id==='pet'?`<div class="pet-envelope-avatar">${petAvatar()}</div>`:''}<div class="category-budget-fields"><div class="category-budget-field"><span>Потратить в этом месяце</span><label class="inline-money-input"><input class="number-field compact" data-category-plan="${esc(category.id)}" ${moneyInputAttributes(0)} value="${e.allocated||''}" placeholder="${e.planned||'0'}" aria-label="Потратить в этом месяце"><span>BYN</span></label></div></div><div class="category-remaining"><span>Осталось</span><strong class="${e.remaining<0?'negative-number':''}">${formatByn(e.remaining)}</strong></div><div class="category-remaining"><span>Потрачено</span><strong>${formatByn(e.spent)}</strong></div>${checkpointList(period,category)}</article>`;
+  return `<article class="category-card">${category.id==='pet'?`<div class="pet-envelope-avatar">${petAvatar()}</div>`:''}<div class="category-budget-fields"><div class="category-budget-field"><span>Потратить в этом месяце</span><label class="inline-money-input"><input class="number-field compact" data-category-plan="${esc(category.id)}" data-envelope-period="${esc(period.key)}" ${moneyInputAttributes(0)} value="${e.allocated||''}" placeholder="${e.planned||'0'}" aria-label="Потратить в этом месяце"><span>BYN</span></label></div></div><div class="category-remaining"><span>Осталось</span><strong class="${e.remaining<0?'negative-number':''}">${formatByn(e.remaining)}</strong></div><div class="category-remaining"><span>Потрачено</span><strong>${formatByn(e.spent)}</strong></div>${checkpointList(period,category)}</article>`;
 }
 function renderMonth(){
   const opened=[...document.querySelectorAll('[data-receipt-category][open]')].map(el=>el.dataset.receiptCategory);
@@ -993,16 +991,15 @@ function renderFood(){
   const p=ensurePeriod(state,foodPeriodKey), total=foodBudget(p);
   syncPeriodAutoClosedWeeks(p);
   const currentKey=periodKeyForDate(new Date(),state.settings.salaryDay), currentIndex=currentWeekIndex(p.key,new Date(),state.settings.salaryDay);
-  const totalAvailable=roundMoney(num(total.plan)-num(total.spent));
   $('#foodMonthTitle').textContent=periodTitle(p.key);$('#foodMonthRange').textContent=formatPeriodRange(p.key,state.settings.salaryDay);
-  const planInput=`<label class="inline-money-input"><input class="number-field compact" ${moneyInputAttributes(0)} data-food-total-plan value="${num(total.plan)}" aria-label="Общий план на еду"><span>BYN</span></label>`;
-  $('#foodTotal').innerHTML=`<div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на месяц</small></span>${planInput}</div><div class="food-spend-summary"><span>Потрачено <b>${formatByn(total.spent)}</b></span><span>Осталось <b class="${totalAvailable<0?'negative-number':''}">${formatByn(totalAvailable)}</b></span></div>`;
+  const category=state.categories.find(c=>c.kind==='food');
+  $('#foodTotal').innerHTML=renderCategoryCard(category,p);
   $('#foodTotal').classList.remove('card-negative','card-warning');
   $('#foodWeeks').innerHTML=p.foodWeeks.map((w,index)=>{
-    const available=roundMoney(num(w.plan)-num(w.spent)), isCurrent=p.key===currentKey&&index===currentIndex;
+    const available=roundMoney(num(w.plan)-num(w.spent)), isPast=w.end<todayISO()||w.closed, isCurrent=p.key===currentKey&&index===currentIndex;
     const weekInput=`<span class="inline-money-input"><input class="number-field compact" ${moneyInputAttributes(0)} data-week-plan="${index}" value="${num(w.plan)}" aria-label="Сумма на неделю ${index+1}"><span>BYN</span></span>`;
-    return `<article class="food-week ${isCurrent?'current-week':''}"><header><div><b>Неделя ${index+1}${isCurrent?'<span class="current-week-badge">Сейчас</span>':''}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}${w.partial?' · неполная неделя':''}</small></div><label class="check-label"><input type="checkbox" ${w.closed?'checked':''} disabled><span>${w.closed?'Закрыта':'Закроется автоматически'}</span></label></header><div class="single-budget-field"><span class="single-budget-label"><b>Сумма</b><small>на неделю</small></span>${weekInput}</div><div class="food-spend-summary"><span>Потрачено <b>${formatByn(w.spent)}</b></span><span>Осталось <b class="${available<0?'negative-number':''}">${formatByn(available)}</b></span></div></article>`;
-  }).join('');
+    return `<article class="food-week ${isCurrent?'current-week':''}"><header><div><b>Неделя ${index+1}${isCurrent?'<span class="current-week-badge">Сейчас</span>':''}</b><small>${shortDate(w.start)} — ${shortDate(w.end)}${w.partial?' · неполная неделя':''}</small></div><label class="check-label"><input type="checkbox" ${w.closed?'checked':''} data-week-closed="${index}"><span>${w.closed?'Закрыта':'Закрыть неделю'}</span></label></header>${!isPast?`<div class="single-budget-field"><span class="single-budget-label"><b>План</b><small>на неделю</small></span>${weekInput}</div>`:''}<div class="single-budget-field"><span class="single-budget-label"><b>Потрачено</b></span><label class="inline-money-input"><input class="number-field compact" ${moneyInputAttributes(0)} data-week-spent="${index}" value="${num(w.spent)}" aria-label="Потрачено за неделю ${index+1}"><span>BYN</span></label></div><div class="food-spend-summary"><span>Осталось <b class="${available<0?'negative-number':''}">${formatByn(available)}</b></span></div></article>`;
+  }).join('')+`<div class="food-plan-total">По неделям: ${formatByn(foodBudget(p).plan)} / ${formatByn(envelopeSummary(p,category).allocated)}</div>`;
 }
 
 function renderSavings(){
@@ -1022,7 +1019,9 @@ function renderPet(){
 }
 
 function renderGifts(){
-  const balance=giftBalanceByn(), open=envelopePlanItems(categoryLayer?.category?.kind==='gift'?selectedPeriod():currentPeriod(),'gift').filter(g=>!g.completed);
+  const period=selectedPeriod(),category=state.categories.find(c=>c.kind==='gift');
+  const balance=category?envelopeSummary(period,category).remaining:0,open=envelopePlanItems(period,'gift').filter(g=>!g.completed);
+  $('#giftEnvelopeContent').innerHTML=category?renderCategoryCard(category,period):'';
   $('#giftBalance').textContent=formatByn(balance);
   $('#giftSummary').textContent=open.length?`Запланировано ${open.length} · нужно ${formatByn(open.reduce((s,g)=>s+num(g.costByn),0))}`:'Планов подарков пока нет';
   $('#giftPlans').innerHTML=open.length?[...open].sort((a,b)=>giftPinnedRank(a)-giftPinnedRank(b)||a.name.localeCompare(b.name)).map(g=>{
@@ -1070,7 +1069,7 @@ function renderPayments(){
 
 function renderSettings(){
   $('#editAppearanceBtn').hidden=true;
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.58')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.59')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1193,9 +1192,9 @@ function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0
   {name:'salary',label:'Зарплата, BYN',type:'money',value:p.salary},
   {name:'extra',label:'Дополнительный доход, BYN',type:'money',value:p.extraIncome},
   {name:'cash',label:'Отдельно отложено / наличные, BYN',type:'money',value:p.cashNow},
-  {name:'housingPlan',label:`${mandatoryLabel('housing')} — план, BYN`,type:'money',value:p.mandatory.housingPlan},
+  {name:'housingPlan',label:`${mandatoryLabel('housing')} — план, BYN`,type:'money',value:p.envelopeAllocations?.housing??p.mandatory.housingPlan},
   {name:'housingSpent',label:`${mandatoryLabel('housing')} — оплачено, BYN`,type:'money',value:p.mandatory.housingSpent},
-  {name:'reservePlan',label:`${mandatoryLabel('reserve')} — план, BYN`,type:'money',value:p.mandatory.reservePlan},
+  {name:'reservePlan',label:`${mandatoryLabel('reserve')} — план, BYN`,type:'money',value:p.envelopeAllocations?.reserve??p.mandatory.reservePlan},
   {name:'reserveAllocated',label:`${mandatoryLabel('reserve')} — уже отложено, BYN`,type:'money',value:p.mandatory.reserveAllocated},
   {name:'savingsUsd',label:`${sectionLabel('savings')} — план, $`,type:'money',value:p.mandatory.savingsPlanUsd},
   {name:'savingsByn',label:`${sectionLabel('savings')} — план, BYN`,type:'money',value:p.mandatory.savingsPlanByn??0,help:'Из свободного остатка резервируется только план в BYN. USD — отдельная цель.'},
@@ -1204,7 +1203,7 @@ function openPeriodEditor(){const p=selectedPeriod(), utility=p.passThroughs?.[0
   {name:'note',label:'Комментарий',type:'textarea',value:p.note}
 ],async v=>{
   const oldSalary=num(p.salary),oldExtraIncome=num(p.extraIncome),oldIncome=periodIncome(p), oldHousing=num(p.mandatory.housingSpent), oldReserve=num(p.mandatory.reserveAllocated);
-  p.salary=num(v.salary);p.extraIncome=num(v.extra);p.cashNow=num(v.cash);p.mandatory.housingPlan=num(v.housingPlan);p.mandatory.housingSpent=num(v.housingSpent);p.mandatory.reservePlan=num(v.reservePlan);p.mandatory.reserveAllocated=num(v.reserveAllocated);p.mandatory.savingsPlanUsd=num(v.savingsUsd);p.mandatory.savingsPlanByn=num(v.savingsByn);p.passThroughs=[{...(p.passThroughs?.[0]||{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25}),amount:num(v.utilities),paid:v.utilitiesPaid,note:'Аванс приходит и сразу уходит'}];p.note=v.note;
+  p.salary=num(v.salary);p.extraIncome=num(v.extra);p.cashNow=num(v.cash);p.mandatory.housingPlan=num(v.housingPlan);(p.envelopeAllocations??={}).housing=num(v.housingPlan);p.mandatory.housingSpent=num(v.housingSpent);p.mandatory.reservePlan=num(v.reservePlan);(p.envelopeAllocations??={}).reserve=num(v.reservePlan);p.mandatory.reserveAllocated=num(v.reserveAllocated);p.mandatory.savingsPlanUsd=num(v.savingsUsd);p.mandatory.savingsPlanByn=num(v.savingsByn);p.passThroughs=[{...(p.passThroughs?.[0]||{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25}),amount:num(v.utilities),paid:v.utilitiesPaid,note:'Аванс приходит и сразу уходит'}];p.note=v.note;
   const operationDate=toISODate(periodStart(p.key,state.settings.salaryDay));
   const incomeTransaction=recordAccountDelta(periodIncome(p)-oldIncome,{type:'income',date:operationDate,periodKey:p.key,note:`Доход · ${periodTitle(p.key)}`,linkedId:`income:${p.key}`});
   if(incomeTransaction){incomeTransaction.previousSalary=oldSalary;incomeTransaction.previousExtraIncome=oldExtraIncome;incomeTransaction.salaryDelta=roundMoney(p.salary-oldSalary);incomeTransaction.extraIncomeDelta=roundMoney(p.extraIncome-oldExtraIncome);}
@@ -1271,13 +1270,14 @@ function quickExpenseModal(categoryId=null){
       period.categoryBudgets[category.id].spent=roundMoney(num(period.categoryBudgets[category.id].spent)+amount);
     }
     const transaction=recordAccountDelta(-amount,{type:'expense',date:todayISO(),periodKey:period.key,categoryId:category.id,note:category.name});
+    if(category.kind==='food')rebalanceFoodPlan(period);
     if(category.kind==='food'&&transaction){const week=period.foodWeeks[currentWeekIndex(period.key,new Date(),state.settings.salaryDay)]||period.foodWeeks[0];transaction.foodChanges=[{weekId:week.id,start:week.start,deltaSpent:amount}];}
     await commit();
     closeModal();
     toast(`${formatByn(amount)} · ${category.name}`);
   },{submitLabel:'Учесть расход'});
 }
-function openMandatoryEditor(kind){const p=selectedPeriod();if(kind==='payment'&&state.payments.filter(item=>item.periodKey===p.key).length>1){showPeriodLayer(p,{panel:'payments'});return;}const pay=state.payments.find(item=>item.periodKey===p.key)||{id:uid(),periodKey:p.key,title:'',planned:0,paid:0,note:''};const config={housing:{title:mandatoryLabel('housing'),plan:p.mandatory.housingPlan,spent:p.mandatory.housingSpent},payment:{title:sectionLabel('payments'),plan:pay.planned,spent:pay.paid},reserve:{title:mandatoryLabel('reserve'),plan:p.mandatory.reservePlan,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'name',label:'Название',value:config.title},{name:'plan',label:'План, BYN',type:'money',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'money',value:config.spent}],async v=>{const oldSpent=num(config.spent);if(kind==='payment')setSectionLabel('payments',v.name);else setMandatoryLabel(kind,v.name);if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){if(!state.payments.includes(pay))state.payments.push(pay);pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}const newSpent=kind==='housing'?num(p.mandatory.housingSpent):kind==='payment'?num(pay.paid):num(p.mandatory.reserveAllocated);recordAccountDelta(-(newSpent-oldSpent),{type:kind==='reserve'?'transfer_out':'expense',date:todayISO(),periodKey:p.key,categoryId:`mandatory:${kind}`,linkedId:kind==='payment'?`payment:${pay.id}`:'',note:v.name.trim()||config.title});await commit();closeModal();});}
+function openMandatoryEditor(kind){const p=selectedPeriod();if(kind==='payment'&&state.payments.filter(item=>item.periodKey===p.key).length>1){showPeriodLayer(p,{panel:'payments'});return;}const pay=state.payments.find(item=>item.periodKey===p.key)||{id:uid(),periodKey:p.key,title:'',planned:0,paid:0,note:''};const config={housing:{title:mandatoryLabel('housing'),plan:mandatoryEnvelope(p,'housing',num(p.mandatory.housingPlan),num(p.mandatory.housingSpent)).allocated,spent:p.mandatory.housingSpent},payment:{title:sectionLabel('payments'),plan:pay.planned,spent:pay.paid},reserve:{title:mandatoryLabel('reserve'),plan:mandatoryEnvelope(p,'reserve',num(p.mandatory.reservePlan),num(p.mandatory.reserveAllocated)).allocated,spent:p.mandatory.reserveAllocated}}[kind];openModal(config.title,[{name:'name',label:'Название',value:config.title},{name:'plan',label:'Потратить в этом месяце, BYN',type:'money',value:config.plan},{name:'spent',label:'Потрачено / отложено, BYN',type:'money',value:config.spent}],async v=>{const oldSpent=num(config.spent);if(kind!=='payment')(p.envelopeAllocations??={})[kind]=num(v.plan);if(kind==='payment')setSectionLabel('payments',v.name);else setMandatoryLabel(kind,v.name);if(kind==='housing'){p.mandatory.housingPlan=num(v.plan);p.mandatory.housingSpent=num(v.spent)}else if(kind==='payment'){if(!state.payments.includes(pay))state.payments.push(pay);pay.planned=num(v.plan);pay.paid=num(v.spent)}else{p.mandatory.reservePlan=num(v.plan);p.mandatory.reserveAllocated=num(v.spent)}const newSpent=kind==='housing'?num(p.mandatory.housingSpent):kind==='payment'?num(pay.paid):num(p.mandatory.reserveAllocated);recordAccountDelta(-(newSpent-oldSpent),{type:kind==='reserve'?'transfer_out':'expense',date:todayISO(),periodKey:p.key,categoryId:`mandatory:${kind}`,linkedId:kind==='payment'?`payment:${pay.id}`:'',note:v.name.trim()||config.title});await commit();closeModal();});}
 
 const iconOptions=['wallet','home','calendar','piggy','paw','bag','money','utensils','dumbbell','sparkles','heart','shirt','gift','ticket','palette','shield'].map(i=>({label:i,value:i}));
 const colorOptions=[
@@ -1450,7 +1450,8 @@ function completePurchaseModal(item){
         period.categoryBudgets[category.id].spent=roundMoney(num(period.categoryBudgets[category.id].spent)+amount);
       }
       const transaction=recordAccountDelta(-amount,{type:'expense',date,periodKey:period.key,categoryId:category.id,note:`Покупка: ${item.name}`,linkedId:`purchase:${item.id}`});
-      if(category.kind==='food'&&transaction){const week=period.foodWeeks[currentWeekIndex(period.key,new Date(`${date}T12:00:00`),state.settings.salaryDay)]||period.foodWeeks[0];transaction.foodChanges=[{weekId:week.id,start:week.start,deltaSpent:amount}];}
+      if(category.kind==='food')rebalanceFoodPlan(period);
+    if(category.kind==='food'&&transaction){const week=period.foodWeeks[currentWeekIndex(period.key,new Date(`${date}T12:00:00`),state.settings.salaryDay)]||period.foodWeeks[0];transaction.foodChanges=[{weekId:week.id,start:week.start,deltaSpent:amount}];}
     }
     item.completed=true;item.completedAt=date;item.paidFrom=v.source;await commit();closeModal();
   },{submitLabel:'Подтвердить покупку'});
@@ -1538,7 +1539,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.58',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.59',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});
@@ -1817,10 +1818,12 @@ function bindDelegatedEvents(){
   document.addEventListener('change',async e=>{
     if(e.target.matches('[data-money]')&&!validateMoneyInput(e.target)){e.target.reportValidity();return;}
     if(e.target.matches('[data-mandatory-allocation]')){const p=selectedPeriod();(p.envelopeAllocations??={})[e.target.dataset.mandatoryAllocation]=Math.max(0,parseMoney(e.target.value));await commit();return;}
-    if(e.target.matches('[data-category-plan]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categoryPlan);if(c){const amount=Math.max(0,parseMoney(e.target.value));setEnvelopeAllocation(p,c,amount);await commit()}return;}
+    if(e.target.matches('[data-category-plan]')){const p=e.target.dataset.envelopePeriod?ensurePeriod(state,e.target.dataset.envelopePeriod):selectedPeriod(),c=categoryById(e.target.dataset.categoryPlan);if(c){const amount=Math.max(0,parseMoney(e.target.value));setEnvelopeAllocation(p,c,amount);await commit()}return;}
     if(e.target.matches('[data-category-spent]')){const p=selectedPeriod(),c=categoryById(e.target.dataset.categorySpent);if(c){const minimum=checkpointTotal(p.categoryBudgets[c.id]?.checkpoints||[],true);if(parseMoney(e.target.value)<minimum){e.target.value=categoryBudget(p,c).spent;toast('Минимальная сумма по списку трат — '+formatByn(minimum));return;}setCategorySpent(p,c,parseMoney(e.target.value));await commit()}return;}
-    if(e.target.matches('[data-food-total-plan]')){const p=ensurePeriod(state,foodPeriodKey);distributeFoodPlan(p,Math.max(0,parseMoney(e.target.value)));await commit();return;}
-    if(e.target.matches('[data-week-plan]')){const p=ensurePeriod(state,foodPeriodKey);p.foodWeeks[num(e.target.dataset.weekPlan)].plan=Math.max(0,parseMoney(e.target.value));await commit();return;}
+    if(e.target.matches('[data-food-total-plan]')){const p=ensurePeriod(state,foodPeriodKey);setEnvelopeAllocation(p,state.categories.find(c=>c.kind==='food'),Math.max(0,parseMoney(e.target.value)));await commit();return;}
+    if(e.target.matches('[data-week-plan]')){const p=ensurePeriod(state,foodPeriodKey),week=p.foodWeeks[num(e.target.dataset.weekPlan)];week.plan=Math.max(0,parseMoney(e.target.value));week.planPinned=e.target.value.trim()!=='';rebalanceFoodPlan(p);await commit();return;}
+    if(e.target.matches('[data-week-spent]')){const p=ensurePeriod(state,foodPeriodKey);setFoodWeekSpent(p,num(e.target.dataset.weekSpent),e.target.value);await commit();return;}
+    if(e.target.matches('[data-week-closed]')){const p=ensurePeriod(state,foodPeriodKey),week=p.foodWeeks[num(e.target.dataset.weekClosed)];week.closed=e.target.checked;week.manualClosed=e.target.checked;rebalanceFoodPlan(p);await commit();return;}
     if(e.target.matches('[data-utility-paid]')){const p=ensurePeriod(state,e.target.dataset.utilityPaid);p.passThroughs=p.passThroughs?.length?p.passThroughs:[{id:`${p.key}-utilities`,name:'Коммунальные',dueDay:25,amount:120}];p.passThroughs[0].paid=e.target.checked;await commit();return;}
     if(e.target.matches('[data-nav-labels]')){state.settings.navLabels=e.target.checked;await commit();return;}
     if(e.target.matches('[data-nav-item]')){const id=e.target.dataset.navItem;if(['home'].includes(id))return;const list=navItems().filter(x=>!['home'].includes(x));state.settings.navItems=['home',...(e.target.checked?[...list,id]:list.filter(x=>x!==id))];await commit();return;}
@@ -2333,7 +2336,6 @@ async function init(){
   selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;ensurePeriod(state,selectedPeriodKey);
   committedState=cloneState(state);
   bindStaticEvents();bindDelegatedEvents();bindOrderEditing();bindCategoryDragging();bindLife();bindDiary();bindSectionManager();renderAll();$('#loading').hidden=true;$('#app').hidden=false;setScreen('home');
-  scheduleAutoWeekClose();
   registerServiceWorker();
   await maybeAskCarryover();
   document.addEventListener('visibilitychange',async()=>{if(!document.hidden){if(syncAllAutoClosedWeeks())await commit(true,{undoable:false});else renderAll();await maybeAskCarryover();}});

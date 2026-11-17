@@ -10,9 +10,9 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="description" content="Личный планировщик бюджета, накоплений, платежей, покупок и баланса питомца.">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.4.58">
-  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.4.58">
-  <link rel="stylesheet" href="./styles.css?v=1.4.58">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=1.4.59">
+  <link rel="icon" type="image/png" href="./icons/favicon.png?v=1.4.59">
+  <link rel="stylesheet" href="./styles.css?v=1.4.59">
   <title>Мои деньги</title>
 </head>
 <body>
@@ -76,7 +76,7 @@
         <article id="foodTotal" class="food-total"></article><div id="foodWeeks" class="food-weeks"></div>
       </section>
 
-      <section id="gifts" class="screen overlay-screen">
+      <section id="gifts" class="screen overlay-screen"><div id="giftEnvelopeContent"></div>
         <article class="gift-hero"><div class="gift-mark"><img class="pack-icon" src="./icons/universal/02-categories/08-gifts.png" alt=""></div><div><span>Осталось в конверте подарков</span><strong id="giftBalance">0 BYN</strong><small id="giftSummary"></small></div></article>
         <div class="button-row"><button id="topupGifts" class="primary-button"></button><button id="spendGifts" class="secondary-button"></button></div>
         <div class="section-row"><h2>Подарки</h2><button id="addGiftPlan" class="text-button"></button></div><div id="giftPlans" class="gift-list"></div>
@@ -105,6 +105,6 @@
   <div id="categoryLayer" hidden><section class="category-window" role="dialog" aria-modal="true" aria-labelledby="categoryLayerTitle"><header><h2 id="categoryLayerTitle"></h2><button id="categoryLayerClose" type="button" aria-label="Закрыть окно">×</button></header><div id="categoryLayerBody"></div></section></div>
   <div id="modalBackdrop" class="modal-backdrop" hidden><section class="modal-sheet" role="dialog" aria-modal="true"><header class="modal-header"><h2 id="modalTitle"></h2><button id="modalClose" class="icon-button subtle" aria-label="Закрыть"></button></header><form id="modalForm"><div id="modalBody" class="modal-content"></div><footer class="modal-footer"><button type="button" id="modalCancel" class="secondary-button">Отмена</button><button type="submit" id="modalSubmit" class="primary-button">Сохранить</button></footer></form></section></div>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script src="./app.bundle.js?v=1.4.58"></script>
+  <script src="./app.bundle.js?v=1.4.59"></script>
 </body>
 </html>

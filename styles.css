@@ -699,3 +699,10 @@ body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-he
 .category-card .category-budget-fields{grid-template-columns:minmax(0,1fr)}
 
 .payment-envelope-card{margin-bottom:16px}
+
+#categoryLayer #foodTotal,#categoryLayer #food>.month-switcher,#categoryLayer #giftEnvelopeContent{display:none}
+#foodTotal{padding:0;background:none;border:0;box-shadow:none}
+#gifts>.gift-hero,#topupGifts{display:none}
+#giftEnvelopeContent{margin-bottom:16px}
+
+.food-plan-total{grid-column:1/-1;padding:12px 4px;font:12px var(--print-font);color:var(--muted);font-variant-numeric:tabular-nums}

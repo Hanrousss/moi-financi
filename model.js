@@ -86,14 +86,29 @@ export function distributeFoodPlan(period,total) {
   });
   period.foodPlanLayoutVersion=1;
 }
-function hasLegacyEvenFoodPlan(period) {
-  const weeks=period.foodWeeks||[];
-  if(weeks.length<2)return false;
-  const total=roundMoney(weeks.reduce((sum,week)=>sum+Number(week.plan||0),0));
-  if(total<=0)return false;
-  const even=roundMoney(total/weeks.length);
-  return weeks.slice(0,-1).every(week=>Math.abs(Number(week.plan||0)-even)<0.011)
-    && Math.abs(Number(weeks.at(-1).plan||0)-roundMoney(total-even*(weeks.length-1)))<0.011;
+export function rebalanceFoodPlan(period,now=new Date()){
+  if(!period.foodAllocationEntered&&Number(period.foodAllocated||0)===0)return;
+  const today=toISODate(now),weeks=period.foodWeeks||[];
+  const cents=value=>Math.round(Number(value||0)*100);
+  const automatic=[];let reserved=0;
+  for(const [index,week] of weeks.entries()){
+    const spent=cents(week.spent);
+    if(week.closed||week.end<today){week.plan=spent/100;reserved+=spent;}
+    else if(week.planPinned){reserved+=Math.max(spent,cents(week.plan));}
+    else{
+      week.plan=spent/100;reserved+=spent;
+      const from=week.start>today?week.start:today;
+      const days=Math.max(1,dateOverlapDays(parseISODate(from),dayAfterISO(week.end),parseISODate(from),dayAfterISO(week.end)));
+      automatic.push({week,index,days});
+    }
+  }
+  const amount=Math.max(0,cents(period.foodAllocated)-reserved),days=automatic.reduce((sum,x)=>sum+x.days,0);
+  let assigned=0;
+  const shares=automatic.map(x=>{const exact=amount*x.days/days,whole=Math.floor(exact);assigned+=whole;return {...x,whole,fraction:exact-whole};});
+  const ranked=[...shares].sort((a,b)=>b.fraction-a.fraction||a.index-b.index);
+  if(ranked.length)for(let i=0;i<amount-assigned;i++)ranked[i%ranked.length].whole++;
+  for(const share of shares)share.week.plan=roundMoney(Number(share.week.spent||0)+share.whole/100);
+  period.foodPlanLayoutVersion=1;
 }
 export function makeFoodWeeks(key, plans=[], salaryDay=5) {
   const periodFrom = periodStart(key,salaryDay);
@@ -220,8 +235,7 @@ function alignFoodWeeks(period,salaryDay=5) {
     changed=true;
   }
   if(period.foodPlanLayoutVersion!==1){
-    if(hasLegacyEvenFoodPlan(period))distributeFoodPlan(period,foodBudget(period).plan);
-    else period.foodPlanLayoutVersion=1;
+    period.foodPlanLayoutVersion=1;
     changed=true;
   }
   return changed;

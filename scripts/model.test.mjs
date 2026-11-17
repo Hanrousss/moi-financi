@@ -4,7 +4,7 @@ import {
   seedState, ensurePeriod, parseMoney, roundMoney, periodIncome,
   accountBalanceAfterSpending, addAccountTransaction, deleteAccountTransaction,
   accountTransactionPeriodKey, migrateMonthlyBalances, plannedFreeBalance, liveFreeBalance,
-  remainingPlannedOutflows, periodSpentTotal, distributeFoodPlan, foodBudget,
+  remainingPlannedOutflows, periodSpentTotal, distributeFoodPlan, rebalanceFoodPlan, foodBudget,
   savingsBalanceByn, savingsBalanceUsd, petBalanceByn, monthlySavingsRows,
   periodSavingsDepositedByn, reconcileFreeBalance, debtRemaining,
   periodKeyForDate, periodStart, periodEnd, makeFoodWeeks, toISODate
@@ -235,4 +235,38 @@ test('reading monthly totals does not create phantom payment records',()=>{
   assert.equal(state.payments.length,0);
   periodSpentTotal(state,period);remainingPlannedOutflows(state,period);liveFreeBalance(state,period);
   assert.equal(state.payments.length,0);
+});
+
+
+test('food redistributes only remaining funds by remaining days and retains manual future plans',()=>{
+ const state=fresh(),p=ensurePeriod(state,'2026-11'),date=new Date(2026,10,18,12);
+ p.foodAllocated=800;p.foodAllocationEntered=true;p.foodWeeks[0].spent=128.35;p.foodWeeks[1].spent=158;
+ rebalanceFoodPlan(p,date);
+ assert.equal(foodBudget(p).plan,800);
+ assert.equal(foodBudget(p).spent,286.35);
+ assert.equal(p.foodWeeks[0].plan,128.35);
+ assert.equal(p.foodWeeks[1].plan,158);
+ assert.equal(p.foodWeeks[2].plan,151.08);
+ assert.equal(p.foodWeeks[3].plan,211.50);
+ assert.equal(p.foodWeeks[4].plan,151.07);
+ p.foodWeeks[3].plan=200;p.foodWeeks[3].planPinned=true;
+ rebalanceFoodPlan(p,date);
+ p.foodWeeks[0].spent=100;
+ rebalanceFoodPlan(p,date);
+ assert.equal(p.foodWeeks[3].plan,200);
+ assert.equal(p.foodWeeks[2].plan,171);
+ assert.equal(p.foodWeeks[4].plan,171);
+ assert.equal(foodBudget(p).plan,800);
+ assert.equal(foodBudget(p).spent,258);
+ const before=structuredClone(p.foodWeeks);rebalanceFoodPlan(p,date);
+ assert.deepEqual(p.foodWeeks,before);
+ assert.ok(p.foodWeeks.every(w=>!w.closed));
+});
+test('food redistribution handles completed periods, tiny remainders and overspending without increasing funding',()=>{
+ const state=fresh(),p=ensurePeriod(state,'2026-11');p.foodAllocated=0.03;p.foodAllocationEntered=true;
+ rebalanceFoodPlan(p,new Date(2026,10,18));assert.equal(foodBudget(p).plan,0.03);
+ p.foodWeeks[0].spent=10;
+ rebalanceFoodPlan(p,new Date(2026,10,18));assert.equal(p.foodAllocated,0.03);
+ assert.equal(foodBudget(p).plan,10);assert.equal(foodBudget(p).spent,10);
+ rebalanceFoodPlan(p,new Date(2027,0,1));assert.equal(foodBudget(p).plan,10);
 });

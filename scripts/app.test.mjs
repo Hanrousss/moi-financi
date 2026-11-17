@@ -304,7 +304,7 @@ test('home displays remaining food and category budgets and month highlights spe
   assert.match(a.value("nodes.get('#categoryList').innerHTML"),/60/);
   assert.equal(a.value("nodes.get('#freeValue').textContent"),a.run('formatByn(800)'));
   assert.equal(a.value("nodes.get('#freeMeta').textContent"),a.run('`Осталось по факту: ${formatByn(930)} · Запланированные траты: ${formatByn(130)}`'));
-  assert.match(a.run("renderCategoryCard(categoryById('pet'),currentPeriod())"),/>Всего отложено</);
+  assert.match(a.run("renderCategoryCard(categoryById('pet'),currentPeriod())"),/>Всего распределено</);
 });
 
 test('approved palette is identical for fresh and existing settings without erasing preferences',()=>{

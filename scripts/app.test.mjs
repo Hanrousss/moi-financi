@@ -331,7 +331,7 @@ test('universal icon pack replaces saved phone icons once and preserves finances
  a.run(`currentPeriod().salary=1234.56;state.settings.navIcons={home:{image:'old'}};state.categories[0].iconImage='old';state.pet.avatarImage='old';state.safety.iconImage='old';normalizeState();`);
  assert.equal(a.value('state.settings.navIcons.home.image'),'./icons/universal/01-navigation/home.png');
  assert.equal(a.value('state.categories[0].iconImage'),'./icons/universal/02-categories/01-food.png');
- assert.equal(a.value('state.pet.avatarImage'),'./icons/universal/04-avatar/pet-avatar.png');
+ assert.equal(a.value('state.pet.avatarImage'),'old');
  assert.equal(a.value('state.safety.iconImage'),'./icons/universal/03-safety/safety.png');
  assert.equal(a.value('currentPeriod().salary'),1234.56);
  a.run(`state.settings.navIcons.home.image='later-choice';normalizeState();`);
@@ -600,14 +600,18 @@ test('mandatory plans cannot silently increase manually allocated funds',()=>{
  assert.equal(a.value('liveFreeBalance(state,p)'),900);
 });
 
-test('pet envelope distinguishes transfers from expenses and preserves carried cash',()=>{
- const a=app();
- a.run("const p=currentPeriod(),c=categoryById('pet');p.categoryBudgets.pet={plan:100,spent:100};state.pet.balanceByn=130;state.pet.transactions=[{id:'in',type:'topup',amountByn:100,date:'2026-10-10',budgetPeriodKey:p.key},{id:'out',type:'spend',amountByn:20,date:'2026-10-11'}];state.pet.needs=[{id:'need',name:'Корм',costByn:150,completed:false}];");
- assert.deepEqual(a.value('envelopeSummary(p,c)'),{allocated:100,planned:150,spent:20,carry:50,remaining:-70});
- a.run('setEnvelopeAllocation(p,c,200);');
- assert.equal(a.value('envelopeSummary(p,c).remaining'),30);
- assert.equal(a.value('p.categoryBudgets.pet.plan'),200);
- assert.equal(a.value('state.pet.balanceByn'),130);
+test('standard pet envelope resets old mechanics once and preserves avatar and other categories',()=>{
+ const a=app();a.run("state.pet.avatarImage='data:image/png;base64,avatar';state.pet.balanceByn=-50;state.pet.needs=[{id:'old',name:'Старый план',costByn:50,completed:false}];state.pet.transactions=[{id:'old',type:'spend',amountByn:50,date:'2026-10-10'}];currentPeriod().categoryBudgets.pet={plan:100,spent:50};currentPeriod().categoryBudgets.sport={plan:300,spent:20};const before=cloneState(currentPeriod().categoryBudgets.sport);normalizeState();");
+ assert.equal(a.value('state.pet.avatarImage'),'data:image/png;base64,avatar');
+ assert.equal(a.value('state.pet.balanceByn'),0);
+ assert.equal(a.value('state.pet.needs.length'),0);
+ assert.equal(a.value('state.pet.transactions.length'),0);
+ assert.deepEqual(a.value('currentPeriod().categoryBudgets.sport'),a.value('before'));
+ assert.equal(a.value("envelopeSummary(currentPeriod(),categoryById('pet')).remaining"),0);
+ a.run("const p=currentPeriod(),c=categoryById('pet');setEnvelopeAllocation(p,c,100);changeCheckpoint(p,c,null,{id:'new',title:'Корм',amount:50,paid:true});normalizeState();");
+ assert.equal(a.value('p.categoryBudgets.pet.plan'),100);
+ assert.equal(a.value('p.categoryBudgets.pet.spent'),50);
+ assert.equal(a.value("envelopeSummary(p,c).remaining"),50);
 });
 
 test('envelope allocations and pins survive backup restore without altering checkpoint records',()=>{
@@ -758,23 +762,12 @@ test('food weekly plans and expenses cannot change the main manual allocation',(
  assert.equal(a.value('freeAfterPlans(p)'),800);
 });
 
-test('month reset clears pet and gift envelope plans while preserving other months and future additions',async()=>{
- const a=app();a.run("globalThis.confirm=()=>true;globalThis.document={querySelector:()=>null};const p=currentPeriod(),pet=categoryById('pet'),gift=categoryById('gifts');state.pet.needs=[{id:'legacy',name:'Старый план',costByn:50,completed:false},{id:'this',name:'Текущий',periodKey:p.key,costByn:20,completed:false},{id:'future',name:'Будущий',periodKey:'2026-11',costByn:70,completed:false}];state.gifts.plans=[{id:'gift',name:'Подарок',costByn:30,completed:false}];");
+test('reset clears standard pet budget and checklist and permits new plans',async()=>{
+ const a=app();a.run("globalThis.confirm=()=>true;globalThis.document={querySelector:()=>null};normalizeState();const p=currentPeriod(),c=categoryById('pet');setEnvelopeAllocation(p,c,100);changeCheckpoint(p,c,null,{id:'old',title:'Корм',amount:50,paid:true});state.pet.avatarImage='data:image/png;base64,avatar';");
  await a.run('resetSelectedMonth();');
- assert.equal(a.value('envelopeSummary(currentPeriod(),pet).planned'),0);
- assert.equal(a.value('envelopeSummary(currentPeriod(),pet).remaining'),0);
- assert.equal(a.value('envelopeSummary(currentPeriod(),gift).planned'),0);
- assert.equal(a.value('state.pet.needs.length'),3);
- assert.equal(a.value("envelopePlanItems(ensurePeriod(state,'2026-11'),'pet').some(n=>n.id==='future')"),true);
- a.run("needModal();");await a.run("modal.submit({name:'Новый план',cost:25,due:'',note:''});");
- assert.equal(a.value('envelopeSummary(currentPeriod(),pet).planned'),25);
- a.run('state=migrateBackupState(cloneState(state));normalizeState();');
- assert.equal(a.value('envelopeSummary(currentPeriod(),pet).planned'),25);
-});
-
-test('previously reset empty months exclude old shared pet plans without touching newly month-bound items',()=>{
- const a=app();a.run("const p=currentPeriod(),pet=categoryById('pet');p.carryoverConfirmed=true;p.selectedCategoryIds=[];p.foodAllocated=0;p.envelopeAllocations={housing:0,payment:0,reserve:0};state.pet.needs=[{id:'old',name:'Осталось после сброса',costByn:50,completed:false},{id:'new',name:'Создано заново',periodKey:p.key,costByn:20,completed:false}];normalizeState();");
- assert.deepEqual(a.value('envelopePlanItems(p,\'pet\').map(n=>n.id)'),['new']);
- assert.equal(a.value('envelopeSummary(p,pet).planned'),20);
- assert.equal(a.value('state.pet.needs.length'),2);
+ assert.deepEqual(a.value('envelopeSummary(currentPeriod(),c)'),{allocated:0,planned:0,spent:0,remaining:0});
+ assert.equal(a.value('state.pet.avatarImage'),'data:image/png;base64,avatar');
+ a.run("changeCheckpoint(currentPeriod(),c,null,{id:'new',title:'Новая трата',amount:25,paid:false});");
+ assert.equal(a.value('envelopeSummary(currentPeriod(),c).planned'),25);
+ assert.equal(a.value('currentPeriod().categoryBudgets.pet.plan'),0);
 });

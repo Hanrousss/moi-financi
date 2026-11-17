@@ -14,7 +14,7 @@ const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
-const APP_BUILD='1.4.53';
+const APP_BUILD='1.4.54';
 const ICON_CENTER_VERSION=2;
 function alphaBounds(img){
   const canvas=document.createElement('canvas');
@@ -193,7 +193,16 @@ function normalizeState(){
   const giftsCategory=state.categories?.find(c=>c.id==='gifts');
   if(giftsCategory)giftsCategory.kind='gift';
   const iconsMigrated=migrateUniversalIcons();
-  return reconcileCheckpointBudgets()||monthlyBalancesMigrated||savingsPeriodsPinned||iconsMigrated;
+  let resetPlansRepaired=false;
+  for(const p of Object.values(state.periods)){
+    const wasEmptyReset=p.carryoverConfirmed&&Array.isArray(p.selectedCategoryIds)&&p.selectedCategoryIds.length===0&&p.foodAllocated===0&&p.envelopeAllocations&&Object.values(p.envelopeAllocations).every(v=>num(v)===0)&&num(p.salary)===0&&num(p.extraIncome)===0&&num(p.mandatory.housingPlan)===0&&num(p.mandatory.housingSpent)===0&&num(p.mandatory.reservePlan)===0&&num(p.mandatory.reserveAllocated)===0&&Object.values(p.categoryBudgets).every(b=>num(b.plan)===0&&num(b.spent)===0)&&p.foodWeeks.every(w=>num(w.plan)===0&&num(w.spent)===0)&&!state.payments.some(item=>item.periodKey===p.key);
+    if(wasEmptyReset&&!p.resetPlansRepaired){
+      p.excludedPetNeedIds=[...new Set([...(p.excludedPetNeedIds||[]),...state.pet.needs.filter(item=>!item.periodKey).map(item=>item.id)])];
+      p.excludedGiftPlanIds=[...new Set([...(p.excludedGiftPlanIds||[]),...state.gifts.plans.filter(item=>!item.periodKey).map(item=>item.id)])];
+      p.resetPlansRepaired=true;resetPlansRepaired=true;
+    }
+  }
+  return reconcileCheckpointBudgets()||monthlyBalancesMigrated||savingsPeriodsPinned||iconsMigrated||resetPlansRepaired;
 }
 
 async function centerStoredIconImages(){
@@ -407,7 +416,7 @@ function optionalCategories(period){
   const ids=mandatoryCategoryIds(period);
   return visibleCategories().filter(c=>!ids.includes(c.id));
 }
-function totalOpenNeeds(){return state.pet.needs.filter(n=>!n.completed).reduce((s,n)=>s+num(n.costByn),0);}
+function totalOpenNeeds(){return envelopePlanItems(petViewPeriod(),'pet').filter(n=>!n.completed).reduce((s,n)=>s+num(n.costByn),0);}
 function dashboardStatus(value){return value<0?'status-bad':'status-good';}
 function txSavingCurrency(t){return t.currency||'usd';}
 function savingTxUsd(t){return txSavingCurrency(t)==='byn'?0:num(t.amountUsd);}
@@ -521,8 +530,8 @@ function applyAppearance(){
   Object.entries(tokens).forEach(([key,value])=>root.style.setProperty(`--${key}`,value));
   root.dataset.theme='receipt';
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',t.bg);
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.53');
-  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.53');
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',a.appIcon||'./icons/favicon.png?v=1.4.54');
+  document.querySelector('link[rel="apple-touch-icon"]')?.setAttribute('href',a.appIcon||'./icons/apple-touch-icon.png?v=1.4.54');
 }
 function navItemIconHtml(item,size=21){
   const custom=navIconSettings()[item.id]||{};
@@ -837,6 +846,17 @@ function reconcileCheckpointBudgets(){
   }
   return changed;
 }
+function envelopePlanItems(period,kind){
+  const pet=kind==='pet',items=pet?state.pet.needs:state.gifts.plans;
+  const excluded=period[pet?'excludedPetNeedIds':'excludedGiftPlanIds']||[];
+  return items.filter(item=>!excluded.includes(item.id)&&(!item.periodKey||item.periodKey===period.key));
+}
+function resetEnvelopePlans(period){
+  for(const [kind,field] of [['pet','excludedPetNeedIds'],['gift','excludedGiftPlanIds']]){
+    period[field]=[...new Set([...(period[field]||[]),...envelopePlanItems(period,kind).map(item=>item.id)])];
+  }
+}
+function petViewPeriod(){return categoryLayer?.category?.kind==='pet'?selectedPeriod():currentPeriod();}
 function envelopeSummary(period,category){
   const b=categoryBudget(period,category),rows=period.categoryBudgets[category.id]?.checkpoints||[];
   if(category.kind==='food'){
@@ -844,7 +864,7 @@ function envelopeSummary(period,category){
     return {allocated,planned,spent,remaining:roundMoney(allocated-period.foodWeeks.reduce((sum,w)=>sum+(w.closed?num(w.spent):Math.max(num(w.plan),num(w.spent))),0))};
   }
   if(category.kind==='pet'||category.kind==='gift'){
-    const pet=category.kind==='pet',items=pet?state.pet.needs:state.gifts.plans,transactions=pet?state.pet.transactions:state.gifts.transactions;
+    const pet=category.kind==='pet',items=envelopePlanItems(period,category.kind),transactions=pet?state.pet.transactions:state.gifts.transactions;
     const planned=roundMoney(items.reduce((sum,item)=>sum+num(item.costByn),0));
     const pending=roundMoney(items.filter(item=>!item.completed).reduce((sum,item)=>sum+num(item.costByn),0));
     const key=t=>t.budgetPeriodKey||t.periodKey||accountPeriodKey(t.date||todayISO());
@@ -970,7 +990,7 @@ function renderSavings(){
 }
 
 function renderPet(){
-  const balance=petBalanceByn(state), open=state.pet.needs.filter(n=>!n.completed), needsTotal=totalOpenNeeds();
+  const balance=petBalanceByn(state), open=envelopePlanItems(petViewPeriod(),'pet').filter(n=>!n.completed), needsTotal=totalOpenNeeds();
   $('#petAvatar').innerHTML=petAvatar();$('#petBalance').textContent=formatByn(balance);$('.pet-hero span').textContent=`Осталось в конверте: ${sectionLabel('pet')}`;
   $('#petNeedSummary').textContent=open.length?`На открытые планы нужно ${formatByn(needsTotal)}`:'Открытых планов нет';
   $('#petNeeds').innerHTML=open.length?open.map(n=>{const missing=Math.max(0,num(n.costByn)-balance), enough=missing===0;return `<article class="need-card ${enough?'affordable':''}"><div class="need-main"><label class="round-check"><input type="checkbox" data-complete-need="${n.id}"><span>${icon('check',15)}</span></label><div><b>${esc(n.name)}</b><small>${n.dueDate?`До ${dateLabel(n.dueDate)}`:'Без срока'}${n.note?` · ${esc(n.note)}`:''}</small></div></div><div class="need-value"><b>${formatByn(n.costByn)}</b><small class="${enough?'success-text':'negative-number'}">${enough?'Баланс позволяет':`Не хватает ${formatByn(missing)}`}</small><button class="mini-icon" data-edit-need="${n.id}">${icon('edit',16)}</button></div></article>`}).join(''):'<div class="empty-state">Добавь покупку, прививку или визит к ветеринару</div>';
@@ -978,7 +998,7 @@ function renderPet(){
 }
 
 function renderGifts(){
-  const balance=giftBalanceByn(), open=state.gifts.plans.filter(g=>!g.completed);
+  const balance=giftBalanceByn(), open=envelopePlanItems(categoryLayer?.category?.kind==='gift'?selectedPeriod():currentPeriod(),'gift').filter(g=>!g.completed);
   $('#giftBalance').textContent=formatByn(balance);
   $('#giftSummary').textContent=open.length?`Запланировано ${open.length} · нужно ${formatByn(open.reduce((s,g)=>s+num(g.costByn),0))}`:'Планов подарков пока нет';
   $('#giftPlans').innerHTML=open.length?[...open].sort((a,b)=>giftPinnedRank(a)-giftPinnedRank(b)||a.name.localeCompare(b.name)).map(g=>{
@@ -1026,7 +1046,7 @@ function renderPayments(){
 
 function renderSettings(){
   $('#editAppearanceBtn').hidden=true;
-  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.53')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
+  $('#editAppIconBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(appearanceSettings().appIcon||'./icons/apple-touch-icon.png?v=1.4.54')}" alt=""><span><b>Иконка приложения</b><small>Выбрать изображение или вернуть свинку</small></span></span>${icon('chevronRight',18)}`;
   $('#editProfileAvatarBtn').innerHTML=`<span><img class="settings-avatar" src="${esc(profileAvatarSource())}" alt=""><span><b>Моя аватарка</b><small>Выбрать фото и настроить кадр</small></span></span>${icon('chevronRight',18)}`;
   $('#editGeneralBtn').innerHTML=`<span><b>Профиль и расчеты</b><small>${esc(state.settings.profileName)} · зарплата ${state.settings.salaryDay} числа</small></span>${icon('chevronRight',18)}`;
   $('#editAppearanceBtn').innerHTML=`<span><span class="theme-preview-dot" aria-hidden="true"></span><span><b>Цветовая тема</b><small>${esc(selectedTheme().label)} · ${Object.keys(THEME_PRESETS).length} готовых палитр</small></span></span>${icon('chevronRight',18)}`;
@@ -1344,13 +1364,13 @@ function rollbackCompletedNeed(item){
   state.pet.transactions=state.pet.transactions.filter(t=>t.needId!==item.id);
   item.completed=false;
 }
-function needModal(item=null){openModal(item?'План питомца':'Добавить для питомца',[{name:'name',label:'Что нужно',value:item?.name||'',required:true},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'due',label:'Срок',type:'date',value:item?.dueDate||''},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){if(item.completed&&num(v.cost)!==num(item.costByn))rollbackCompletedNeed(item);item.name=v.name;item.costByn=num(v.cost);item.dueDate=v.due;item.note=v.note}else state.pet.needs.push({id:uid(),name:v.name,costByn:num(v.cost),dueDate:v.due,note:v.note,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{rollbackCompletedNeed(item);state.pet.needs=state.pet.needs.filter(n=>n.id!==item.id);await commit();closeModal();}}:null});}
+function needModal(item=null){openModal(item?'План питомца':'Добавить для питомца',[{name:'name',label:'Что нужно',value:item?.name||'',required:true},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'due',label:'Срок',type:'date',value:item?.dueDate||''},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{if(item){if(item.completed&&num(v.cost)!==num(item.costByn))rollbackCompletedNeed(item);item.name=v.name;item.costByn=num(v.cost);item.dueDate=v.due;item.note=v.note}else state.pet.needs.push({id:uid(),periodKey:petViewPeriod().key,name:v.name,costByn:num(v.cost),dueDate:v.due,note:v.note,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить',handler:async()=>{rollbackCompletedNeed(item);state.pet.needs=state.pet.needs.filter(n=>n.id!==item.id);await commit();closeModal();}}:null});}
 function giftTransactionModal(type){openModal(type==='topup'?'Перевести в конверт подарков':'Потратить из конверта подарков',[{name:'amount',label:'Сумма, BYN',type:'money',min:0,required:true},{name:'date',label:'Дата',type:'date',value:todayISO()},{name:'note',label:'Комментарий',value:''}],async v=>{const amount=num(v.amount),date=v.date||todayISO();if(amount<=0){toast('Введи сумму');return;}const transaction={id:uid(),type,amountByn:amount,date,periodKey:accountPeriodKey(date),note:v.note.trim()};if(type==='topup'){const key=accountPeriodKey(date),period=ensurePeriod(state,key);period.categoryBudgets.gifts=period.categoryBudgets.gifts||{plan:0,spent:0};period.categoryBudgets.gifts.spent=roundMoney(num(period.categoryBudgets.gifts.spent)+amount);transaction.budgetPeriodKey=key;const accountTransaction=recordAccountDelta(-amount,{type:'transfer_out',date,periodKey:key,categoryId:'gifts',note:transaction.note||'Конверт подарков',linkedId:`gifts:${transaction.id}`});transaction.accountTransactionId=accountTransaction?.id||'';}state.gifts.transactions.push(transaction);await commit();closeModal();});}
 function rollbackCompletedGift(item){
   state.gifts.transactions=state.gifts.transactions.filter(t=>t.giftPlanId!==item.id);
   item.completed=false;
 }
-function giftModal(item=null){const recipients=[...new Set([...(state.gifts.recipients||[]),'Близким','Семье','Другому'])];openModal(item?'Подарок':'Новый подарок',[{name:'name',label:'Название',value:item?.name||'',required:true},{name:'recipient',label:'Кому',type:'select',value:item?.recipient||recipients[0],options:recipients.map(r=>({value:r,label:r}))},{name:'recipientCustom',label:'Другой получатель',value:'',help:'Заполни, если нужно добавить новый пресет.'},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'color',label:'Цвет карточки',type:'palette',value:item?.color||'#FBC9AE',options:colorOptions},{name:'link',label:'Ссылка',value:item?.link||''},{name:'image',label:'Изображение',type:'file',preview:item?.imageDataUrl||'',help:'Можно прикрепить фото или скрин подарка.'},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const recipient=(v.recipientCustom||'').trim()||v.recipient;if(!state.gifts.recipients.includes(recipient))state.gifts.recipients.push(recipient);const imageDataUrl=v.image?await imageToDataUrl(v.image):item?.imageDataUrl||'';if(item){if(item.completed&&num(v.cost)!==num(item.costByn))rollbackCompletedGift(item);item.name=v.name;item.recipient=recipient;item.costByn=num(v.cost);item.color=v.color;item.link=v.link;item.note=v.note;item.imageDataUrl=imageDataUrl}else state.gifts.plans.push({id:uid(),name:v.name,recipient,costByn:num(v.cost),color:v.color,link:v.link,note:v.note,imageDataUrl,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить подарок',handler:async()=>{rollbackCompletedGift(item);state.gifts.plans=state.gifts.plans.filter(g=>g.id!==item.id);await commit();closeModal();}}:null});}
+function giftModal(item=null){const recipients=[...new Set([...(state.gifts.recipients||[]),'Близким','Семье','Другому'])];openModal(item?'Подарок':'Новый подарок',[{name:'name',label:'Название',value:item?.name||'',required:true},{name:'recipient',label:'Кому',type:'select',value:item?.recipient||recipients[0],options:recipients.map(r=>({value:r,label:r}))},{name:'recipientCustom',label:'Другой получатель',value:'',help:'Заполни, если нужно добавить новый пресет.'},{name:'cost',label:'Стоимость, BYN',type:'money',value:item?.costByn||0},{name:'color',label:'Цвет карточки',type:'palette',value:item?.color||'#FBC9AE',options:colorOptions},{name:'link',label:'Ссылка',value:item?.link||''},{name:'image',label:'Изображение',type:'file',preview:item?.imageDataUrl||'',help:'Можно прикрепить фото или скрин подарка.'},{name:'note',label:'Комментарий',value:item?.note||''}],async v=>{const recipient=(v.recipientCustom||'').trim()||v.recipient;if(!state.gifts.recipients.includes(recipient))state.gifts.recipients.push(recipient);const imageDataUrl=v.image?await imageToDataUrl(v.image):item?.imageDataUrl||'';if(item){if(item.completed&&num(v.cost)!==num(item.costByn))rollbackCompletedGift(item);item.name=v.name;item.recipient=recipient;item.costByn=num(v.cost);item.color=v.color;item.link=v.link;item.note=v.note;item.imageDataUrl=imageDataUrl}else state.gifts.plans.push({id:uid(),periodKey:(categoryLayer?.category?.kind==='gift'?selectedPeriod():currentPeriod()).key,name:v.name,recipient,costByn:num(v.cost),color:v.color,link:v.link,note:v.note,imageDataUrl,completed:false});await commit();closeModal();},{extraAction:item?{label:'Удалить подарок',handler:async()=>{rollbackCompletedGift(item);state.gifts.plans=state.gifts.plans.filter(g=>g.id!==item.id);await commit();closeModal();}}:null});}
 function rollbackCompletedPurchase(item){
   if(!item?.completed)return;
   if(item.paidFrom==='account'){
@@ -1451,7 +1471,11 @@ async function resetSelectedMonth(){
   state.account.balanceByn=roundMoney(num(state.account.balanceByn)-removedAccount.reduce((sum,t)=>sum+num(t.deltaByn),0));
   state.account.transactions=state.account.transactions.filter(t=>!removedAccount.includes(t));
   state.payments=state.payments.filter(p=>p.periodKey!==key);
+  const clearedPlans={...state.periods[key]};resetEnvelopePlans(clearedPlans);
   state.periods[key]=createPeriod(key);
+  state.periods[key].excludedPetNeedIds=clearedPlans.excludedPetNeedIds;
+  state.periods[key].excludedGiftPlanIds=clearedPlans.excludedGiftPlanIds;
+  state.periods[key].resetAt=new Date().toISOString();
   state.periods[key].selectedCategoryIds=[];
   state.periods[key].foodAllocated=0;
   state.periods[key].envelopeAllocations={housing:0,payment:0,reserve:0};
@@ -1494,7 +1518,7 @@ function profileAvatarModal(){
 function generalModal(){openModal('Общие настройки',[{name:'name',label:'Имя',value:state.settings.profileName},{name:'salaryDay',label:'День зарплаты',type:'number',min:1,value:state.settings.salaryDay}],async v=>{state.settings.profileName=v.name.trim()||'Пользователь';state.settings.salaryDay=Math.min(28,Math.max(1,num(v.salaryDay)||5));selectedPeriodKey=periodKeyForDate(new Date(),state.settings.salaryDay);foodPeriodKey=selectedPeriodKey;await commit();closeModal();});}
 function appIconModal(){
   const a=appearanceSettings();
-  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.53',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
+  openModal('Иконка приложения',[{name:'appIcon',label:'Изображение иконки',type:'file',crop:true,preview:a.appIcon||'./icons/apple-touch-icon.png?v=1.4.54',accept:'image/*',help:'На iPhone сохранённый значок может не обновиться автоматически. Для нового значка открой приложение в Safari и добавь его на экран Домой заново. Не очищай данные сайта.'}],async v=>{
     if(v.appIcon)a.appIcon=await imageToDataUrl(v.appIcon,512,cropOptions(v,'appIcon'));
     await commit();closeModal();
   },{extraAction:a.appIcon?{label:'Вернуть свинку',handler:async()=>{delete a.appIcon;await commit();closeModal();}}:null});

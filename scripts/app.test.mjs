@@ -757,3 +757,24 @@ test('food weekly plans and expenses cannot change the main manual allocation',(
  a.run('p.foodWeeks[0].spent=450;p.foodWeeks[0].plan=500;');
  assert.equal(a.value('freeAfterPlans(p)'),800);
 });
+
+test('month reset clears pet and gift envelope plans while preserving other months and future additions',async()=>{
+ const a=app();a.run("globalThis.confirm=()=>true;globalThis.document={querySelector:()=>null};const p=currentPeriod(),pet=categoryById('pet'),gift=categoryById('gifts');state.pet.needs=[{id:'legacy',name:'Старый план',costByn:50,completed:false},{id:'this',name:'Текущий',periodKey:p.key,costByn:20,completed:false},{id:'future',name:'Будущий',periodKey:'2026-11',costByn:70,completed:false}];state.gifts.plans=[{id:'gift',name:'Подарок',costByn:30,completed:false}];");
+ await a.run('resetSelectedMonth();');
+ assert.equal(a.value('envelopeSummary(currentPeriod(),pet).planned'),0);
+ assert.equal(a.value('envelopeSummary(currentPeriod(),pet).remaining'),0);
+ assert.equal(a.value('envelopeSummary(currentPeriod(),gift).planned'),0);
+ assert.equal(a.value('state.pet.needs.length'),3);
+ assert.equal(a.value("envelopePlanItems(ensurePeriod(state,'2026-11'),'pet').some(n=>n.id==='future')"),true);
+ a.run("needModal();");await a.run("modal.submit({name:'Новый план',cost:25,due:'',note:''});");
+ assert.equal(a.value('envelopeSummary(currentPeriod(),pet).planned'),25);
+ a.run('state=migrateBackupState(cloneState(state));normalizeState();');
+ assert.equal(a.value('envelopeSummary(currentPeriod(),pet).planned'),25);
+});
+
+test('previously reset empty months exclude old shared pet plans without touching newly month-bound items',()=>{
+ const a=app();a.run("const p=currentPeriod(),pet=categoryById('pet');p.carryoverConfirmed=true;p.selectedCategoryIds=[];p.foodAllocated=0;p.envelopeAllocations={housing:0,payment:0,reserve:0};state.pet.needs=[{id:'old',name:'Осталось после сброса',costByn:50,completed:false},{id:'new',name:'Создано заново',periodKey:p.key,costByn:20,completed:false}];normalizeState();");
+ assert.deepEqual(a.value('envelopePlanItems(p,\'pet\').map(n=>n.id)'),['new']);
+ assert.equal(a.value('envelopeSummary(p,pet).planned'),20);
+ assert.equal(a.value('state.pet.needs.length'),2);
+});

@@ -733,8 +733,13 @@ body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-he
 .bottom-nav .nav-symbol,.bottom-nav .nav-expense-button .nav-symbol{position:relative;display:grid;place-items:center;width:var(--nav-icon-size);height:var(--nav-icon-size);margin:0;padding:0}
 .bottom-nav .money-minus{display:block;width:18px;height:2px;border-radius:2px;background:currentColor;margin:0;padding:0}
 .bottom-nav.icons-only button{grid-template-rows:var(--nav-icon-size);min-height:48px}
-.bottom-nav-backdrop{position:fixed;z-index:29;pointer-events:none;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,560px);height:calc(148px + var(--safe-bottom));background:linear-gradient(to bottom,rgb(242 242 242 / 0),rgb(242 242 242 / .65) 20%,rgb(242 242 242 / .97) 38%,#f2f2f2 60%);backdrop-filter:blur(18px) saturate(110%);-webkit-backdrop-filter:blur(18px) saturate(110%);mask-image:linear-gradient(to bottom,transparent,#000 34%);-webkit-mask-image:linear-gradient(to bottom,transparent,#000 34%)}
+.bottom-nav-backdrop{position:fixed;z-index:29;pointer-events:none;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,560px);height:calc(126px + var(--safe-bottom));background:linear-gradient(to bottom,rgb(242 242 242 / 0),rgb(242 242 242 / .65) 12px,rgb(242 242 242 / .97) 25px,#f2f2f2 38px);backdrop-filter:blur(18px) saturate(110%);-webkit-backdrop-filter:blur(18px) saturate(110%);mask-image:linear-gradient(to bottom,transparent,#000 28px);-webkit-mask-image:linear-gradient(to bottom,transparent,#000 28px)}
 #app:has(.bottom-nav[hidden])>.bottom-nav-backdrop{display:none}
 .app-shell{padding-bottom:calc(152px + var(--safe-bottom))}
 @media(max-width:374px){#app>.bottom-nav{--nav-icon-size:44px}.bottom-nav button{min-height:62px}.bottom-nav button small{line-height:12px}.bottom-nav .money-minus{width:17px}}
 @media(prefers-reduced-transparency:reduce){.bottom-nav-backdrop{backdrop-filter:none;-webkit-backdrop-filter:none}#app>.bottom-nav{background:#20211f;backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+/* Keep scrolled content behind the header, with a short frosted edge. */
+#app>.topbar{isolation:isolate}
+#app>.topbar::before{content:'';position:absolute;z-index:-1;pointer-events:none;left:50%;transform:translateX(-50%);width:min(100vw,560px);top:calc(-12px - env(safe-area-inset-top,0px));bottom:-14px;background:linear-gradient(to bottom,#f2f2f2,rgb(242 242 242 / .97) calc(100% - 16px),rgb(242 242 242 / 0));backdrop-filter:blur(16px) saturate(110%);-webkit-backdrop-filter:blur(16px) saturate(110%);mask-image:linear-gradient(to bottom,#000 calc(100% - 14px),transparent);-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 14px),transparent)}
+@media(prefers-reduced-transparency:reduce){#app>.topbar::before{backdrop-filter:none;-webkit-backdrop-filter:none}}

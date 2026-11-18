@@ -11,7 +11,7 @@ function worker(){
   const cache={match:async()=>new Response('cached bundle'),put:async()=>{},addAll:async()=>{}};
   const context=vm.createContext({URL,Response,
     self:{location:{origin:'https://example.com'},clients:{claim:async()=>{}},skipWaiting:async()=>{},addEventListener:(name,handler)=>handlers[name]=handler},
-    caches:{open:async()=>cache,keys:async()=>[current,'moi-dengi-private-v1.0.48','other-app-cache'],delete:async key=>deleted.push(key),match:async()=>new Response('offline index')},
+    caches:{open:async()=>cache,keys:async()=>[current,'moi-dengi-private-v1.0.48','other-app-cache'],delete:async key=>deleted.push(key),match:async key=>new Response(key==='./iphone-17.html'?'offline preview':'offline index')},
     fetch:async()=>{networkCalls++;throw new Error('offline');}
   });
   vm.runInContext(source,context);
@@ -41,4 +41,10 @@ test('cross-origin and non-GET requests are not intercepted',async()=>{
   const w=worker();
   assert.equal(await w.request('cors','POST'),undefined);
   assert.equal(await w.request('cors','GET','https://other.example.com/image'),undefined);
+});
+
+test('iPhone preview navigation has a separate offline entry from the application',async()=>{
+ const w=worker();
+ assert.equal(await w.request('navigate','GET','https://example.com/iphone-17.html'),'offline preview');
+ assert.equal(await w.request('navigate','GET','https://example.com/'),'offline index');
 });

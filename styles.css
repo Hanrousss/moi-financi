@@ -423,7 +423,7 @@ body:has(#home.active) .month-switcher small{color:var(--on-dark);opacity:.85;fo
 .receipt-totals .receipt-total-primary{font-weight:700;font-size:17px}
 .receipt-totals .receipt-total-divider{border-top:1px solid var(--muted);padding-top:11px;margin-top:12px}
 .utility-envelope .receipt-name{font-size:12px}
-body:has(#home.active) .bottom-nav{background:var(--dark)}
+
 @media(max-width:374px){.receipt-title{font-size:35px}.receipt-name{font-size:13px}.receipt-number{font-size:15px}.receipt-columns{font-size:10px}.receipt-content .checkpoint-title{font-size:14px}.receipt-totals{font-size:12px}}
 
 #home .month-receipt #freeValue{align-self:center}
@@ -435,10 +435,10 @@ body:has(#home.active) .month-switcher button svg{color:var(--on-dark)}
 .receipt-edit-category{font-size:12px;font-weight:400;color:var(--muted);padding:3px 0}
 
 /* Compact receipt header. */
-body:has(#home.active) .topbar{min-height:48px;padding:5px 4px;margin:4px 0 4px;gap:9px}
+
 body:has(#home.active) #sectionSwitch{font-size:23px}
 body:has(#home.active) .profile-avatar{width:36px;height:36px}
-body:has(#home.active) #settingsBtn{width:36px;height:36px}
+
 body:has(#home.active) .month-switcher{margin:6px 0 10px;min-height:40px}
 body:has(#home.active) .month-switcher strong{font-size:18px}
 body:has(#home.active) .month-switcher small{font-size:11px;margin-top:1px}
@@ -457,7 +457,7 @@ body:has(#home.active) .month-switcher button{width:32px;height:32px}
 
 /* Current budgeting period shares the application header. */
 .topbar>.header-period{display:none}
-body:has(#home.active) .topbar{gap:6px;flex-wrap:nowrap;margin-bottom:10px}
+
 body:has(#home.active) .topbar>div:not(.header-period){flex:0 1 auto}
 body:has(#home.active) .topbar>.header-period{display:flex;flex:1 1 auto;justify-content:center;align-items:center;gap:2px;min-width:0;min-height:40px;margin:0}
 body:has(#home.active) .header-period>div{min-width:0;text-align:center}
@@ -468,15 +468,15 @@ body:has(#home.active) .header-period button svg{width:15px;height:15px}
 body:has(#home.active) #sectionSwitch{font-size:20px;gap:5px}
 body:has(#home.active) .section-chevron{width:24px;height:24px}
 body:has(#home.active) .profile-avatar{width:30px;height:30px;flex:0 0 30px}
-body:has(#home.active) #settingsBtn{width:30px;height:30px;flex:0 0 30px}
+
 @media(max-width:374px){
- body:has(#home.active) .topbar{gap:4px;padding-inline:0}
+
  body:has(#home.active) #sectionSwitch{font-size:17px;gap:3px}
  body:has(#home.active) .profile-avatar{width:26px;height:26px;flex-basis:26px}
  body:has(#home.active) .header-period strong{font-size:11px}
  body:has(#home.active) .header-period small{font-size:8px}
  body:has(#home.active) .header-period button{width:17px;flex-basis:17px}
- body:has(#home.active) #settingsBtn{width:26px;height:26px;flex-basis:26px}
+
 }
 
 body:has(#home.active) .topbar>div:not(.header-period){flex:1;min-width:0}
@@ -713,3 +713,28 @@ body:has(#home.active) .receipt-period #monthTitle{width:auto;height:auto;min-he
 #foodWeeks[hidden]{display:none!important}
 #categoryLayer:has(.payment-envelope-card.spent-all-card) #payments{display:none}
 #gifts:has(.spent-all-card) #giftPlans,#gifts:has(.spent-all-card) #addGiftPlan{display:none}
+
+/* Shared alignment for the header, receipt and navigation. */
+#app>.topbar{grid-template-columns:minmax(0,1fr) 44px;grid-template-rows:48px;align-items:center;column-gap:8px;min-height:56px;padding:4px 0;margin:6px 0 12px;border:0;border-radius:0;box-sizing:border-box}
+#app>.topbar>div{grid-column:1;grid-row:1;min-width:0;align-self:center}
+#app>.topbar :is(#settingsBtn,#closeOverlayBtn){grid-column:2;grid-row:1;align-self:center;width:44px;height:44px;padding:5px;display:grid;place-items:center;margin:0}
+#app>.topbar :is(#settingsBtn,#closeOverlayBtn)[hidden]{display:none}
+#app>.topbar #settingsBtn img{display:block;width:32px;height:32px;margin:0}
+#app>.topbar .section-menu{position:static;margin:0;overflow:hidden;align-self:center}
+#app>.topbar .section-wheel{height:44px;align-items:center}
+#app>.topbar .section-wheel-option{display:flex;align-items:center;justify-content:center;height:38px;min-height:38px;line-height:1;padding:0 8px}
+.receipt-pencil-note{width:fit-content;max-width:100%;margin:12px 0 7px;text-align:left;transform:rotate(-5deg);transform-origin:left center;line-height:1.35}
+.receipt-balance-input{column-gap:0;align-items:baseline}
+.receipt-balance-input>span{flex:0 0 auto;white-space:pre}
+.receipt-balance-input>input{max-width:100%;text-align:left}
+#app>.bottom-nav{--nav-icon-size:48px;--nav-panel-height:87px;align-items:center;background:rgb(32 33 31 / .92);border:1px solid rgb(255 255 255 / .22);box-shadow:inset 0 1px 1px rgb(255 255 255 / .13),0 8px 24px rgb(30 32 27 / .17);backdrop-filter:blur(24px) saturate(120%);-webkit-backdrop-filter:blur(24px) saturate(120%)}
+.bottom-nav button{display:grid;grid-template-rows:var(--nav-icon-size) 12px;justify-items:center;align-items:center;align-content:center;gap:6px;min-height:66px;padding:0}
+.bottom-nav button small{display:block;align-self:center;line-height:12px;margin:0;white-space:nowrap}
+.bottom-nav .nav-symbol,.bottom-nav .nav-expense-button .nav-symbol{position:relative;display:grid;place-items:center;width:var(--nav-icon-size);height:var(--nav-icon-size);margin:0;padding:0}
+.bottom-nav .money-minus{display:block;width:18px;height:2px;border-radius:2px;background:currentColor;margin:0;padding:0}
+.bottom-nav.icons-only button{grid-template-rows:var(--nav-icon-size);min-height:48px}
+.bottom-nav-backdrop{position:fixed;z-index:29;pointer-events:none;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,560px);height:calc(148px + var(--safe-bottom));background:linear-gradient(to bottom,rgb(242 242 242 / 0),rgb(242 242 242 / .65) 20%,rgb(242 242 242 / .97) 38%,#f2f2f2 60%);backdrop-filter:blur(18px) saturate(110%);-webkit-backdrop-filter:blur(18px) saturate(110%);mask-image:linear-gradient(to bottom,transparent,#000 34%);-webkit-mask-image:linear-gradient(to bottom,transparent,#000 34%)}
+#app:has(.bottom-nav[hidden])>.bottom-nav-backdrop{display:none}
+.app-shell{padding-bottom:calc(152px + var(--safe-bottom))}
+@media(max-width:374px){#app>.bottom-nav{--nav-icon-size:44px}.bottom-nav button{min-height:62px}.bottom-nav button small{line-height:12px}.bottom-nav .money-minus{width:17px}}
+@media(prefers-reduced-transparency:reduce){.bottom-nav-backdrop{backdrop-filter:none;-webkit-backdrop-filter:none}#app>.bottom-nav{background:#20211f;backdrop-filter:none;-webkit-backdrop-filter:none}}
